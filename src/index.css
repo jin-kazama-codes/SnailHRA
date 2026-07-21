@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --variant-dark: class(dark);
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer utilities {
+  /* Neon emerald shadow glow for dark mode */
+  .neon-glow {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2), 0 0 5px rgba(16, 185, 129, 0.1);
+  }
+  .neon-glow-strong {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.45), 0 0 10px rgba(16, 185, 129, 0.2);
+  }
+  .neon-text-glow {
+    text-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  }
+  
+  /* Custom scrollbars */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.25);
+    border-radius: 9999px;
+  }
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(16, 185, 129, 0.2);
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.45);
+  }
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.dark, html.dark body {
+  background-color: #0a0a0a;
+  color: #f3f4f6;
+}
+

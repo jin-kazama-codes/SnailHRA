@@ -1,0 +1,6 @@
+{
+  "name": "SnailHR",
+  "description": "Premium full-stack HRMS suite for NBFC financial services with role-based access, automated payroll, onboarding, attendance, and document management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
