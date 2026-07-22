@@ -1254,6 +1254,8 @@ export default function App() {
               inventory={inventory}
               fines={fines}
               role={activeRole}
+              onPunchAction={handlePunchAction}
+              setCurrentView={setCurrentView}
             />
           )}
 

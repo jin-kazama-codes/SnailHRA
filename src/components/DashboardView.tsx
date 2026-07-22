@@ -19,6 +19,8 @@ interface DashboardViewProps {
   inventory?: InventoryItem[];
   fines?: Fine[];
   role: "admin" | "hr" | "employee";
+  onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
+  setCurrentView?: (view: string) => void;
 }
 
 export default function DashboardView({
@@ -31,7 +33,9 @@ export default function DashboardView({
   expenses = [],
   inventory = [],
   fines = [],
-  role
+  role,
+  onPunchAction,
+  setCurrentView
 }: DashboardViewProps) {
   const [time, setTime] = useState(new Date());
 
@@ -43,6 +47,15 @@ export default function DashboardView({
 
   const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const formattedDate = time.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  
+  const formatTimeStr = (dateStr?: string | null) => {
+    if (!dateStr) return "";
+    try {
+      return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return "";
+    }
+  };
   const todayStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
   const currentMonthStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}`;
 
@@ -139,34 +152,150 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Live Digital Clock Widget */}
-        <div id="weather-card" className="rounded-2xl bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] p-6 flex flex-col justify-between shadow-xs dark:neon-glow">
-          <div className="flex items-center justify-between">
+        {/* Interactive Desk Widget */}
+        <div id="weather-card" className="rounded-2xl bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] p-5 flex flex-col justify-between shadow-xs dark:neon-glow">
+          <div className="flex items-center justify-between mb-3">
             <div className="space-y-1">
               <h2 className="text-sm font-semibold text-slate-700 dark:text-gray-300">{userBranch} Desk</h2>
               <p className="text-xs text-slate-400 dark:text-gray-500">{formattedDate}</p>
             </div>
-            <div className="bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-100/50 dark:border-emerald-900/50">
-              <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-          </div>
-
-          <div className="my-4">
-            <p className="text-3xl font-bold font-mono text-slate-800 dark:text-emerald-400 tracking-wider neon-text-glow">
-              {formattedTime}
-            </p>
-            <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Real-Time Geo-Synched Attendance Clock</p>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-slate-50 dark:border-[#1a1a1a] pt-3 text-xs">
-            <span className="text-slate-500 dark:text-gray-400">Shift Status:</span>
-            <span className={`font-bold px-2.5 py-0.5 rounded-full uppercase text-[10px] ${
-              myTodayPunch?.clockOut ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
-              myTodayPunch ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse" :
-              "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-            }`}>
-              {myTodayPunch?.clockOut ? "Completed" : myTodayPunch ? "Clocked In" : "Not Clocked In"}
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg font-bold uppercase tracking-wider">
+              {role === "admin" ? "Admin" : role === "hr" ? "HR" : "Employee"}
             </span>
+          </div>
+
+          <div className="border-t border-slate-100 dark:border-[#1a1a1a] pt-3">
+            {role === "employee" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 dark:text-gray-400">Shift Status:</span>
+                  <span className={`font-bold px-2.5 py-0.5 rounded-full uppercase text-[10px] ${
+                    myTodayPunch?.clockOut ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                    myTodayPunch ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse" :
+                    "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                  }`}>
+                    {myTodayPunch?.clockOut ? "Completed" : myTodayPunch ? "Clocked In" : "Not Clocked In"}
+                  </span>
+                </div>
+
+                {myTodayPunch && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-gray-400 font-mono bg-slate-50 dark:bg-[#0a0a0a] px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-[#1a1a1a]">
+                    <span>In: <strong className="text-slate-700 dark:text-gray-200">{formatTimeStr(myTodayPunch.clockIn)}</strong></span>
+                    {myTodayPunch.clockOut && (
+                      <span>Out: <strong className="text-slate-700 dark:text-gray-200">{formatTimeStr(myTodayPunch.clockOut)}</strong></span>
+                    )}
+                  </div>
+                )}
+
+                {onPunchAction && currentEmployee && (
+                  <div>
+                    {!myTodayPunch ? (
+                      <button
+                        onClick={() => onPunchAction(currentEmployee.id, "clockin")}
+                        className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Clock In Now</span>
+                      </button>
+                    ) : !myTodayPunch.clockOut ? (
+                      <button
+                        onClick={() => onPunchAction(currentEmployee.id, "clockout")}
+                        className="w-full flex items-center justify-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-rose-600/10 cursor-pointer"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>Clock Out Shift</span>
+                      </button>
+                    ) : (
+                      <div className="text-center text-[11px] text-emerald-600 dark:text-emerald-400 font-medium py-1">
+                        ✓ Excellent! Shift completed for today.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {role === "hr" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold">
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                    <span className="block text-slate-400">Leaves Pending</span>
+                    <span className="text-xs font-bold text-amber-500 font-mono">{hrBranchPendingLeaves} Requests</span>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                    <span className="block text-slate-400">Expenses Pending</span>
+                    <span className="text-xs font-bold text-teal-500 font-mono">{hrBranchPendingExpenses} Claims</span>
+                  </div>
+                </div>
+
+                {setCurrentView && (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => setCurrentView("leaves")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2 text-amber-500" /> Review Branch Leaves</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentView("expenses")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><DollarSign className="w-3.5 h-3.5 mr-2 text-teal-500" /> Review Expenses</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentView("directory")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><Users className="w-3.5 h-3.5 mr-2 text-emerald-500" /> Employee Directory</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {role === "admin" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold">
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                    <span className="block text-slate-400">Total Personnel</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-gray-200 font-mono">{adminTotalUsers} Members</span>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                    <span className="block text-slate-400">System Approvals</span>
+                    <span className="text-xs font-bold text-amber-500 font-mono">{adminPendingLeaves + adminPendingExpenses} Items</span>
+                  </div>
+                </div>
+
+                {setCurrentView && (
+                  <div className="space-y-1.5">
+                    <button
+                      onClick={() => setCurrentView("configurations")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><Activity className="w-3.5 h-3.5 mr-2 text-indigo-500" /> System Settings</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentView("inventory")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><Package className="w-3.5 h-3.5 mr-2 text-indigo-500" /> Corporate Assets</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    <button
+                      onClick={() => setCurrentView("leaves")}
+                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2 text-emerald-500" /> Leave Approvals</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

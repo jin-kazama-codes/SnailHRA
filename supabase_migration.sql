@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS employees (
   role                    TEXT NOT NULL,        -- "admin" | "hr" | "employee"
   designation_id          TEXT REFERENCES designations(id) ON DELETE SET NULL,
   department              TEXT,
+  branch                  TEXT DEFAULT 'Snail Mumbai HQ',
   joining_date            DATE,
   status                  TEXT DEFAULT 'Active', -- "Active" | "Inactive"
   address                 TEXT,
@@ -590,6 +591,40 @@ INSERT INTO employees (
  'Operations coordinator specialized in Senior Loan Officer metrics. Dedicated team player.',
  73407,29363,14681,5873,'893884822411','SBI','SBIN0001234','Aditi Tendulkar','Sibling','+91 8898799391')
 ON CONFLICT (id) DO NOTHING;
+
+-- Update branches for seeded employees
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1001';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1002';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1003';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1004';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1005';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1006';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1007';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1008';
+UPDATE employees SET branch = 'Bangalore Tech Hub' WHERE id = 'EMP-1009';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1010';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1011';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1012';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1013';
+UPDATE employees SET branch = 'Bangalore Tech Hub' WHERE id = 'EMP-1014';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1015';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1016';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1017';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1018';
+UPDATE employees SET branch = 'Bangalore Tech Hub' WHERE id = 'EMP-1019';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1020';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1021';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1022';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1023';
+UPDATE employees SET branch = 'Bangalore Tech Hub' WHERE id = 'EMP-1024';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1025';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1026';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1027';
+UPDATE employees SET branch = 'Hyderabad Insurance Center' WHERE id = 'EMP-1028';
+UPDATE employees SET branch = 'Bangalore Tech Hub' WHERE id = 'EMP-1029';
+UPDATE employees SET branch = 'Snail Mumbai HQ' WHERE id = 'EMP-1030';
+UPDATE employees SET branch = 'Noida Field Hub' WHERE id = 'EMP-1031';
+UPDATE employees SET branch = 'Pune Branch Office' WHERE id = 'EMP-1032';
 
 
 -- 3. EMPLOYEE DOCUMENTS

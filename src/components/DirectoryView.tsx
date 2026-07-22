@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  Search, UserPlus, FileText, CheckCircle2, XCircle, 
-  Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight, 
+import {
+  Search, UserPlus, FileText, CheckCircle2, XCircle,
+  Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
   Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask } from "../types";
@@ -73,15 +73,15 @@ export default function DirectoryView({
   const accessibleEmployees = role === "admin"
     ? employees
     : role === "hr"
-    ? employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin")
-    : employees.filter(e => e.id === currentUserId);
+      ? employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin")
+      : employees.filter(e => e.id === currentUserId);
 
   const activeEmployee = accessibleEmployees.find(e => e.id === activeEmpId) || accessibleEmployees[0];
 
   const filteredEmployees = accessibleEmployees.filter(emp => {
-    const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          emp.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = selectedDept === "All" || emp.department === selectedDept;
     return matchesSearch && matchesDept;
   });
@@ -101,7 +101,7 @@ export default function DirectoryView({
       bankAccount, bankName, bankIfsc, address, bio, password
     };
     onOnboardEmployee(data);
-    
+
     // Clear state & close
     setFullName("");
     setEmail("");
@@ -133,7 +133,7 @@ export default function DirectoryView({
         <div className="flex items-center space-x-3 flex-1 min-w-[280px]">
           <div className="relative w-full">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <input 
+            <input
               type="text"
               placeholder="Search NBFC agents by name, email, or employee ID..."
               value={searchTerm}
@@ -184,21 +184,19 @@ export default function DirectoryView({
                 <div
                   key={emp.id}
                   onClick={() => setActiveEmpId(emp.id)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center space-x-3 ${
-                    isActive 
-                      ? "bg-emerald-50/75 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs" 
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center space-x-3 ${isActive
+                      ? "bg-emerald-50/75 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs"
                       : "bg-slate-50/50 dark:bg-[#0a0a0a]/50 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/80 border-slate-100/50 dark:border-[#1a1a1a]"
-                  }`}
+                    }`}
                 >
                   <div className="relative">
-                    <img 
-                      src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"} 
+                    <img
+                      src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
                       alt={emp.fullName}
                       className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-gray-700"
                     />
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${
-                      emp.status === "Active" ? "bg-emerald-500" : "bg-amber-500"
-                    }`}></span>
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${emp.status === "Active" ? "bg-emerald-500" : "bg-amber-500"
+                      }`}></span>
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -231,19 +229,18 @@ export default function DirectoryView({
               <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-6 shadow-xs dark:neon-glow">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center space-x-4">
-                    <img 
-                      src={activeEmployee.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"} 
+                    <img
+                      src={activeEmployee.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
                       alt={activeEmployee.fullName}
                       className="w-16 h-16 rounded-full object-cover border-2 border-emerald-500/20"
                     />
                     <div>
                       <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white flex items-center space-x-2">
                         <span>{activeEmployee.fullName}</span>
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide ${
-                          activeEmployee.status === "Active" 
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" 
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide ${activeEmployee.status === "Active"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
                             : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                        }`}>{activeEmployee.status}</span>
+                          }`}>{activeEmployee.status}</span>
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-gray-400 font-medium mt-1">
                         {getDesignationTitle(activeEmployee.designationId)} ({activeEmployee.department} Department)
@@ -336,18 +333,17 @@ export default function DirectoryView({
 
                   <div className="space-y-2.5">
                     {activeEmployee.onboardingTasks.map(task => (
-                      <div 
-                        key={task.id} 
+                      <div
+                        key={task.id}
                         onClick={() => {
                           if (role === "admin" || role === "hr" || activeEmployee.id === currentUserId) {
                             onToggleOnboardingTask(activeEmployee.id, task.id, !task.completed);
                           }
                         }}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                          task.completed 
-                            ? "bg-slate-50/50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a]/50 text-slate-500 dark:text-gray-400" 
+                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${task.completed
+                            ? "bg-slate-50/50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a]/50 text-slate-500 dark:text-gray-400"
                             : "bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/40 text-slate-700 dark:text-gray-300 cursor-pointer hover:bg-emerald-50/50"
-                        }`}
+                          }`}
                       >
                         <span className={`font-semibold ${task.completed ? "line-through text-slate-400 dark:text-gray-500" : ""}`}>{task.taskName}</span>
                         <span className="flex items-center">
@@ -373,7 +369,7 @@ export default function DirectoryView({
                     <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Employee Document Vault</h3>
                     <p className="text-xs text-slate-400 dark:text-gray-500">Aadhaar, PAN, and training clearance logs</p>
                   </div>
-                  
+
                   <button
                     onClick={() => setShowUploadModal(true)}
                     className="border border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/10 transition-colors cursor-pointer"
@@ -401,7 +397,7 @@ export default function DirectoryView({
                           <Eye className="w-4 h-4" />
                         </button>
                         {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
-                          <button 
+                          <button
                             onClick={() => onDeleteDocument(activeEmployee.id, doc.id)}
                             className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-rose-400 hover:text-rose-600 dark:text-rose-500 dark:hover:text-rose-400"
                           >
@@ -437,8 +433,8 @@ export default function DirectoryView({
             <form onSubmit={handleDocUpload} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Document Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={docName}
                   onChange={(e) => setDocName(e.target.value)}
                   placeholder="e.g. Form_16_Tax_Clearance"
@@ -494,7 +490,7 @@ export default function DirectoryView({
                   </h3>
                   <p className="text-xs text-slate-400 dark:text-gray-500">Initiate payroll, workspace assets, and welcome sequence</p>
                 </div>
-                <button 
+                <button
                   onClick={() => setShowOnboardForm(false)}
                   className="p-1.5 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-400"
                 >
@@ -509,8 +505,8 @@ export default function DirectoryView({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         placeholder="e.g. Vikram Malhotra"
@@ -520,8 +516,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Email Address *</label>
-                      <input 
-                        type="email" 
+                      <input
+                        type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="e.g. vikram@snailhr.com"
@@ -531,8 +527,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Phone Number</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="e.g. +91 99999 88888"
@@ -541,8 +537,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Password *</label>
-                      <input 
-                        type="password" 
+                      <input
+                        type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Set login password"
@@ -598,8 +594,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Joining Date</label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         value={joiningDate}
                         onChange={(e) => setJoiningDate(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
@@ -614,8 +610,8 @@ export default function DirectoryView({
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={salaryBasic}
                         onChange={(e) => setSalaryBasic(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
@@ -623,8 +619,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={salaryHra}
                         onChange={(e) => setSalaryHra(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
@@ -632,8 +628,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={salaryAllowances}
                         onChange={(e) => setSalaryAllowances(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
@@ -641,8 +637,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={salaryPf}
                         onChange={(e) => setSalaryPf(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
@@ -657,8 +653,8 @@ export default function DirectoryView({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Account Number</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={bankAccount}
                         onChange={(e) => setBankAccount(e.target.value)}
                         placeholder="e.g. 501002938192"
@@ -667,8 +663,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Bank Name</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={bankName}
                         onChange={(e) => setBankName(e.target.value)}
                         placeholder="HDFC Bank"
@@ -677,8 +673,8 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">IFSC Code</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={bankIfsc}
                         onChange={(e) => setBankIfsc(e.target.value)}
                         placeholder="HDFC0000104"
