@@ -1217,7 +1217,19 @@
       "workFromHome": false
     }
   ],
-  "leaves": [],
+  "leaves": [
+    {
+      "id": "lv-1784744612521",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "leaveType": "Earned Leave",
+      "startDate": "2026-07-22",
+      "endDate": "2026-07-22",
+      "reason": "sss",
+      "status": "Pending",
+      "appliedDate": "2026-07-22"
+    }
+  ],
   "holidays": [
     {
       "id": "hol-1",
