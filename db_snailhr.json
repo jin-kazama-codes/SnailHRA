@@ -1201,7 +1201,7 @@
       "employeeId": "EMP-1001",
       "date": "2026-07-22",
       "clockIn": "2026-07-22T10:19:09.713Z",
-      "clockOut": null,
+      "clockOut": "2026-07-22T17:31:40.124Z",
       "breaks": [],
       "status": "Late",
       "workFromHome": false

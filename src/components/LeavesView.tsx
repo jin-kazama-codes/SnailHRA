@@ -66,7 +66,7 @@ export default function LeavesView({
     setProcessingLeaveId(id);
 
     const targetLeave = leaves.find(l => l.id === id);
-    const empName = targetLeave?.employeeName || (targetLeave ? getEmployeeName(targetLeave.employeeId) : "Employee");
+    const empName = targetLeave ? getEmployeeName(targetLeave.employeeId, targetLeave.employeeName) : "Employee";
 
     try {
       await onReviewLeave(id, status);
@@ -106,8 +106,11 @@ export default function LeavesView({
     }
   };
 
-  const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Agent";
+  const getEmployeeName = (empId: string, fallbackName?: string) => {
+    const emp = employees.find(e => e.id === empId);
+    if (emp) return emp.fullName;
+    if (fallbackName && !fallbackName.startsWith("Employee")) return fallbackName;
+    return "Agent";
   };
 
   const getEmployeeDept = (empId: string) => {
@@ -346,7 +349,7 @@ export default function LeavesView({
                   return (b.id || "").localeCompare(a.id || "");
                 })
                 .map(leave => {
-                  const empName = leave.employeeName || getEmployeeName(leave.employeeId);
+                  const empName = getEmployeeName(leave.employeeId, leave.employeeName);
                   const statusVal = leave.status || "Pending";
 
                   return (
