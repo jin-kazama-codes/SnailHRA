@@ -94,9 +94,9 @@ export async function PUT(request: Request) {
     saveDatabase(db);
 
     if (supabase) {
-      const targetLeave = db.leaves.find(l => l.id === id);
-      if (targetLeave) {
-        await supabase.from("leaves").update({ status }).eq("id", id);
+      const { error } = await supabase.from("leaves").update({ status }).eq("id", id);
+      if (error) {
+        console.warn("Supabase update error in leave status update:", error.message);
       }
     }
 
