@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { 
   Search, UserPlus, FileText, CheckCircle2, XCircle, 
@@ -11,6 +13,8 @@ interface DirectoryViewProps {
   designations: Designation[];
   role: UserRole;
   currentUserId: string;
+  customDepartments?: string[];
+  customBranches?: string[];
   onOnboardEmployee: (empData: any) => void;
   onUpdateEmployee: (id: string, updatedData: any) => void;
   onAddDocument: (empId: string, docData: any) => void;
@@ -23,6 +27,8 @@ export default function DirectoryView({
   designations,
   role,
   currentUserId,
+  customDepartments,
+  customBranches,
   onOnboardEmployee,
   onUpdateEmployee,
   onAddDocument,
@@ -43,10 +49,14 @@ export default function DirectoryView({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [empRole, setEmpRole] = useState<UserRole>("employee");
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
   const [department, setDepartment] = useState("Loans");
-  const [joiningDate, setJoiningDate] = useState("2026-07-20");
+  const [joiningDate, setJoiningDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [salaryBasic, setSalaryBasic] = useState("45000");
   const [salaryHra, setSalaryHra] = useState("18000");
   const [salaryAllowances, setSalaryAllowances] = useState("10000");
@@ -57,9 +67,18 @@ export default function DirectoryView({
   const [address, setAddress] = useState("");
   const [bio, setBio] = useState("");
 
-  const activeEmployee = employees.find(e => e.id === activeEmpId) || employees[0];
+  const loggedInUser = employees.find(e => e.id === currentUserId) || employees[0];
+  const userBranch = loggedInUser?.branch || "Mumbai Branch";
 
-  const filteredEmployees = employees.filter(emp => {
+  const accessibleEmployees = role === "admin"
+    ? employees
+    : role === "hr"
+    ? employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin")
+    : employees.filter(e => e.id === currentUserId);
+
+  const activeEmployee = accessibleEmployees.find(e => e.id === activeEmpId) || accessibleEmployees[0];
+
+  const filteredEmployees = accessibleEmployees.filter(emp => {
     const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           emp.id.toLowerCase().includes(searchTerm.toLowerCase());
@@ -73,14 +92,13 @@ export default function DirectoryView({
 
   const handleOnboardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email) {
-      alert("Name and Email are required");
+    if (!fullName || !email || !password) {
       return;
     }
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
       joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf,
-      bankAccount, bankName, bankIfsc, address, bio
+      bankAccount, bankName, bankIfsc, address, bio, password
     };
     onOnboardEmployee(data);
     
@@ -88,6 +106,7 @@ export default function DirectoryView({
     setFullName("");
     setEmail("");
     setPhone("");
+    setPassword("");
     setAddress("");
     setBio("");
     setShowOnboardForm(false);
@@ -128,12 +147,12 @@ export default function DirectoryView({
             className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
           >
             <option value="All">All Departments</option>
-            <option value="Loans">Loans Department</option>
-            <option value="Insurance">Insurance Department</option>
-            <option value="Risk">Risk Department</option>
-            <option value="HR">HR Department</option>
-            <option value="Operations">Operations</option>
-            <option value="Compliance">Compliance</option>
+            {(customDepartments && customDepartments.length > 0
+              ? customDepartments
+              : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+            ).map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
           </select>
         </div>
 
@@ -521,6 +540,17 @@ export default function DirectoryView({
                       />
                     </div>
                     <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Password *</label>
+                      <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Set login password"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        required
+                      />
+                    </div>
+                    <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
                       <select
                         value={empRole}
@@ -546,12 +576,12 @@ export default function DirectoryView({
                         onChange={(e) => setDepartment(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                       >
-                        <option value="Loans">Loans Department</option>
-                        <option value="Insurance">Insurance Department</option>
-                        <option value="Risk">Risk Department</option>
-                        <option value="HR">HR Department</option>
-                        <option value="Operations">Operations</option>
-                        <option value="Compliance">Compliance</option>
+                        {(customDepartments && customDepartments.length > 0
+                          ? customDepartments
+                          : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+                        ).map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
                       </select>
                     </div>
                     <div>

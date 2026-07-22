@@ -1,7 +1,10 @@
+"use client";
+
 import React, { useState } from "react";
 import { 
   DollarSign, Mail, Plus, Trash2, ShieldCheck, FileText, 
-  Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle
+  Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { Employee, Designation, Payslip, SimulatedEmail, UserRole } from "../types";
 
@@ -39,6 +42,18 @@ export default function PayrollView({
 
   // Selected payslip for detailed view modal
   const [activeSlip, setActiveSlip] = useState<Payslip | null>(null);
+
+  // Pagination state for Payroll Center list (9 items per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 9;
+
+  const totalItems = employees.length;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
+  const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
+  const paginatedEmployees = employees.slice(startIndex, endIndex);
 
   const handleAddDesg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,49 +129,87 @@ export default function PayrollView({
 
       {/* SUBTAB 1: Payslips Grid & Generating Station */}
       {activeSubTab === "payslips" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Action Side */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {role === "employee" ? (
-              /* Employee View: Payslip Archives */
-              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-                <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">My Payslips Vault</h3>
-                  <p className="text-xs text-slate-400 dark:text-gray-500">Download and print validated salary slips</p>
+        <div className="space-y-6">
+          {role === "employee" ? (
+            /* Employee View: Payslip Archives */
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">My Payslips Vault</h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500">Download and print validated salary slips</p>
+              </div>
+
+              <div className="space-y-3">
+                {payslips
+                  .filter(p => p.employeeId === currentEmployeeId)
+                  .map(slip => (
+                    <div key={slip.id} className="p-4 bg-slate-50/50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex items-center justify-between text-xs">
+                      <div className="space-y-1">
+                        <p className="font-bold text-slate-800 dark:text-white text-xs">{slip.month} Earnings Summary</p>
+                        <p className="text-slate-400 dark:text-gray-500 font-medium">Net Disbursed: <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{slip.netPay.toLocaleString()}</span></p>
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500">Disbursed to: {getEmployeeBank(slip.employeeId)}</p>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setActiveSlip(slip)}
+                          className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>View PDF Slip</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                {payslips.filter(p => p.employeeId === currentEmployeeId).length === 0 && (
+                  <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No salary payslips generated for this billing month yet.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* HR/Admin View: Process and Generate Payslips */
+            <>
+              {/* Top Monthly Summary KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium">Slips Generated This Month</p>
+                    <p className="text-xl font-bold text-slate-800 dark:text-white font-mono mt-1">
+                      {currentMonthPayslips.length} <span className="text-xs text-slate-400 font-normal">/ {employees.length}</span>
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                    <FileText className="w-5 h-5" />
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  {payslips
-                    .filter(p => p.employeeId === currentEmployeeId)
-                    .map(slip => (
-                      <div key={slip.id} className="p-4 bg-slate-50/50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex items-center justify-between text-xs">
-                        <div className="space-y-1">
-                          <p className="font-bold text-slate-800 dark:text-white text-xs">{slip.month} Earnings Summary</p>
-                          <p className="text-slate-400 dark:text-gray-500 font-medium">Net Disbursed: <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{slip.netPay.toLocaleString()}</span></p>
-                          <p className="text-[10px] text-slate-400 dark:text-gray-500">Disbursed to: {getEmployeeBank(slip.employeeId)}</p>
-                        </div>
+                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium">Total Net Disbursed Log</p>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+                      ₹{currentMonthPayslips.reduce((sum, p) => sum + p.netPay, 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                </div>
 
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => setActiveSlip(slip)}
-                            className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                            <span>View PDF Slip</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  {payslips.filter(p => p.employeeId === currentEmployeeId).length === 0 && (
-                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No salary payslips generated for this billing month yet.</p>
-                  )}
+                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-slate-400 font-medium">EPF Provident Fund Logs</p>
+                    <p className="text-xl font-bold text-indigo-500 font-mono mt-1">
+                      ₹{currentMonthPayslips.reduce((sum, p) => sum + p.pfDeduction, 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center font-bold">
+                    <Landmark className="w-5 h-5" />
+                  </div>
                 </div>
               </div>
-            ) : (
-              /* HR/Admin View: Process and Generate Payslips */
-              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-                <div className="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+
+              {/* Full-width Lending Agents Payroll Center Table Card */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
                   <div>
                     <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Lending Agents Payroll Center</h3>
                     <p className="text-xs text-slate-400 dark:text-gray-500">Generate structural salary slips with automated email dispatch</p>
@@ -168,27 +221,32 @@ export default function PayrollView({
                         onPayAllPayslips(selectedMonth);
                       }
                     }}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
                   >
                     Bulk Disburse Payments
                   </button>
+                </div>
+
+                <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] text-slate-500 dark:text-gray-400 leading-normal flex items-start space-x-2">
+                  <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                  <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the agent's email address.</span>
                 </div>
 
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                        <th className="py-2.5 px-3">Agent Name</th>
-                        <th className="py-2.5 px-3">Base Compensation</th>
-                        <th className="py-2.5 px-3">HRA + Allowances</th>
-                        <th className="py-2.5 px-3">Fines Deducted</th>
-                        <th className="py-2.5 px-3">Net Disbursed</th>
-                        <th className="py-2.5 px-3">Status</th>
-                        <th className="py-2.5 px-3 text-right">Actions</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Agent Name</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Base Compensation</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">HRA + Allowances</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Fines Deducted</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Net Disbursed</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
+                        <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
-                      {employees.map(emp => {
+                      {paginatedEmployees.map(emp => {
                         const hasSlip = currentMonthPayslips.find(p => p.employeeId === emp.id);
                         const grossEarnings = emp.salary.basic + emp.salary.hra + emp.salary.allowances;
                         const defaultTaxes = Math.round(grossEarnings * 0.05);
@@ -196,8 +254,8 @@ export default function PayrollView({
 
                         return (
                           <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
-                            <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
-                              <div className="w-5.5 h-5.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
+                            <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2 whitespace-nowrap">
+                              <div className="w-5.5 h-5.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase shrink-0">
                                 {emp.fullName.charAt(0)}
                               </div>
                               <div>
@@ -205,15 +263,15 @@ export default function PayrollView({
                                 <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal font-mono">{emp.id}</span>
                               </div>
                             </td>
-                            <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400 font-semibold">₹{emp.salary.basic.toLocaleString()}</td>
-                            <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-500">₹{(emp.salary.hra + emp.salary.allowances).toLocaleString()}</td>
-                            <td className="py-3 px-3 font-mono text-rose-500">
+                            <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400 font-semibold whitespace-nowrap">₹{emp.salary.basic.toLocaleString()}</td>
+                            <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-500 whitespace-nowrap">₹{(emp.salary.hra + emp.salary.allowances).toLocaleString()}</td>
+                            <td className="py-3 px-3 font-mono text-rose-500 whitespace-nowrap">
                               {hasSlip ? `₹${hasSlip.finesDeducted.toLocaleString()}` : "Evaluated"}
                             </td>
-                            <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                            <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
                             </td>
-                            <td className="py-3 px-3">
+                            <td className="py-3 px-3 whitespace-nowrap">
                               <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase ${
                                 hasSlip?.status === "Paid" 
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
@@ -224,20 +282,20 @@ export default function PayrollView({
                                 {hasSlip ? hasSlip.status : "Pending Run"}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-right">
+                            <td className="py-3 px-3 text-right whitespace-nowrap">
                               {hasSlip ? (
                                 <button
                                   onClick={() => setActiveSlip(hasSlip)}
-                                  className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold"
+                                  className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold inline-flex items-center space-x-1 cursor-pointer"
                                 >
-                                  Review Slip
+                                  <span>Review Slip</span>
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => onGeneratePayslip(emp.id, selectedMonth)}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg flex items-center space-x-1 ml-auto cursor-pointer"
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap"
                                 >
-                                  <Sparkles className="w-3.5 h-3.5" />
+                                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
                                   <span>Compile Slip</span>
                                 </button>
                               )}
@@ -248,36 +306,52 @@ export default function PayrollView({
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
-          </div>
 
-          {/* Right Column: Help Summary / Details */}
-          <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md border-b border-slate-50 dark:border-[#1a1a1a] pb-3">Monthly Summary</h3>
-              
-              <div className="space-y-3.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Slips Generated This Month</span>
-                  <span className="font-bold text-slate-700 dark:text-gray-300 font-mono">{currentMonthPayslips.length} / {employees.length}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Total Net Disbursed Log</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{currentMonthPayslips.reduce((sum, p) => sum + p.netPay, 0).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">EPF Provident Fund Logs</span>
-                  <span className="font-bold text-indigo-500 font-mono">₹{currentMonthPayslips.reduce((sum, p) => sum + p.pfDeduction, 0).toLocaleString()}</span>
-                </div>
-              </div>
+                {/* Pagination Controls */}
+                {totalItems > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a] text-xs">
+                    <div className="text-slate-400 font-medium">
+                      Showing <span className="font-bold text-slate-700 dark:text-gray-200">{startIndex + 1}</span> to <span className="font-bold text-slate-700 dark:text-gray-200">{endIndex}</span> of <span className="font-bold text-slate-700 dark:text-gray-200">{totalItems}</span> agents
+                    </div>
 
-              <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] text-slate-400 leading-normal flex items-start space-x-2">
-                <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the agent's email address.</span>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                        disabled={safeCurrentPage === 1}
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                            safeCurrentPage === page
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a]"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                        disabled={safeCurrentPage === totalPages}
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                        title="Next Page"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
 

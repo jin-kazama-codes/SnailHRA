@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { 
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, 
@@ -19,7 +21,9 @@ interface ConfigurationViewProps {
   onRemoveDesignation: (id: string) => void;
   onUpdateCollection: (
     type: "leaveTypes" | "departments" | "branches", 
-    updatedList: string[]
+    updatedList: string[],
+    action?: "add" | "remove",
+    item?: string
   ) => void;
 }
 
@@ -76,17 +80,16 @@ ON CONFLICT (key) DO NOTHING;`;
     e.preventDefault();
     if (!newLeaveType.trim()) return;
     const trimmed = newLeaveType.trim();
-    if (customLeaveTypes.includes(trimmed)) {
-      alert("Leave type already exists.");
-      return;
-    }
-    onUpdateCollection("leaveTypes", [...customLeaveTypes, trimmed]);
+    const newList = customLeaveTypes.some(l => l.toLowerCase() === trimmed.toLowerCase())
+      ? customLeaveTypes
+      : [...customLeaveTypes, trimmed];
+    onUpdateCollection("leaveTypes", newList, "add", trimmed);
     setNewLeaveType("");
   };
 
   const handleRemoveLeaveType = (leave: string) => {
     if (confirm(`Are you sure you want to delete "${leave}"?`)) {
-      onUpdateCollection("leaveTypes", customLeaveTypes.filter(l => l !== leave));
+      onUpdateCollection("leaveTypes", customLeaveTypes.filter(l => l !== leave), "remove", leave);
     }
   };
 
@@ -94,17 +97,16 @@ ON CONFLICT (key) DO NOTHING;`;
     e.preventDefault();
     if (!newDepartment.trim()) return;
     const trimmed = newDepartment.trim();
-    if (customDepartments.includes(trimmed)) {
-      alert("Department already exists.");
-      return;
-    }
-    onUpdateCollection("departments", [...customDepartments, trimmed]);
+    const newList = customDepartments.some(d => d.toLowerCase() === trimmed.toLowerCase())
+      ? customDepartments
+      : [...customDepartments, trimmed];
+    onUpdateCollection("departments", newList, "add", trimmed);
     setNewDepartment("");
   };
 
   const handleRemoveDepartment = (dept: string) => {
     if (confirm(`Are you sure you want to delete the "${dept}" department?`)) {
-      onUpdateCollection("departments", customDepartments.filter(d => d !== dept));
+      onUpdateCollection("departments", customDepartments.filter(d => d !== dept), "remove", dept);
     }
   };
 
@@ -112,17 +114,16 @@ ON CONFLICT (key) DO NOTHING;`;
     e.preventDefault();
     if (!newBranch.trim()) return;
     const trimmed = newBranch.trim();
-    if (customBranches.includes(trimmed)) {
-      alert("Office branch already exists.");
-      return;
-    }
-    onUpdateCollection("branches", [...customBranches, trimmed]);
+    const newList = customBranches.some(b => b.toLowerCase() === trimmed.toLowerCase())
+      ? customBranches
+      : [...customBranches, trimmed];
+    onUpdateCollection("branches", newList, "add", trimmed);
     setNewBranch("");
   };
 
   const handleRemoveBranch = (branch: string) => {
     if (confirm(`Are you sure you want to remove the "${branch}" branch office?`)) {
-      onUpdateCollection("branches", customBranches.filter(b => b !== branch));
+      onUpdateCollection("branches", customBranches.filter(b => b !== branch), "remove", branch);
     }
   };
 

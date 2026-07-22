@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { 
   DollarSign, FileText, Plus, Check, X, ShieldAlert, 
@@ -28,18 +30,23 @@ export default function ExpensesView({
 }: ExpensesViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"claims" | "reimbursements">("claims");
   const [showClaimForm, setShowClaimForm] = useState(false);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Claim fields
   const [category, setCategory] = useState<any>("Travel & Fuel");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState("2026-07-20");
+  const [date, setDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [description, setDescription] = useState("");
 
   const handleClaimSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description || !date) return;
+    const targetEmpId = currentEmployeeId || (employees.find(emp => emp.role === role)?.id || employees[0]?.id || "");
     onSubmitExpense({
-      employeeId: currentEmployeeId,
+      employeeId: targetEmpId,
       category,
       amount,
       date,
@@ -48,6 +55,16 @@ export default function ExpensesView({
     setDescription("");
     setAmount("");
     setShowClaimForm(false);
+  };
+
+  const handleReviewAction = async (id: string, status: "Approved" | "Rejected") => {
+    if (processingId) return;
+    setProcessingId(id);
+    try {
+      await onReviewExpense(id, status);
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const getEmployeeName = (empId: string) => {
@@ -193,18 +210,33 @@ export default function ExpensesView({
 
                       <div className="flex space-x-2 shrink-0 self-end md:self-auto">
                         <button
-                          onClick={() => onReviewExpense(claim.id, "Rejected")}
-                          className="bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center space-x-1 cursor-pointer"
+                          onClick={() => handleReviewAction(claim.id, "Rejected")}
+                          disabled={processingId === claim.id}
+                          className="bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center space-x-1 cursor-pointer disabled:opacity-50"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          {processingId === claim.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <X className="w-3.5 h-3.5" />
+                          )}
                           <span>Reject</span>
                         </button>
                         <button
-                          onClick={() => onReviewExpense(claim.id, "Approved")}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer"
+                          onClick={() => handleReviewAction(claim.id, "Approved")}
+                          disabled={processingId === claim.id}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
                         >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Approve & Reimburse</span>
+                          {processingId === claim.id ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                              <span>Approving...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve & Reimburse</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -224,9 +256,15 @@ export default function ExpensesView({
               </div>
 
               <div className="space-y-2.5 max-h-[300px] overflow-y-auto custom-scrollbar">
-                {expenses
-                  .filter(e => role === "employee" ? e.employeeId === currentEmployeeId : true)
-                  .map(claim => (
+                {(() => {
+                  const activeEmpId = currentEmployeeId || (employees.find(emp => emp.role === role)?.id || employees[0]?.id || "");
+                  const visibleExpenses = expenses.filter(e => role === "employee" ? (e.employeeId === activeEmpId || (currentEmployeeId && e.employeeId === currentEmployeeId)) : true);
+                  
+                  if (visibleExpenses.length === 0) {
+                    return <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No expense claims logged yet.</p>;
+                  }
+
+                  return visibleExpenses.map(claim => (
                     <div key={claim.id} className="p-3 bg-slate-50/50 dark:bg-[#0a0a0a]/40 border border-slate-100/50 dark:border-[#1a1a1a]/50 rounded-xl flex items-center justify-between text-xs">
                       <div className="space-y-1">
                         <div className="flex items-center space-x-2">
@@ -247,10 +285,8 @@ export default function ExpensesView({
                         {claim.status}
                       </span>
                     </div>
-                  ))}
-                {expenses.filter(e => role === "employee" ? e.employeeId === currentEmployeeId : true).length === 0 && (
-                  <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No expense claims logged yet.</p>
-                )}
+                  ));
+                })()}
               </div>
             </div>
 

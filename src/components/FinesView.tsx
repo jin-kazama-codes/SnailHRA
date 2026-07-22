@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import { 
   Scale, AlertTriangle, Plus, Check, DollarSign, Sparkles, UserCheck, X
@@ -31,16 +33,18 @@ export default function FinesView({
   const handleFineSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fineEmpId || !fineAmount) return;
+    const emp = employees.find(e => e.id === fineEmpId);
     onAddFine({
       employeeId: fineEmpId,
+      employeeName: emp ? emp.fullName : getEmployeeName(fineEmpId),
       reason: fineReason,
-      amount: fineAmount
+      amount: Number(fineAmount)
     });
     setShowFineForm(false);
   };
 
   const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Agent";
+    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
   const pendingFinesCount = fines.filter(f => f.status === "Pending").length;
@@ -67,7 +71,7 @@ export default function FinesView({
           {(role === "admin" || role === "hr") && (
             <button
               onClick={() => setShowFineForm(!showFineForm)}
-              className="bg-rose-650 hover:bg-rose-600 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
             >
               <Plus className="w-4 h-4" />
               <span>{showFineForm ? "Close Panel" : "Log Corporate Infraction"}</span>
@@ -87,14 +91,16 @@ export default function FinesView({
           <form onSubmit={handleFineSubmit} className="space-y-4 text-xs font-semibold">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-slate-500 dark:text-gray-400">Offending Agent / Employee</label>
+                <label className="block text-slate-500 dark:text-gray-400">Employee Name</label>
                 <select
                   value={fineEmpId}
                   onChange={(e) => setFineEmpId(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2.5 rounded-xl border border-slate-100 dark:border-[#2a2a2a]"
                 >
                   {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.id})</option>
+                    <option key={emp.id} value={emp.id}>
+                      {emp.fullName} ({emp.id}) - Role: {emp.role === "hr" ? "HR" : emp.role === "admin" ? "Admin" : "Employee"}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -128,7 +134,7 @@ export default function FinesView({
             <div className="flex justify-end pt-2 border-t border-slate-50 dark:border-[#1a1a1a]">
               <button
                 type="submit"
-                className="bg-rose-650 hover:bg-rose-600 text-white font-semibold px-4.5 py-2.5 rounded-xl cursor-pointer shadow-xs"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-4.5 py-2.5 rounded-xl cursor-pointer shadow-xs"
               >
                 Authorize Fine Penalty
               </button>
@@ -145,7 +151,7 @@ export default function FinesView({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                <th className="py-2.5 px-3">Agent Name</th>
+                <th className="py-2.5 px-3">Employee Name</th>
                 <th className="py-2.5 px-3">Violation Reason</th>
                 <th className="py-2.5 px-3">Date Authorised</th>
                 <th className="py-2.5 px-3">Penalty Charge</th>
@@ -160,10 +166,10 @@ export default function FinesView({
                   <tr key={fine.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/40 transition-colors">
                     <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
                       <div className="w-6.5 h-6.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
-                        {fine.employeeName.charAt(0)}
+                        {(fine.employeeName || getEmployeeName(fine.employeeId)).charAt(0)}
                       </div>
                       <div>
-                        <span className="block leading-tight">{fine.employeeName}</span>
+                        <span className="block leading-tight">{fine.employeeName || getEmployeeName(fine.employeeId)}</span>
                         <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal font-mono">{fine.employeeId}</span>
                       </div>
                     </td>

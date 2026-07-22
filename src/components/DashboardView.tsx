@@ -1,8 +1,12 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { 
-  Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles
+  Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
+  CheckCircle2, Users, FileText, AlertCircle, DollarSign, Package, Briefcase, Home,
+  Award, ChevronRight, Activity, TrendingUp
 } from "lucide-react";
-import { Employee, Holiday, LeaveRequest, Payslip } from "../types";
+import { Employee, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine } from "../types";
 
 interface DashboardViewProps {
   currentEmployee: Employee;
@@ -10,6 +14,10 @@ interface DashboardViewProps {
   holidays: Holiday[];
   leaves: LeaveRequest[];
   payslips: Payslip[];
+  attendance?: AttendancePunch[];
+  expenses?: ExpenseClaim[];
+  inventory?: InventoryItem[];
+  fines?: Fine[];
   role: "admin" | "hr" | "employee";
 }
 
@@ -19,48 +27,78 @@ export default function DashboardView({
   holidays,
   leaves,
   payslips,
+  attendance = [],
+  expenses = [],
+  inventory = [],
+  fines = [],
   role
 }: DashboardViewProps) {
   const [time, setTime] = useState(new Date());
-  const [weatherTemp, setWeatherTemp] = useState(28);
-  const [weatherCondition, setWeatherCondition] = useState("Partly Cloudy");
 
-  // Keep digital clock live
+  // Keep digital clock ticking
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Format time beautifully
   const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const formattedDate = time.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+  const todayStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
+  const currentMonthStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}`;
 
-  // Get upcoming birthdays (next 30 days) and work anniversaries
-  const upcomingBirthdays = [
-    { name: "Rahul Verma", role: "Senior Loan Officer", date: "July 24", age: 29 },
-    { name: "Priya Patel", role: "HR Business Partner", date: "August 02", age: 31 },
-    { name: "Vikram Malhotra", role: "Relationship Manager", date: "August 11", age: 26 }
-  ];
+  const userBranch = currentEmployee?.branch || "Mumbai Branch";
 
-  const workAnniversaries = [
-    { name: "Amit Sharma", role: "Head of Credit & Risk", tenure: "2 Years", date: "August 15" },
-    { name: "Sneha Iyer", role: "Insurance Underwriter", tenure: "1 Year", date: "August 20" }
-  ];
+  // Filter employees according to role
+  const branchEmployees = employees.filter(e => (e.branch || "Mumbai Branch") === userBranch);
 
-  // NBFC-specific Sales metrics calculations for Admin/HR
-  const totalEmployeesCount = employees.length;
-  const activeLoansValue = "₹ 12.4 Cr";
-  const insurancePoliciesSold = 420;
-  const averageLoanDisbursalTime = "4.2 Days";
+  // Dynamic calculations based on role
+  // 1. Admin Metrics
+  const adminTotalUsers = employees.length;
+  const adminTotalHrs = employees.filter(e => e.role === "hr").length;
+  const adminTotalEmps = employees.filter(e => e.role === "employee").length;
+  const adminTodayPresent = attendance.filter(a => a.date === todayStr && (a.status === "Present" || a.status === "Late")).length;
+  const adminTodayWfh = attendance.filter(a => a.date === todayStr && a.workFromHome).length;
+  const adminPendingLeaves = leaves.filter(l => l.status === "Pending").length;
+  const adminPendingExpenses = expenses.filter(e => e.status === "Pending").length;
+  const adminTotalAssetsAssigned = inventory.filter(i => i.status === "Assigned").length;
 
-  // Pending leaves counts
-  const pendingLeavesCount = leaves.filter(l => l.status === "Pending").length;
+  // 2. HR Metrics (Branch specific)
+  const hrBranchUsers = branchEmployees.length;
+  const hrBranchPresentToday = attendance.filter(a => a.date === todayStr && (a.status === "Present" || a.status === "Late") && branchEmployees.some(e => e.id === a.employeeId)).length;
+  const hrBranchWfhToday = attendance.filter(a => a.date === todayStr && a.workFromHome && branchEmployees.some(e => e.id === a.employeeId)).length;
+  const hrBranchPendingLeaves = leaves.filter(l => l.status === "Pending" && branchEmployees.some(e => e.id === l.employeeId)).length;
+  const hrBranchPendingExpenses = expenses.filter(exp => exp.status === "Pending" && branchEmployees.some(emp => emp.id === exp.employeeId)).length;
+
+  // 3. Employee Metrics (Personal only)
+  const myTodayPunch = currentEmployee ? attendance.find(a => a.employeeId === currentEmployee.id && a.date === todayStr) : undefined;
+  const myPunchesThisMonth = currentEmployee ? attendance.filter(a => a.employeeId === currentEmployee.id && a.date.startsWith(currentMonthStr)) : [];
+  const myPresentDays = myPunchesThisMonth.filter(p => p.status === "Present" || p.status === "Late").length;
+  const myWfhDays = myPunchesThisMonth.filter(p => p.workFromHome).length;
+  const myLateLogins = myPunchesThisMonth.filter(p => p.status === "Late").length;
+  const myLeaves = currentEmployee ? leaves.filter(l => l.employeeId === currentEmployee.id) : [];
+  const myPendingLeaves = myLeaves.filter(l => l.status === "Pending").length;
+  const myPayslip = currentEmployee ? (payslips.find(p => p.employeeId === currentEmployee.id) || payslips[0]) : undefined;
+  const myAssets = currentEmployee ? inventory.filter(i => i.assignedToEmployeeId === currentEmployee.id) : [];
+
+  // Dynamic celebrations derived from employees database catalog
+  const upcomingBirthdays = employees.map(emp => {
+    const joinYear = new Date(emp.joiningDate).getFullYear();
+    const currentYear = time.getFullYear();
+    const tenureYears = Math.max(1, currentYear - joinYear);
+    return {
+      name: emp.fullName,
+      role: `${emp.department} • ${tenureYears} Year${tenureYears > 1 ? 's' : ''} Work Anniversary`,
+      date: new Date(emp.joiningDate).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    };
+  });
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner Row */}
+      
+      {/* Welcome & Clock Header Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Welcome Message */}
+        
+        {/* Customized Banner based on Role */}
         <div id="welcome-banner" className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-linear-to-r from-emerald-600 via-emerald-700 to-teal-800 p-6 text-white shadow-md dark:shadow-emerald-950/40 dark:neon-glow">
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
           <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-emerald-400/20 rounded-full blur-xl pointer-events-none"></div>
@@ -68,44 +106,48 @@ export default function DashboardView({
           <div className="relative z-10 flex flex-col justify-between h-full space-y-4">
             <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full w-fit">
               <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
-              <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100">NBFC Lending & Insurance Hub</span>
+              <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100">
+                {role === "admin" ? "SnailHR System Administrator Portal" : role === "hr" ? `SnailHR Branch Management Desk (${userBranch})` : "SnailHR Employee Workspace"}
+              </span>
             </div>
             
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold font-display tracking-tight leading-none mb-2">
-                Welcome back, {currentEmployee.fullName}!
+                Welcome back, {currentEmployee?.fullName || "User"}!
               </h1>
               <p className="text-emerald-100 text-sm max-w-lg leading-relaxed">
-                Empowering SnailHR agents with unified onboarding, payroll, directory access, and instant leave logs. Stay connected and manage your workspace efficiently today.
+                {role === "admin" && "Executive Overview: Monitoring company-wide attendance, HR rosters, payroll metrics, and infrastructure security."}
+                {role === "hr" && `Branch HR Overview: Managing talent, branch attendance, onboarding, and leaves for ${userBranch}.`}
+                {role === "employee" && "Personal Overview: Access your shift punches, monthly attendance metrics, leave balances, and payslips."}
               </p>
             </div>
 
             <div className="flex flex-wrap gap-4 pt-2">
               <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
                 <span className="block text-emerald-200">Designation</span>
-                <span className="font-semibold">{employees.find(e => e.id === currentEmployee.id)?.role === "admin" ? "Systems Administrator" : "Financial Associate"}</span>
+                <span className="font-semibold">{currentEmployee?.department || "General"} Specialist</span>
               </div>
               <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
-                <span className="block text-emerald-200">Security Clearance</span>
+                <span className="block text-emerald-200">Clearance & Role</span>
                 <span className="font-semibold uppercase tracking-wider text-emerald-300 font-mono">{role}</span>
               </div>
               <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
-                <span className="block text-emerald-200">Corporate Branch</span>
-                <span className="font-semibold">Mumbai Corporate Office</span>
+                <span className="block text-emerald-200">Branch Office</span>
+                <span className="font-semibold">{userBranch}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Digital Clock & Smart Weather Widget */}
+        {/* Live Digital Clock Widget */}
         <div id="weather-card" className="rounded-2xl bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] p-6 flex flex-col justify-between shadow-xs dark:neon-glow">
           <div className="flex items-center justify-between">
             <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-slate-500 dark:text-gray-400">Mumbai HQ Desk</h2>
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-gray-300">{userBranch} Desk</h2>
               <p className="text-xs text-slate-400 dark:text-gray-500">{formattedDate}</p>
             </div>
             <div className="bg-emerald-50 dark:bg-emerald-950/50 p-2.5 rounded-xl border border-emerald-100/50 dark:border-emerald-900/50">
-              <CloudSun className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
 
@@ -113,44 +155,164 @@ export default function DashboardView({
             <p className="text-3xl font-bold font-mono text-slate-800 dark:text-emerald-400 tracking-wider neon-text-glow">
               {formattedTime}
             </p>
-            <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Automatic Attendance Geo-locked Time</p>
+            <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Real-Time Geo-Synched Attendance Clock</p>
           </div>
 
-          <div className="flex items-center justify-between border-t border-slate-50 dark:border-[#1a1a1a] pt-4">
-            <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-slate-800 dark:text-white">{weatherTemp}°C</span>
-              <span className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 px-2 py-0.5 rounded-full font-medium">Warm</span>
-            </div>
-            <span className="text-xs text-slate-500 dark:text-gray-400 font-medium">{weatherCondition}</span>
+          <div className="flex items-center justify-between border-t border-slate-50 dark:border-[#1a1a1a] pt-3 text-xs">
+            <span className="text-slate-500 dark:text-gray-400">Shift Status:</span>
+            <span className={`font-bold px-2.5 py-0.5 rounded-full uppercase text-[10px] ${
+              myTodayPunch?.clockOut ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+              myTodayPunch ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse" :
+              "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+            }`}>
+              {myTodayPunch?.clockOut ? "Completed" : myTodayPunch ? "Clocked In" : "Not Clocked In"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Corporate Metadata & HR Metrics Calculations */}
-      {(() => {
-        const totalEmployeesCount = employees.length;
-        return null;
-      })()}
+      {/* ROLE-BASED DASHBOARD CONTENT BENTO */}
 
-      {/* Dashboard Key HR Insights Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Active Agent Pool */}
-        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-semibold text-slate-400 dark:text-gray-400 uppercase tracking-wider">Active Agent Pool</span>
-            <span className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-400 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center">
-              No attrition
-            </span>
-          </div>
-          <div className="my-4">
-            <p className="text-3xl font-bold font-display text-slate-800 dark:text-white">{employees.length} Users</p>
-            <p className="text-xs text-slate-400 dark:text-gray-500 mt-1">Active registered agents in system</p>
-          </div>
-          <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-xl text-xs text-slate-500 dark:text-gray-400">
-            <span>👥 <b>Structure</b>: 3 Departments, 8 designations across Snail Mumbai HQ.</span>
+      {/* 1. ADMIN DASHBOARD VIEW */}
+      {role === "admin" && (
+        <div className="space-y-6">
+          {/* Top Dynamic Stat Bento Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Company Roster</span>
+                <Users className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-slate-800 dark:text-white font-mono">{adminTotalUsers}</p>
+              <p className="text-xs text-slate-400 mt-1">{adminTotalHrs} HR Staff • {adminTotalEmps} Employees</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Attendance Today</span>
+                <Clock className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{adminTodayPresent}</p>
+              <p className="text-xs text-slate-400 mt-1">{adminTodayWfh} Work From Home</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Pending Approvals</span>
+                <ShieldAlert className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-amber-500 font-mono">{adminPendingLeaves + adminPendingExpenses}</p>
+              <p className="text-xs text-slate-400 mt-1">{adminPendingLeaves} Leaves • {adminPendingExpenses} Expenses</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Allocated Assets</span>
+                <Package className="w-4 h-4 text-indigo-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-indigo-500 font-mono">{adminTotalAssetsAssigned}</p>
+              <p className="text-xs text-slate-400 mt-1">Hardware inventory items</p>
+            </div>
           </div>
         </div>
+      )}
 
+      {/* 2. HR DASHBOARD VIEW */}
+      {role === "hr" && (
+        <div className="space-y-6">
+          {/* HR Branch Stat Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Branch Staff</span>
+                <Users className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-slate-800 dark:text-white font-mono">{hrBranchUsers}</p>
+              <p className="text-xs text-slate-400 mt-1">{userBranch} Employees</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Branch Present</span>
+                <Clock className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{hrBranchPresentToday}</p>
+              <p className="text-xs text-slate-400 mt-1">{hrBranchWfhToday} WFH Logs</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Pending Branch Leaves</span>
+                <ShieldAlert className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-amber-500 font-mono">{hrBranchPendingLeaves}</p>
+              <p className="text-xs text-slate-400 mt-1">Awaiting HR review</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Branch Expense Claims</span>
+                <DollarSign className="w-4 h-4 text-teal-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-teal-600 font-mono">{hrBranchPendingExpenses}</p>
+              <p className="text-xs text-slate-400 mt-1">Claims submitted</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. EMPLOYEE PERSONAL DASHBOARD VIEW */}
+      {role === "employee" && (
+        <div className="space-y-6">
+          {/* Employee Personal Bento Stat Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">My Present Days</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{myPresentDays}</p>
+              <p className="text-xs text-slate-400 mt-1">{myWfhDays} Work From Home (WFH)</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">My Late Logins</span>
+                <Clock className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-amber-500 font-mono">{myLateLogins}</p>
+              <p className="text-xs text-slate-400 mt-1">Logins after 09:30 AM</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Leave Balance</span>
+                <Calendar className="w-4 h-4 text-indigo-500" />
+              </div>
+              <p className="text-3xl font-extrabold text-indigo-500 font-mono">14 Days</p>
+              <p className="text-xs text-slate-400 mt-1">{myPendingLeaves} leave request pending</p>
+            </div>
+
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider">Net Monthly Pay</span>
+                <DollarSign className="w-4 h-4 text-teal-500" />
+              </div>
+              <p className="text-2xl font-extrabold text-slate-800 dark:text-white font-mono">
+                ₹ {myPayslip ? myPayslip.netPay.toLocaleString('en-IN') : "65,000"}
+              </p>
+              <p className="text-xs text-emerald-600 mt-1 font-semibold">July 2026 Payslip Issued</p>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Lower Insights Grid: Holidays & Leave Tracker */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
         {/* Upcoming Holidays Card */}
         <div id="holidays-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
           <div className="flex items-center justify-between mb-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-2">
@@ -163,7 +325,11 @@ export default function DashboardView({
 
           <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
             {holidays
-              .filter(h => new Date(h.date) >= new Date("2026-07-20"))
+              .filter(h => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return new Date(h.date) >= today;
+              })
               .slice(0, 3)
               .map(holiday => (
                 <div key={holiday.id} className="flex items-center justify-between text-xs p-1 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/50 rounded-lg transition-colors">
@@ -176,60 +342,81 @@ export default function DashboardView({
                   </span>
                 </div>
               ))}
-            {holidays.filter(h => new Date(h.date) >= new Date("2026-07-20")).length === 0 && (
-              <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-2">No upcoming holidays this season.</p>
-            )}
           </div>
         </div>
 
-        {/* Birthdays & Work Anniversaries Panel */}
+        {/* Celebrations */}
         <div id="celebrations-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
           <div className="flex items-center justify-between mb-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-2">
             <div className="flex items-center space-x-2">
               <Gift className="w-4 h-4 text-pink-500" />
-              <h4 className="font-display font-semibold text-slate-800 dark:text-white">Anniversaries & Birthdays</h4>
+              <h4 className="font-display font-semibold text-slate-800 dark:text-white">Birthdays & Anniversaries</h4>
             </div>
             <span className="text-[10px] bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-400 px-2 py-0.5 rounded-full font-bold">This Month</span>
           </div>
 
           <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-            {/* Birthdays & Milestones list */}
-            {upcomingBirthdays.slice(0, 1).map((b, idx) => (
+            {upcomingBirthdays.slice(0, 2).map((b, idx) => (
               <div key={idx} className="flex items-center space-x-2.5 text-xs bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-1.5 rounded-xl">
                 <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/50 flex items-center justify-center text-pink-600 dark:text-pink-400 font-bold text-xs">
-                  {b.name.charAt(0)}
+                  {b.name ? b.name.charAt(0) : "A"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-slate-700 dark:text-gray-300 truncate">{b.name}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate">Birthday • {b.date}</p>
-                </div>
-              </div>
-            ))}
-            {workAnniversaries.slice(0, 1).map((a, idx) => (
-              <div key={idx} className="flex items-center space-x-2.5 text-xs bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-1.5 rounded-xl">
-                <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600 dark:text-amber-400 font-bold">
-                  <Heart className="w-3.5 h-3.5 fill-amber-500 stroke-none" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-700 dark:text-gray-300 truncate">{a.name}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate">Anniversary ({a.tenure}) • {a.date}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{b.role} • {b.date}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Assets / Onboarding Summary */}
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
+          <div className="flex items-center justify-between mb-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-2">
+            <div className="flex items-center space-x-2">
+              <Package className="w-4 h-4 text-teal-500" />
+              <h4 className="font-display font-semibold text-slate-800 dark:text-white">
+                {role === "employee" ? "My Hardware Assets" : "Corporate Assets"}
+              </h4>
+            </div>
+            <span className="text-[10px] bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-400 px-2 py-0.5 rounded-full font-bold">Assigned</span>
+          </div>
+
+          <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+            {(role === "employee" ? myAssets : inventory).slice(0, 2).map((item) => (
+              <div key={item.id} className="flex items-center justify-between text-xs p-1.5 bg-slate-50/50 dark:bg-[#0a0a0a]/50 rounded-xl">
+                <div>
+                  <p className="font-bold text-slate-700 dark:text-gray-300">{item.name}</p>
+                  <p className="text-[10px] font-mono text-slate-400">{item.serialNumber}</p>
+                </div>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md">
+                  {item.status}
+                </span>
+              </div>
+            ))}
+            {(role === "employee" ? myAssets : inventory).length === 0 && (
+              <p className="text-xs text-slate-400 italic">No assigned assets.</p>
+            )}
+          </div>
+        </div>
+
       </div>
 
-      {/* Leave Status Monitoring Row */}
+      {/* Leave Status Monitoring Row (Filtered by Role) */}
       <div id="leaves-summary-row" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
           <div>
-            <h4 className="font-display font-semibold text-slate-800 dark:text-white text-md">Lending Agents Leave Tracker & Status</h4>
-            <p className="text-xs text-slate-400 dark:text-gray-400">Review status of submitted medical, casual or earned leave requests</p>
+            <h4 className="font-display font-semibold text-slate-800 dark:text-white text-md">
+              {role === "admin" ? "Company Leave Tracker" : role === "hr" ? `Branch Leave Tracker (${userBranch})` : "My Leave Requests"}
+            </h4>
+            <p className="text-xs text-slate-400 dark:text-gray-400">
+              {role === "employee" ? "Track your submitted casual and medical leave requests" : "Review status of submitted employee leave applications"}
+            </p>
           </div>
           {role !== "employee" && (
             <span className="text-xs bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 font-bold px-3 py-1 rounded-full flex items-center">
-              <ShieldAlert className="w-3.5 h-3.5 mr-1" /> {pendingLeavesCount} Pending
+              <ShieldAlert className="w-3.5 h-3.5 mr-1" />
+              {role === "admin" ? adminPendingLeaves : hrBranchPendingLeaves} Pending
             </span>
           )}
         </div>
@@ -247,33 +434,47 @@ export default function DashboardView({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
-              {leaves.slice(0, 4).map(leave => (
-                <tr key={leave.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
-                  <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
-                    <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
-                      {leave.employeeName.charAt(0)}
-                    </div>
-                    <span>{leave.employeeName}</span>
-                  </td>
-                  <td className="py-3 px-3 text-slate-600 dark:text-gray-400 font-medium">{leave.leaveType}</td>
-                  <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-400">
-                    {leave.startDate} to {leave.endDate}
-                  </td>
-                  <td className="py-3 px-3 font-mono text-slate-400 dark:text-gray-500">{leave.appliedDate}</td>
-                  <td className="py-3 px-3 text-slate-400 dark:text-gray-500 max-w-[200px] truncate">{leave.reason}</td>
-                  <td className="py-3 px-3 text-right">
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase ${
-                      leave.status === "Approved" 
-                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                        : leave.status === "Pending"
-                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse"
-                        : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                    }`}>
-                      {leave.status}
-                    </span>
-                  </td>
+              {(role === "admin" 
+                ? leaves 
+                : role === "hr"
+                ? leaves.filter(l => branchEmployees.some(e => e.id === l.employeeId))
+                : myLeaves
+              ).slice(0, 5).map(leave => {
+                const empName = leave.employeeName || employees.find(e => e.id === leave.employeeId)?.fullName || "Agent";
+                const statusVal = leave.status || "Pending";
+                return (
+                  <tr key={leave.id || `lvr-${Math.random()}`} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
+                    <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
+                      <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
+                        {empName.charAt(0)}
+                      </div>
+                      <span>{empName}</span>
+                    </td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-gray-400 font-medium">{leave.leaveType || "Leave"}</td>
+                    <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-400">
+                      {leave.startDate} to {leave.endDate}
+                    </td>
+                    <td className="py-3 px-3 font-mono text-slate-400 dark:text-gray-500">{leave.appliedDate}</td>
+                    <td className="py-3 px-3 text-slate-400 dark:text-gray-500 max-w-[200px] truncate">{leave.reason}</td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase ${
+                        statusVal === "Approved" 
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          : statusVal === "Pending"
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse"
+                          : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                      }`}>
+                        {statusVal}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {(role === "employee" ? myLeaves : leaves).length === 0 && (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-slate-400 italic">No leave records found.</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

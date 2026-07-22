@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Laptop, Tablet, Radio, Layers, Plus, Check, X, 
   HelpCircle, AlertCircle, FileText, User, Calendar
@@ -11,6 +11,7 @@ interface InventoryViewProps {
   employees: Employee[];
   role: UserRole;
   currentEmployeeId: string;
+  customBranches?: string[];
   onAddAsset: (assetData: any) => void;
   onApplyAssetRequest: (reqData: any) => void;
   onReviewAssetRequest: (id: string, status: "Approved" | "Rejected", assetId?: string) => void;
@@ -22,6 +23,7 @@ export default function InventoryView({
   employees,
   role,
   currentEmployeeId,
+  customBranches,
   onAddAsset,
   onApplyAssetRequest,
   onReviewAssetRequest
@@ -33,11 +35,49 @@ export default function InventoryView({
   // Allocation states
   const [allocatingReqId, setAllocatingReqId] = useState<string | null>(null);
   const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Approved" | "Rejected">("All");
 
   // Add asset fields
   const [assetName, setAssetName] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [assetCategory, setAssetCategory] = useState<any>("Laptop");
+
+  const getBranchCode = (branchName: string) => {
+    if (!branchName) return "";
+    const codeMap: Record<string, string> = {
+      "Noida HQ": "NOIDA-HQ",
+      "Mumbai Branch": "MUM-BR",
+      "Pune Digital Office": "PUNE-DO",
+      "Hyderabad Hub": "HYD-HUB"
+    };
+    if (codeMap[branchName]) return codeMap[branchName];
+    return branchName.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 10);
+  };
+
+  // Automatically pre-select the logged-in employee's branch and generate initial serial code
+  useEffect(() => {
+    const currentEmp = employees.find(e => e.id === currentEmployeeId);
+    const empBranch = currentEmp?.branch || "Mumbai Branch";
+    setSelectedBranch(empBranch);
+    const code = getBranchCode(empBranch);
+    const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
+    if (!serialNumber || showAddAssetForm) {
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      setSerialNumber(`${code}-${catCode}-${randNum}`);
+    }
+  }, [currentEmployeeId, employees, showAddAssetForm]);
+
+  const handleCategorySelect = (category: string) => {
+    setAssetCategory(category as any);
+    const branchToUse = selectedBranch || (employees.find(e => e.id === currentEmployeeId)?.branch) || "Mumbai Branch";
+    if (branchToUse) {
+      const code = getBranchCode(branchToUse);
+      const catCode = category === "Laptop" ? "LP" : category === "Mobile Tablet" ? "TB" : category === "WiFi Dongle" ? "WF" : "AST";
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      setSerialNumber(`${code}-${catCode}-${randNum}`);
+    }
+  };
 
   // Request asset fields
   const [reqItemName, setReqItemName] = useState("");
@@ -48,13 +88,28 @@ export default function InventoryView({
     e.preventDefault();
     if (!assetName || !serialNumber) return;
     onAddAsset({
+      id: `inv-${Date.now()}`,
       name: assetName,
       serialNumber,
-      category: assetCategory
+      category: assetCategory,
+      status: "Available",
+      assignedToEmployeeId: null,
+      assignedDate: null,
+      branch: selectedBranch || undefined
     });
     setAssetName("");
-    setSerialNumber("");
     setShowAddAssetForm(false);
+
+    // Reset serial number for next asset
+    const currentEmp = employees.find(e => e.id === currentEmployeeId);
+    const empBranch = currentEmp?.branch || "Mumbai Branch";
+    if (empBranch) {
+      setSelectedBranch(empBranch);
+      const code = getBranchCode(empBranch);
+      const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      setSerialNumber(`${code}-${catCode}-${randNum}`);
+    }
   };
 
   const handleRequestSubmit = (e: React.FormEvent) => {
@@ -72,10 +127,11 @@ export default function InventoryView({
   };
 
   const handleApproveClick = (reqId: string, category: string) => {
-    // Show allocation interface
+    // Check available assets under this category
     const availableAssets = inventory.filter(i => i.category === category && i.status === "Available");
     if (availableAssets.length === 0) {
-      alert(`No available items under the ${category} category in inventory! Add assets first.`);
+      // Approve ticket directly if no available asset in directory
+      onReviewAssetRequest(reqId, "Approved");
       return;
     }
     setAllocatingReqId(reqId);
@@ -83,8 +139,7 @@ export default function InventoryView({
   };
 
   const handleCompleteAllocation = (reqId: string) => {
-    if (!selectedAssetId) return;
-    onReviewAssetRequest(reqId, "Approved", selectedAssetId);
+    onReviewAssetRequest(reqId, "Approved", selectedAssetId || undefined);
     setAllocatingReqId(null);
   };
 
@@ -158,7 +213,7 @@ export default function InventoryView({
               <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Register New Hardware Asset</h3>
 
               <form onSubmit={handleAddAssetSubmit} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Asset Model Name</label>
                     <input 
@@ -172,7 +227,20 @@ export default function InventoryView({
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Company Serial Code</label>
+                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Branch (Branch Serial Code)</label>
+                    <input 
+                      type="text"
+                      value={selectedBranch ? `${selectedBranch} (${getBranchCode(selectedBranch)})` : "Fetching branch..."}
+                      readOnly
+                      disabled
+                      className="w-full bg-slate-100 dark:bg-[#1a1a1a]/70 text-slate-700 dark:text-gray-300 px-3 py-2 rounded-xl border border-slate-200 dark:border-[#262626] font-medium cursor-not-allowed select-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">
+                      Company Serial Code {selectedBranch && <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold ml-1">[{getBranchCode(selectedBranch)}]</span>}
+                    </label>
                     <input 
                       type="text"
                       value={serialNumber}
@@ -187,8 +255,8 @@ export default function InventoryView({
                     <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Asset Category</label>
                     <select
                       value={assetCategory}
-                      onChange={(e) => setAssetCategory(e.target.value as any)}
-                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
+                      onChange={(e) => handleCategorySelect(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium cursor-pointer"
                     >
                       <option value="Laptop">Laptop Notebook</option>
                       <option value="Mobile Tablet">Mobile Sales Tablet</option>
@@ -325,11 +393,86 @@ export default function InventoryView({
 
           {/* Requisition Ticket Logs */}
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Asset Requisitions</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Asset Requisitions</h3>
+
+              {/* Status Filter Toolbar */}
+              <div className="flex items-center space-x-1.5 bg-slate-50 dark:bg-[#0a0a0a] p-1 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs font-semibold self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("All")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    statusFilter === "All"
+                      ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  All ({(role === "employee" ? inventoryRequests.filter(r => r.employeeId === currentEmployeeId) : inventoryRequests).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("Pending")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1 ${
+                    statusFilter === "Pending"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span>Pending</span>
+                  <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${
+                    statusFilter === "Pending" ? "bg-amber-600 text-white" : "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400"
+                  }`}>
+                    {(role === "employee" ? inventoryRequests.filter(r => r.employeeId === currentEmployeeId) : inventoryRequests).filter(r => r.status === "Pending").length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("Approved")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1 ${
+                    statusFilter === "Approved"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span>Approved</span>
+                  <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${
+                    statusFilter === "Approved" ? "bg-emerald-700 text-white" : "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400"
+                  }`}>
+                    {(role === "employee" ? inventoryRequests.filter(r => r.employeeId === currentEmployeeId) : inventoryRequests).filter(r => r.status === "Approved").length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("Rejected")}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1 ${
+                    statusFilter === "Rejected"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-gray-300"
+                  }`}
+                >
+                  <span>Rejected</span>
+                  <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-bold ${
+                    statusFilter === "Rejected" ? "bg-rose-700 text-white" : "bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400"
+                  }`}>
+                    {(role === "employee" ? inventoryRequests.filter(r => r.employeeId === currentEmployeeId) : inventoryRequests).filter(r => r.status === "Rejected").length}
+                  </span>
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-4">
-              {inventoryRequests
+              {[...inventoryRequests]
                 .filter(r => role === "employee" ? r.employeeId === currentEmployeeId : true)
+                .filter(r => statusFilter === "All" ? true : r.status === statusFilter)
+                .sort((a, b) => {
+                  const tsA = parseInt(a.id.replace(/\D/g, "") || "0", 10);
+                  const tsB = parseInt(b.id.replace(/\D/g, "") || "0", 10);
+                  if (tsA && tsB && tsA !== tsB) return tsB - tsA;
+                  if (a.requestDate && b.requestDate && a.requestDate !== b.requestDate) {
+                    return new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime();
+                  }
+                  return 0;
+                })
                 .map(req => {
                   const isAllocatingThis = allocatingReqId === req.id;
                   const availableOptionAssets = inventory.filter(i => i.category === req.category && i.status === "Available");
@@ -418,8 +561,12 @@ export default function InventoryView({
                     </div>
                   );
                 })}
-              {inventoryRequests.filter(r => role === "employee" ? r.employeeId === currentEmployeeId : true).length === 0 && (
-                <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No asset requisition tickets logged.</p>
+              {inventoryRequests
+                .filter(r => role === "employee" ? r.employeeId === currentEmployeeId : true)
+                .filter(r => statusFilter === "All" ? true : r.status === statusFilter).length === 0 && (
+                <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">
+                  {statusFilter === "All" ? "No asset requisition tickets logged." : `No ${statusFilter.toLowerCase()} asset requisition tickets found.`}
+                </p>
               )}
             </div>
           </div>

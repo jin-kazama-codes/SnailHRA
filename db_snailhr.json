@@ -1,0 +1,261 @@
+{
+  "designations": [],
+  "employees": [],
+  "attendance": [
+    {
+      "id": "pun-1784700287461",
+      "employeeId": "EMP-1003",
+      "date": "2026-07-22",
+      "clockIn": "2026-07-22T06:04:00.000Z",
+      "clockOut": "2026-07-22T12:52:00.000Z",
+      "breaks": [],
+      "status": "Late",
+      "workFromHome": true,
+      "notes": ""
+    },
+    {
+      "id": "pun-1784715549713",
+      "employeeId": "EMP-1001",
+      "date": "2026-07-22",
+      "clockIn": "2026-07-22T10:19:09.713Z",
+      "clockOut": null,
+      "breaks": [],
+      "status": "Late",
+      "workFromHome": false
+    },
+    {
+      "id": "pun-1784724839555",
+      "employeeId": "EMP-1002",
+      "date": "2026-07-22",
+      "clockIn": "2026-07-22T12:53:59.286Z",
+      "clockOut": "2026-07-22T12:54:27.013Z",
+      "breaks": [],
+      "status": "Late",
+      "workFromHome": false
+    }
+  ],
+  "leaves": [],
+  "holidays": [],
+  "policies": [
+    {
+      "id": "pol-1784667016830",
+      "title": "Travel Protocall",
+      "category": "Conduct & Ethics",
+      "content": "Code of Conduct: Standards for professional behavior and ethics.\nAttendance & Leave Policy: Rules for working hours, holidays, and leave.\nDress Code Policy: Guidelines for appropriate workplace attire.\nWork From Home / Remote Work Policy: Expectations for remote employees.\nIT & Data Security Policy: Proper use of company devices, email, and protection of confidential information.\nAnti-Harassment & Equal Opportunity Policy: Ensures a respectful and inclusive workplace free from discrimination.\nHealth & Safety Policy: Procedures to maintain a safe working environment.\nPerformance & Disciplinary Policy: Expectations for performance and consequences of misconduct.\nConfidentiality Policy: Protects company and customer information.\nExpense & Travel Policy: Rules for business travel and expense reimbursements.",
+      "lastUpdated": "2026-07-21"
+    },
+    {
+      "id": "pol-1784666923770",
+      "title": "Office Protocall",
+      "category": "Conduct & Ethics",
+      "content": "Policy Details and rules are as follows \n1. Everyone should weard their id card in office.",
+      "lastUpdated": "2026-07-21"
+    },
+    {
+      "id": "pol-1",
+      "title": "Code of Conduct & Ethics",
+      "category": "Conduct & Ethics",
+      "content": "SnailHR and our NBFC parent organisation are committed to maintaining strict professional ethics, workplace integrity, and regulatory compliance. Employees must uphold confidentiality, prevent conflicts of interest, and treat clients and team members with respect.",
+      "lastUpdated": "2026-01-15"
+    },
+    {
+      "id": "pol-2",
+      "title": "Annual Leave & Attendance Policy",
+      "category": "Employee Benefits",
+      "content": "Every active employee receives annual leave allowances including Casual Leave, Medical Leave, and Earned Leave. Daily attendance punches must be logged via SnailHR. Leaves must be applied in advance and approved by HR or reporting managers.",
+      "lastUpdated": "2026-02-01"
+    },
+    {
+      "id": "pol-3",
+      "title": "Data Protection & Information Security",
+      "category": "Compliance & Security",
+      "content": "NBFC employees handle sensitive customer financial and personal information (PII). All company devices must be secured with multi-factor authentication and passwords. Sharing customer credit info externally without authorization is strictly prohibited.",
+      "lastUpdated": "2026-03-10"
+    },
+    {
+      "id": "pol-4",
+      "title": "Sales Commission & Agent Incentives Framework",
+      "category": "NBFC Sales & Commissions",
+      "content": "Relationship managers and field sales agents earn monthly incentive commissions based on verified loan disbursements and loan portfolio performance. All deal documentations must pass audit before commission release.",
+      "lastUpdated": "2026-04-05"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "exp-1784663203329",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Broadband & Phone",
+      "amount": 40000,
+      "date": "2026-07-22",
+      "description": "Broadband Bill",
+      "status": "Approved"
+    },
+    {
+      "id": "exp-1784663035935",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Others",
+      "amount": 3000,
+      "date": "2026-07-22",
+      "description": "Functianal Expense",
+      "status": "Approved"
+    },
+    {
+      "id": "exp-1784662950472",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Office Supplies",
+      "amount": 3000,
+      "date": "2026-07-22",
+      "description": "Stationary Supplies",
+      "status": "Approved"
+    },
+    {
+      "id": "exp-1784662667873",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Training & Courses",
+      "amount": 30000,
+      "date": "2026-07-22",
+      "description": "Training",
+      "status": "Approved"
+    },
+    {
+      "id": "exp-1784662548892",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Travel & Fuel",
+      "amount": 2000,
+      "date": "2026-07-22",
+      "description": "Fuel",
+      "status": "Approved"
+    },
+    {
+      "id": "exp-1784662043379",
+      "employeeId": "EMP-1003",
+      "employeeName": "Employee EMP-1003",
+      "category": "Broadband & Phone",
+      "amount": 40000,
+      "date": "2026-07-22",
+      "description": "Phone bill",
+      "status": "Approved"
+    }
+  ],
+  "inventory": [],
+  "inventoryRequests": [
+    {
+      "id": "invreq-1784666393924",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "itemName": "i phone 15b pro max",
+      "category": "Mobile Tablet",
+      "requestDate": "2026-07-21",
+      "reason": "for sales field work",
+      "status": "Rejected"
+    },
+    {
+      "id": "invreq-1784666015241",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "itemName": "Laptop",
+      "category": "Laptop",
+      "requestDate": "2026-07-21",
+      "reason": "I need laptop for devlopment perpose",
+      "status": "Approved"
+    }
+  ],
+  "fines": [
+    {
+      "id": "fin-1784667593083",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "reason": "Unprofessional Conduct",
+      "amount": 5000,
+      "date": "2026-07-21",
+      "status": "Paid"
+    }
+  ],
+  "reimbursements": [
+    {
+      "id": "reim-1784663250903",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Broadband & Phone",
+      "amount": 40000,
+      "claimId": "exp-1784663203329",
+      "status": "Pending",
+      "processedDate": null
+    },
+    {
+      "id": "reim-1784663049021",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Others",
+      "amount": 3000,
+      "claimId": "exp-1784663035935",
+      "status": "Pending",
+      "processedDate": null
+    },
+    {
+      "id": "reim-1784662971157",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Office Supplies",
+      "amount": 3000,
+      "claimId": "exp-1784662950472",
+      "status": "Pending",
+      "processedDate": null
+    },
+    {
+      "id": "reim-1784662796039",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Training & Courses",
+      "amount": 30000,
+      "claimId": "exp-1784662667873",
+      "status": "Pending",
+      "processedDate": null
+    },
+    {
+      "id": "reim-1784662620894",
+      "employeeId": "EMP-1003",
+      "employeeName": "Rahul Verma",
+      "category": "Travel & Fuel",
+      "amount": 2000,
+      "claimId": "exp-1784662548892",
+      "status": "Pending",
+      "processedDate": null
+    }
+  ],
+  "payslips": [],
+  "simulatedEmails": [],
+  "customLeaveTypes": [
+    "Casual Leave",
+    "Medical Leave",
+    "Maternity/Paternity",
+    "Loss of Pay",
+    "Maternity Leave",
+    "Paternity Leave",
+    "Earned Leave"
+  ],
+  "customDepartments": [
+    "Executive",
+    "Risk",
+    "HR",
+    "Loans",
+    "Insurance",
+    "Sales",
+    "Operations",
+    "Compliance",
+    "IT"
+  ],
+  "customBranches": [
+    "Snail Mumbai HQ",
+    "Noida Field Hub",
+    "Pune Branch Office",
+    "Hyderabad Insurance Center",
+    "Bangalore Tech Hub",
+    "Bareilly"
+  ]
+}

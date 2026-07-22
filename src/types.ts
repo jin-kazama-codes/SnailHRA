@@ -52,6 +52,8 @@ export interface Employee {
   onboardingTasks: OnboardingTask[];
   avatarUrl?: string;
   bio?: string;
+  branch?: string;
+  password?: string;
 }
 
 export interface AttendancePunch {
@@ -66,6 +68,7 @@ export interface AttendancePunch {
   }[];
   status: "Present" | "Late" | "Half Day" | "Absent" | "On Leave";
   workFromHome?: boolean;
+  notes?: string;
 }
 
 export interface LeaveRequest {
@@ -114,6 +117,7 @@ export interface InventoryItem {
   status: "Available" | "Assigned" | "Under Repair";
   assignedToEmployeeId: string | null;
   assignedDate: string | null;
+  branch?: string;
 }
 
 export interface InventoryRequest {
@@ -172,3 +176,12 @@ export interface SimulatedEmail {
   body: string;
   sentAt: string;
 }
+
+export interface TimingSettings {
+  clockInTime: string;
+  clockOutTime: string;
+  lateThreshold: string;
+  breakStartTime: string;
+  breakEndTime: string;
+}
+

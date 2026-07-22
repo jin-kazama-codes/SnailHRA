@@ -6,10 +6,11 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { supabase } from "./src/lib/supabase.js";
+import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument 
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings 
 } from "./src/types";
 
 // Setup __dirname and __filename in ESM
@@ -39,482 +40,22 @@ interface AppState {
   customLeaveTypes: string[];
   customDepartments: string[];
   customBranches: string[];
+  timingSettings: TimingSettings;
 }
 
-const initialDesignations: Designation[] = [
-  { id: "des-1", title: "Managing Director", department: "Executive" },
-  { id: "des-2", title: "Head of Credit & Risk", department: "Risk" },
-  { id: "des-3", title: "HR Business Partner", department: "HR" },
-  { id: "des-4", title: "Senior Loan Officer", department: "Loans" },
-  { id: "des-5", title: "Insurance Underwriter", department: "Insurance" },
-  { id: "des-6", title: "Sales Relationship Manager", department: "Sales" },
-  { id: "des-7", title: "Collections Specialist", department: "Operations" },
-  { id: "des-8", title: "Compliance Officer", department: "Compliance" }
-];
-
-const initialEmployees: Employee[] = [
-  {
-    id: "EMP-1001",
-    fullName: "Amit Sharma",
-    email: "amit.sharma@snailhr.com",
-    phone: "+91 98765 43210",
-    role: "admin",
-    designationId: "des-2",
-    department: "Risk",
-    joiningDate: "2024-03-15",
-    status: "Active",
-    salary: {
-      basic: 85000,
-      hra: 34000,
-      allowances: 21000,
-      pfDeduction: 6500
-    },
-    bankDetails: {
-      accountNumber: "987654321098",
-      bankName: "HDFC Bank",
-      ifsc: "HDFC0000104"
-    },
-    address: "B-402, Skyline Residency, Sector 62, Noida, UP - 201301",
-    emergencyContact: {
-      name: "Suman Sharma",
-      relation: "Spouse",
-      phone: "+91 98765 43211"
-    },
-    documents: [
-      { id: "doc-1", name: "Aadhaar_Card.pdf", category: "ID Proof", uploadedAt: "2024-03-15", size: "1.2 MB" },
-      { id: "doc-2", name: "Employment_Agreement.pdf", category: "Contract", uploadedAt: "2024-03-15", size: "3.4 MB" }
-    ],
-    onboardingTasks: [
-      { id: "tsk-1", taskName: "Bank Account verification", completed: true, dueDate: "2024-03-20" },
-      { id: "tsk-2", taskName: "Submit signed NDA", completed: true, dueDate: "2024-03-20" }
-    ],
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
-    bio: "Lead credit evaluation and risk assessment models for commercial and retail loan products. Over 10 years of experience in retail banking risk policies."
-  },
-  {
-    id: "EMP-1002",
-    fullName: "Priya Patel",
-    email: "priya.patel@snailhr.com",
-    phone: "+91 87654 32109",
-    role: "hr",
-    designationId: "des-3",
-    department: "HR",
-    joiningDate: "2024-06-01",
-    status: "Active",
-    salary: {
-      basic: 60000,
-      hra: 24000,
-      allowances: 16000,
-      pfDeduction: 5000
-    },
-    bankDetails: {
-      accountNumber: "876543210987",
-      bankName: "ICICI Bank",
-      ifsc: "ICIC0000213"
-    },
-    address: "Flat 504, Emerald Court, Andheri East, Mumbai - 400069",
-    emergencyContact: {
-      name: "Ramesh Patel",
-      relation: "Father",
-      phone: "+91 87654 32108"
-    },
-    documents: [
-      { id: "doc-3", name: "PAN_Card.pdf", category: "ID Proof", uploadedAt: "2024-06-01", size: "0.8 MB" },
-      { id: "doc-4", name: "HR_Certifications.pdf", category: "Educational", uploadedAt: "2024-06-02", size: "4.1 MB" }
-    ],
-    onboardingTasks: [
-      { id: "tsk-3", taskName: "ID verification", completed: true, dueDate: "2024-06-05" },
-      { id: "tsk-4", taskName: "Welcome kit dispatch", completed: true, dueDate: "2024-06-05" }
-    ],
-    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
-    bio: "Managing end-to-end talent acquisition, employee relations, and policy compliance for SnailHR. Committed to nurturing our digital-first culture."
-  },
-  {
-    id: "EMP-1003",
-    fullName: "Rahul Verma",
-    email: "rahul.verma@snailhr.com",
-    phone: "+91 76543 21098",
-    role: "employee",
-    designationId: "des-4",
-    department: "Loans",
-    joiningDate: "2024-11-10",
-    status: "Active",
-    salary: {
-      basic: 50000,
-      hra: 20000,
-      allowances: 15000,
-      pfDeduction: 4200
-    },
-    bankDetails: {
-      accountNumber: "765432109876",
-      bankName: "State Bank of India",
-      ifsc: "SBIN0001234"
-    },
-    address: "Row House No. 12, Rosewood Society, Baner, Pune - 411045",
-    emergencyContact: {
-      name: "Aarti Verma",
-      relation: "Mother",
-      phone: "+91 76543 21099"
-    },
-    documents: [
-      { id: "doc-5", name: "Aadhaar_Rahul.pdf", category: "ID Proof", uploadedAt: "2024-11-10", size: "1.1 MB" }
-    ],
-    onboardingTasks: [
-      { id: "tsk-5", taskName: "Set up laptop and software licenses", completed: true, dueDate: "2024-11-12" }
-    ],
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
-    bio: "Senior Loan Officer facilitating home and personal loan processing for retail clients. Awarded Top Seller for Q1 2026."
-  },
-  {
-    id: "EMP-1004",
-    fullName: "Sneha Iyer",
-    email: "sneha.iyer@snailhr.com",
-    phone: "+91 65432 10987",
-    role: "employee",
-    designationId: "des-5",
-    department: "Insurance",
-    joiningDate: "2025-01-20",
-    status: "Active",
-    salary: {
-      basic: 48000,
-      hra: 19200,
-      allowances: 12800,
-      pfDeduction: 4000
-    },
-    bankDetails: {
-      accountNumber: "654321098765",
-      bankName: "Axis Bank",
-      ifsc: "UTIB0000084"
-    },
-    address: "Flat 201, Green Meadows, Gachibowli, Hyderabad - 500032",
-    emergencyContact: {
-      name: "Venkat Iyer",
-      relation: "Father",
-      phone: "+91 65432 10980"
-    },
-    documents: [
-      { id: "doc-6", name: "Insurance_Cert_III.pdf", category: "Educational", uploadedAt: "2025-01-20", size: "2.3 MB" }
-    ],
-    onboardingTasks: [
-      { id: "tsk-6", taskName: "Completed IRDAI Certification logging", completed: true, dueDate: "2025-01-25" }
-    ],
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
-    bio: "Managing underwriting risk policies for motor and life insurance distributions. Specialized in medical claim risk loading algorithms."
-  }
-];
-
-// Programmatically generate remaining 28 employees to hit at least 32 total (30 employees, 1 HR, 1 Admin)
-const firstNames = ["Siddharth", "Arjun", "Aditi", "Rajesh", "Pooja", "Vikram", "Sanjay", "Kavita", "Rohan", "Divya", "Sandeep", "Neha", "Vivek", "Swati", "Abhinav", "Anjali", "Manoj", "Kiran", "Milind", "Shreya", "Sonu", "Arijit", "Sunidhi", "Rohit", "Virat", "Mahendra", "Sachin", "Rahul", "Jasprit", "Ravindra"];
-const lastNames = ["Malhotra", "Rao", "Kumar", "Hegde", "Sharma", "Dutt", "Krishnamurthy", "Bopanna", "Spandana", "Singh", "Dhupia", "Oberoi", "Sen", "Bindra", "Bhagwat", "Bajpayee", "Hashmi", "Kapoor", "Bedi", "Soman", "Ghoshal", "Nigam", "Singh", "Chauhan", "Sharma", "Kohli", "Dhoni", "Tendulkar", "Bumrah", "Jadeja"];
-
-for (let i = 0; i < 28; i++) {
-  const fName = firstNames[i % firstNames.length];
-  const lName = lastNames[i % lastNames.length];
-  const fullName = `${fName} ${lName}`;
-  const empId = `EMP-${1005 + i}`;
-  const email = `${fName.toLowerCase()}.${lName.toLowerCase()}@snailhr.com`;
-  const phone = `+91 9${Math.floor(100000000 + Math.random() * 900000000)}`;
-  const designation = initialDesignations[i % initialDesignations.length];
-  const joiningDate = `2024-${String(Math.floor(1 + Math.random() * 11)).padStart(2, "0")}-${String(Math.floor(1 + Math.random() * 28)).padStart(2, "0")}`;
-  
-  const basic = Math.round(35000 + Math.random() * 40000);
-  const hra = Math.round(basic * 0.4);
-  const allowances = Math.round(basic * 0.2);
-  const pfDeduction = Math.round(basic * 0.08);
-
-  initialEmployees.push({
-    id: empId,
-    fullName,
-    email,
-    phone,
-    role: "employee",
-    designationId: designation.id,
-    department: designation.department,
-    joiningDate,
-    status: "Active",
-    salary: { basic, hra, allowances, pfDeduction },
-    bankDetails: {
-      accountNumber: String(100000000000 + Math.floor(Math.random() * 900000000000)),
-      bankName: ["HDFC Bank", "ICICI Bank", "SBI", "Axis Bank", "Kotak Mahindra"][i % 5],
-      ifsc: ["HDFC0000104", "ICIC0000213", "SBIN0001234", "UTIB0000084", "KKBK0000311"][i % 5]
-    },
-    address: `Flat ${101 + i * 7}, Shanti Enclave, Sector ${12 + i}, ${["Mumbai", "Noida", "Pune", "Hyderabad", "Bangalore"][i % 5]}`,
-    emergencyContact: {
-      name: `${firstNames[(i + 5) % firstNames.length]} ${lName}`,
-      relation: ["Spouse", "Father", "Mother", "Sibling"][i % 4],
-      phone: `+91 8${Math.floor(100000000 + Math.random() * 900000000)}`
-    },
-    documents: [],
-    onboardingTasks: [
-      { id: `tsk-auto-${empId}-1`, taskName: "KYC submission", completed: true, dueDate: joiningDate },
-      { id: `tsk-auto-${empId}-2`, taskName: "Orientation session", completed: true, dueDate: joiningDate }
-    ],
-    avatarUrl: `https://images.unsplash.com/photo-${[
-      "1534528741775-53994a69daeb",
-      "1507003211169-0a1dd7228f2d",
-      "1494790108377-be9c29b29330",
-      "1500648767791-00dcc994a43e"
-    ][i % 4]}?q=80&w=256&auto=format&fit=crop`,
-    bio: `Operations coordinator specialized in ${designation.title} metrics. Dedicated team player.`
-  });
-}
-
-
-const initialHolidays: Holiday[] = [
-  { id: "hol-1", date: "2026-01-26", name: "Republic Day", type: "National" },
-  { id: "hol-2", date: "2026-03-17", name: "Holi", type: "Regional" },
-  { id: "hol-3", date: "2026-04-03", name: "Good Friday", type: "National" },
-  { id: "hol-4", date: "2026-08-15", name: "Independence Day", type: "National" },
-  { id: "hol-5", date: "2026-10-02", name: "Gandhi Jayanti", type: "National" },
-  { id: "hol-6", date: "2026-10-19", name: "Dussehra", type: "Regional" },
-  { id: "hol-7", date: "2026-11-08", name: "Diwali Festival of Lights", type: "National" },
-  { id: "hol-8", date: "2026-12-25", name: "Christmas Day", type: "National" }
-];
-
-const initialPolicies: Policy[] = [
-  {
-    id: "pol-1",
-    title: "Code of Conduct & Ethics",
-    category: "Conduct & Ethics",
-    content: "SnailHR and our NBFC parent are committed to the highest standards of professional integrity. Employees must ensure that all loan interest calculations and insurance loading charges are explicitly disclosed to customers. Misrepresentation of terms, processing fees, or tie-up commissions is strictly prohibited.",
-    lastUpdated: "2026-01-10"
-  },
-  {
-    id: "pol-2",
-    title: "Annual Leave & Attendance Policy",
-    category: "Employee Benefits",
-    content: "Every active employee receives 18 Casual Leaves and 12 Medical Leaves per year. Attendance punches should be recorded between 09:00 AM and 06:30 PM. Clocking in after 09:30 AM is considered Late. Consecutive late-comings of more than 3 days per month will attract an automatic system fine of Rs. 500.",
-    lastUpdated: "2026-02-15"
-  },
-  {
-    id: "pol-3",
-    title: "Data Protection & Information Security Policy",
-    category: "Compliance & Security",
-    content: "NBFC employees handle sensitive financial details (Bank Statements, PAN details, Credit Scores). All personal documents and credit files of loan prospects must be managed strictly inside the secure company CRM. Storing client records on local hard drives or sharing them on public messaging apps is a severe violation.",
-    lastUpdated: "2026-03-01"
-  },
-  {
-    id: "pol-4",
-    title: "Sales Commission & Agent Incentives Program",
-    category: "NBFC Sales & Commissions",
-    content: "Relationship managers and underwriting coordinators are eligible for a quarterly sales commission. Loans processed with zero NPA logs in the first 6 months earn an additional 1.5% commission weight. Motor and group health policies qualify for a flat incentive paid along with the monthly payslip.",
-    lastUpdated: "2026-04-12"
-  }
-];
-
-const initialAttendance: AttendancePunch[] = [
-  {
-    id: "pun-1",
-    employeeId: "EMP-1003",
-    date: "2026-07-20",
-    clockIn: "2026-07-20T09:12:00-07:00",
-    clockOut: null,
-    breaks: [],
-    status: "Present"
-  },
-  {
-    id: "pun-2",
-    employeeId: "EMP-1004",
-    date: "2026-07-20",
-    clockIn: "2026-07-20T09:42:00-07:00",
-    clockOut: null,
-    breaks: [{ start: "2026-07-20T12:00:00-07:00", end: "2026-07-20T12:30:00-07:00" }],
-    status: "Late"
-  },
-  {
-    id: "pun-3",
-    employeeId: "EMP-1001",
-    date: "2026-07-19",
-    clockIn: "2026-07-19T08:55:00-07:00",
-    clockOut: "2026-07-19T18:05:00-07:00",
-    breaks: [],
-    status: "Present"
-  },
-  {
-    id: "pun-4",
-    employeeId: "EMP-1002",
-    date: "2026-07-19",
-    clockIn: "2026-07-19T09:05:00-07:00",
-    clockOut: "2026-07-19T17:45:00-07:00",
-    breaks: [],
-    status: "Present"
-  }
-];
-
-const initialLeaves: LeaveRequest[] = [
-  {
-    id: "lv-1",
-    employeeId: "EMP-1003",
-    employeeName: "Rahul Verma",
-    leaveType: "Medical Leave",
-    startDate: "2026-07-22",
-    endDate: "2026-07-24",
-    reason: "Severe fever and wisdom tooth extraction",
-    status: "Pending",
-    appliedDate: "2026-07-19"
-  },
-  {
-    id: "lv-2",
-    employeeId: "EMP-1004",
-    employeeName: "Sneha Iyer",
-    leaveType: "Casual Leave",
-    startDate: "2026-07-10",
-    endDate: "2026-07-12",
-    reason: "Traveling to native place for family ceremony",
-    status: "Approved",
-    appliedDate: "2026-07-05"
-  }
-];
-
-const initialExpenses: ExpenseClaim[] = [
-  {
-    id: "exp-1",
-    employeeId: "EMP-1003",
-    employeeName: "Rahul Verma",
-    category: "Travel & Fuel",
-    amount: 1850,
-    date: "2026-07-15",
-    description: "Fuel and toll charges for visiting loan applicant's warehouse in Greater Noida",
-    status: "Pending"
-  },
-  {
-    id: "exp-2",
-    employeeId: "EMP-1004",
-    employeeName: "Sneha Iyer",
-    category: "Client Entertainment",
-    amount: 2400,
-    date: "2026-07-08",
-    description: "Business dinner with Bajaj Allianz Insurance distribution partners",
-    status: "Approved"
-  },
-  {
-    id: "exp-3",
-    employeeId: "EMP-1003",
-    employeeName: "Rahul Verma",
-    category: "Broadband & Phone",
-    amount: 999,
-    date: "2026-07-01",
-    description: "Work-from-home high-speed monthly internet reimbursement",
-    status: "Approved"
-  }
-];
-
-const initialInventory: InventoryItem[] = [
-  { id: "inv-1", name: "Lenovo ThinkPad T14", serialNumber: "SNAIL-LP-8849", category: "Laptop", status: "Assigned", assignedToEmployeeId: "EMP-1001", assignedDate: "2024-03-15" },
-  { id: "inv-2", name: "Dell Latitude 5420", serialNumber: "SNAIL-LP-9241", category: "Laptop", status: "Assigned", assignedToEmployeeId: "EMP-1003", assignedDate: "2024-11-12" },
-  { id: "inv-3", name: "iPad 10.9-inch (Sales Tab)", serialNumber: "SNAIL-TB-3021", category: "Mobile Tablet", status: "Assigned", assignedToEmployeeId: "EMP-1004", assignedDate: "2025-01-21" },
-  { id: "inv-4", name: "TP-Link Portable 4G Router", serialNumber: "SNAIL-WF-1049", category: "WiFi Dongle", status: "Available", assignedToEmployeeId: null, assignedDate: null },
-  { id: "inv-5", name: "Dell 24-inch IPS Monitor", serialNumber: "SNAIL-MN-4491", category: "Other", status: "Available", assignedToEmployeeId: null, assignedDate: null }
-];
-
-const initialInventoryRequests: InventoryRequest[] = [
-  {
-    id: "invreq-1",
-    employeeId: "EMP-1004",
-    employeeName: "Sneha Iyer",
-    itemName: "Portable Bluetooth Scanner (for field documentation)",
-    category: "Other",
-    requestDate: "2026-07-18",
-    reason: "Need portable document scanner to quickly upload customer insurance proposal files during field audits.",
-    status: "Pending"
-  }
-];
-
-const initialFines: Fine[] = [
-  {
-    id: "fin-1",
-    employeeId: "EMP-1003",
-    employeeName: "Rahul Verma",
-    reason: "Late Coming",
-    amount: 500,
-    date: "2026-07-12",
-    status: "Pending"
-  },
-  {
-    id: "fin-2",
-    employeeId: "EMP-1004",
-    employeeName: "Sneha Iyer",
-    reason: "Compliance Violation",
-    amount: 1000,
-    date: "2026-07-05",
-    status: "Deducted From Payroll"
-  }
-];
-
-const initialReimbursements: Reimbursement[] = [
-  {
-    id: "reim-1",
-    employeeId: "EMP-1004",
-    employeeName: "Sneha Iyer",
-    category: "Client Entertainment",
-    amount: 2400,
-    claimId: "exp-2",
-    status: "Pending",
-    processedDate: null
-  },
-  {
-    id: "reim-2",
-    employeeId: "EMP-1003",
-    employeeName: "Rahul Verma",
-    category: "Broadband & Phone",
-    amount: 999,
-    claimId: "exp-3",
-    status: "Paid",
-    processedDate: "2026-07-05"
-  }
-];
-
-const initialPayslips: Payslip[] = [
-  {
-    id: "pay-1",
-    employeeId: "EMP-1003",
-    month: "June 2026",
-    basic: 50000,
-    hra: 20000,
-    allowances: 15000,
-    finesDeducted: 0,
-    pfDeduction: 4200,
-    taxDeduction: 3500,
-    netPay: 77300,
-    status: "Paid",
-    generatedAt: "2026-07-01T10:00:00Z",
-    sentToEmail: "rahul.verma@snailhr.com"
-  },
-  {
-    id: "pay-2",
-    employeeId: "EMP-1004",
-    month: "June 2026",
-    basic: 48000,
-    hra: 19200,
-    allowances: 12800,
-    finesDeducted: 1000,
-    pfDeduction: 4000,
-    taxDeduction: 3000,
-    netPay: 72000,
-    status: "Paid",
-    generatedAt: "2026-07-01T10:15:00Z",
-    sentToEmail: "sneha.iyer@snailhr.com"
-  }
-];
-
-const initialSimulatedEmails: SimulatedEmail[] = [
-  {
-    id: "em-1",
-    recipientEmail: "rahul.verma@snailhr.com",
-    recipientName: "Rahul Verma",
-    subject: "Payslip Generated for June 2026 - SnailHR",
-    body: "Dear Rahul Verma,\n\nYour payslip for the month of June 2026 has been generated and approved by the SnailHR finance team. Here are the brief payroll details:\n- Net Pay: Rs. 77,300\n- PF Deduction: Rs. 4,200\n- Professional Tax: Rs. 3,500\n\nYou can log into your SnailHR app to view, download, or print your full structural PDF. If you have questions regarding allowances, commissions, or sales incentives, contact priya.patel@snailhr.com.\n\nBest Regards,\nSnailHR Payroll Automation Bot",
-    sentAt: "2026-07-01T10:00:05-07:00"
-  },
-  {
-    id: "em-2",
-    recipientEmail: "sneha.iyer@snailhr.com",
-    recipientName: "Sneha Iyer",
-    subject: "Welcome to SnailHR Admin Panel!",
-    body: "Dear Sneha Iyer,\n\nWelcome to SnailHR! Your employee portal is fully active. You have been onboarded as a Senior Insurance Underwriter in the Insurance Department.\n\nPlease log in and upload your IRDAI certification files and complete your onboarding tasks.\n\nBest Regards,\nPriya Patel (HR Team)",
-    sentAt: "2025-01-20T09:30:00-07:00"
-  }
-];
+const initialDesignations: Designation[] = [];
+const initialHolidays: Holiday[] = [];
+const initialPolicies: Policy[] = [];
+const initialAttendance: AttendancePunch[] = [];
+const initialLeaves: LeaveRequest[] = [];
+const initialExpenses: ExpenseClaim[] = [];
+const initialInventory: InventoryItem[] = [];
+const initialInventoryRequests: InventoryRequest[] = [];
+const initialFines: Fine[] = [];
+const initialReimbursements: Reimbursement[] = [];
+const initialPayslips: Payslip[] = [];
+const initialSimulatedEmails: SimulatedEmail[] = [];
+const initialEmployees: Employee[] = [];
 
 const initialData: AppState = {
   designations: initialDesignations,
@@ -532,7 +73,14 @@ const initialData: AppState = {
   simulatedEmails: initialSimulatedEmails,
   customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity/Paternity", "Loss of Pay"],
   customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "Marketing"],
-  customBranches: ["Snail Mumbai HQ", "Noida Field Hub", "Pune Branch Office", "Hyderabad Insurance Center", "Bangalore Tech Hub"]
+  customBranches: ["Snail Mumbai HQ", "Noida Field Hub", "Pune Branch Office", "Hyderabad Insurance Center", "Bangalore Tech Hub"],
+  timingSettings: {
+    clockInTime: "09:00",
+    clockOutTime: "18:00",
+    lateThreshold: "09:30",
+    breakStartTime: "13:00",
+    breakEndTime: "14:00"
+  }
 };
 
 // Database loader/saver with local-first file and background Supabase sync
@@ -545,7 +93,8 @@ function readDatabaseLocal(): AppState {
       if (!state.customLeaveTypes) state.customLeaveTypes = initialData.customLeaveTypes;
       if (!state.customDepartments) state.customDepartments = initialData.customDepartments;
       if (!state.customBranches) state.customBranches = initialData.customBranches;
-      if (!state.employees || state.employees.length < 32) state.employees = initialData.employees;
+      if (!state.employees) state.employees = [];
+      if (!state.timingSettings) state.timingSettings = initialData.timingSettings;
       return state;
     }
   } catch (err) {
@@ -555,30 +104,221 @@ function readDatabaseLocal(): AppState {
 }
 
 function writeDatabaseLocal(state: AppState) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error writing database file to disk.", err);
-  }
+  // Per explicit directive: DO NOT write to db_snailhr.json.
+  // All state persistence goes directly to Supabase cloud database tables.
 }
 
 // Global active in-memory database representation
 let db = readDatabaseLocal();
 
-// Background push to Supabase
-async function pushStateToSupabase(state: AppState) {
+// Supabase Relational Table Sync Helpers
+async function syncLeaveToSupabase(leave: LeaveRequest) {
   if (supabase) {
     try {
-      const { error } = await supabase
-        .from("snailhr_state")
-        .upsert({ key: "app_state", value: state });
+      const leaveId = leave.id || "lv-" + Date.now();
+      const employeeName = leave.employeeName || db.employees.find(e => e.id === leave.employeeId)?.fullName || "Employee " + leave.employeeId;
+      const status = leave.status || "Pending";
+      const appliedDate = leave.appliedDate || new Date().toISOString().split('T')[0];
+
+      const payload = {
+        id: leaveId,
+        employee_id: leave.employeeId,
+        employee_name: employeeName,
+        leave_type: leave.leaveType,
+        start_date: leave.startDate,
+        end_date: leave.endDate,
+        reason: leave.reason,
+        status: status,
+        applied_date: appliedDate
+      };
+      const { error } = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
       if (error) {
-        console.warn("Supabase Cloud Sync Warning (Run table SQL setup if table missing):", error.message);
+        console.warn("Supabase 'leaves' table upsert warning:", error.message);
       } else {
-        console.log("SnailHR successfully synced live organizational state to Supabase Cloud.");
+        console.log(`Synced leave record ${leaveId} (${employeeName}) to Supabase 'leaves' relational table.`);
       }
     } catch (err) {
-      console.warn("Supabase Cloud exception during background push:", err);
+      console.warn("Supabase leaves sync exception:", err);
+    }
+  }
+}
+
+async function syncAllLeavesToSupabase(leaves: LeaveRequest[]) {
+  if (supabase && leaves.length > 0) {
+    try {
+      const payload = leaves.map(leave => ({
+        id: leave.id || "lv-" + Math.floor(Math.random() * 1000000),
+        employee_id: leave.employeeId,
+        employee_name: leave.employeeName || db.employees.find(e => e.id === leave.employeeId)?.fullName || "Employee " + leave.employeeId,
+        leave_type: leave.leaveType || "Casual Leave",
+        start_date: leave.startDate,
+        end_date: leave.endDate,
+        reason: leave.reason,
+        status: leave.status || "Pending",
+        applied_date: leave.appliedDate || new Date().toISOString().split('T')[0]
+      }));
+      const { error } = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
+      if (error) {
+        console.warn("Supabase bulk leaves upsert warning:", error.message);
+      } else {
+        console.log(`Synced ${leaves.length} leave records to Supabase 'leaves' relational table.`);
+      }
+    } catch (err) {
+      console.warn("Supabase bulk leaves exception:", err);
+    }
+  }
+}
+
+async function fetchLeavesFromSupabase(): Promise<LeaveRequest[] | null> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("leaves").select("*");
+      if (!error && data && data.length > 0) {
+        return data.map((row: any) => ({
+          id: row.id,
+          employeeId: row.employee_id || row.employeeId || "",
+          employeeName: row.employee_name || row.employeeName || "",
+          leaveType: row.leave_type || row.leaveType || "Casual Leave",
+          startDate: row.start_date || row.startDate || "",
+          endDate: row.end_date || row.endDate || "",
+          reason: row.reason || "",
+          status: row.status || "Pending",
+          appliedDate: row.applied_date || row.appliedDate || ""
+        }));
+      }
+    } catch (err) {
+      console.warn("Error fetching leaves from Supabase 'leaves' table:", err);
+    }
+  }
+  return null;
+}
+
+async function fetchAllFromSupabase(): Promise<AppState> {
+  if (!supabase) return db;
+  try {
+    const [leavesRes, attendanceRes, employeesRes] = await Promise.all([
+      supabase.from("leaves").select("*"),
+      supabase.from("attendance").select("*"),
+      supabase.from("employees").select("*")
+    ]);
+
+    if (leavesRes.data && leavesRes.data.length > 0) {
+      db.leaves = leavesRes.data.map((row: any) => ({
+        id: row.id,
+        employeeId: row.employee_id || row.employeeId || "",
+        employeeName: row.employee_name || row.employeeName || "",
+        leaveType: row.leave_type || row.leaveType || "Casual Leave",
+        startDate: row.start_date || row.startDate || "",
+        endDate: row.end_date || row.endDate || "",
+        reason: row.reason || "",
+        status: row.status || "Pending",
+        appliedDate: row.applied_date || row.appliedDate || ""
+      }));
+    }
+
+    if (attendanceRes.data && attendanceRes.data.length > 0) {
+      db.attendance = attendanceRes.data.map((row: any) => ({
+        id: row.id,
+        employeeId: row.employee_id || row.employeeId || "",
+        date: row.date,
+        clockIn: row.clock_in || row.clockIn,
+        clockOut: row.clock_out || row.clockOut,
+        breaks: typeof row.breaks === "string" ? JSON.parse(row.breaks) : (row.breaks || []),
+        status: row.status || "Present",
+        workFromHome: row.work_from_home ?? row.workFromHome ?? false,
+        notes: row.notes || ""
+      }));
+    }
+
+    if (employeesRes.data && employeesRes.data.length > 0) {
+      db.employees = employeesRes.data.map((row: any) => ({
+        id: row.id,
+        fullName: row.full_name || row.fullName || "",
+        email: row.email || "",
+        phone: row.phone || "",
+        role: row.role || "employee",
+        designationId: row.designation_id || row.designationId || "des-4",
+        department: row.department || "Loans",
+        branch: row.branch || "Mumbai Branch",
+        joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
+        status: row.status || "Active",
+        salary: typeof row.salary === "string" ? JSON.parse(row.salary) : (row.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
+        bankDetails: typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : (row.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
+        address: row.address || "",
+        emergencyContact: typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : (row.emergencyContact || { name: "", relation: "", phone: "" }),
+        documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || []),
+        onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || []),
+        password: row.password || ""
+      }));
+    } else {
+      console.log("Supabase 'employees' table empty - Hydrating initial employee roster and seeding to Supabase...");
+      db.employees = initialEmployees;
+      await syncAllEmployeesToSupabase(initialEmployees);
+    }
+  } catch (err) {
+    console.warn("Error fetching data directly from Supabase tables:", err);
+  }
+  return db;
+}
+
+// Employee Supabase Table Sync Helpers
+async function syncAllEmployeesToSupabase(employees: Employee[]) {
+  if (supabase && employees.length > 0) {
+    try {
+      const payload = employees.map(emp => ({
+        id: emp.id,
+        full_name: emp.fullName,
+        email: emp.email,
+        phone: emp.phone,
+        role: emp.role,
+        designation_id: emp.designationId,
+        department: emp.department,
+        branch: emp.branch || "Mumbai Branch",
+        joining_date: emp.joiningDate,
+        status: emp.status || "Active",
+        salary: emp.salary,
+        bank_details: emp.bankDetails,
+        address: emp.address,
+        emergency_contact: emp.emergencyContact,
+        documents: emp.documents || [],
+        onboarding_tasks: emp.onboardingTasks || [],
+        password: emp.password || null
+      }));
+      const { error } = await supabase.from("employees").upsert(payload, { onConflict: "id" });
+      if (error) {
+        console.warn("Supabase employees upsert warning:", error.message);
+      } else {
+        console.log(`Synced ${employees.length} employee records to Supabase 'employees' table via API.`);
+      }
+    } catch (err) {
+      console.warn("Supabase bulk employees exception:", err);
+    }
+  }
+}
+
+async function seedSupabaseFromInitialFile() {
+  if (!supabase) return;
+  const legacyDbFile = path.join(__dirname, "db_snailhr.json");
+  if (fs.existsSync(legacyDbFile)) {
+    try {
+      console.log("Seeding all initial dataset from local JSON to Supabase Cloud PostgreSQL Database via API...");
+      const fileData = fs.readFileSync(legacyDbFile, "utf-8");
+      const seedData: AppState = JSON.parse(fileData);
+
+      if (seedData.employees && seedData.employees.length > 0) {
+        await syncAllEmployeesToSupabase(seedData.employees);
+        db.employees = seedData.employees;
+      }
+      if (seedData.leaves && seedData.leaves.length > 0) {
+        await syncAllLeavesToSupabase(seedData.leaves);
+        db.leaves = seedData.leaves;
+      }
+
+      console.log("Database seeded successfully via API! Deleting db_snailhr.json per explicit directive...");
+      fs.unlinkSync(legacyDbFile);
+      console.log("Successfully removed db_snailhr.json from filesystem.");
+    } catch (err) {
+      console.warn("Error during initial file database seeding to Supabase:", err);
     }
   }
 }
@@ -587,59 +327,87 @@ async function pushStateToSupabase(state: AppState) {
 async function initializeSupabaseSync() {
   if (supabase) {
     try {
-      console.log("Checking Supabase for existing SnailHR state...");
-      const { data, error } = await supabase
-        .from("snailhr_state")
-        .select("value")
-        .eq("key", "app_state")
-        .maybeSingle();
-
-      if (error) {
-        console.warn("Supabase query failed, state table might be uninitialized. Background seeding to Supabase...");
-        await pushStateToSupabase(db);
-        return;
-      }
-
-      if (data && data.value && Object.keys(data.value).length > 0) {
-        console.log("Discovered existing live SnailHR state in Supabase. Hydrating local cache.");
-        const state = data.value as AppState;
-        
-        // Dynamic fallbacks
-        if (!state.customLeaveTypes) state.customLeaveTypes = initialData.customLeaveTypes;
-        if (!state.customDepartments) state.customDepartments = initialData.customDepartments;
-        if (!state.customBranches) state.customBranches = initialData.customBranches;
-        if (!state.employees || state.employees.length < 32) state.employees = initialData.employees;
-
-        db = state;
-        writeDatabaseLocal(db);
-      } else {
-        console.log("Supabase State table is empty. Uploading default 32-Employee SnailHR state...");
-        await pushStateToSupabase(db);
-      }
+      console.log("Checking Supabase relational database tables via API...");
+      await seedSupabaseFromInitialFile();
+      await fetchAllFromSupabase();
     } catch (err) {
-      console.warn("Failed to initialize Supabase sync. Running with local filesystem fallback:", err);
+      console.warn("Failed to initialize Supabase sync:", err);
     }
   }
 }
 
-// Fast synchronous client endpoints reader/writer
+// Reader / Writer helpers
 function readDatabase(): AppState {
-  // Always return current in-memory reference which is fast and live
   return db;
 }
 
 function writeDatabase(state: AppState) {
   db = state;
-  writeDatabaseLocal(state);
-  pushStateToSupabase(state); // Fire background async push to Supabase
+  if (supabase) {
+    (async () => {
+      try {
+        await supabase.from("snailhr_state").upsert({ key: "app_state", value: state });
+        if (state.attendance && state.attendance.length > 0) {
+          const payload = state.attendance.map(a => ({
+            id: a.id,
+            employee_id: a.employeeId,
+            date: a.date,
+            clock_in: a.clockIn || null,
+            clock_out: a.clockOut || null,
+            status: a.status || "Present"
+          }));
+          const { error } = await supabase.from("attendance").upsert(payload, { onConflict: "id" });
+          if (error) {
+            console.warn("Supabase attendance bulk upsert error:", error.message);
+          }
+        }
+      } catch (e) {
+        console.warn("Supabase sync warning:", e);
+      }
+    })();
+  }
 }
 
 // Fire async background sync on startup
 initializeSupabaseSync();
 
-// Make sure initial mock write happens if file doesn't exist
-if (!fs.existsSync(DB_FILE)) {
-  writeDatabase(db);
+// Helper to sync single employee to Supabase
+async function syncEmployeeToSupabase(emp: Employee) {
+  if (supabase) {
+    try {
+      const payload = {
+        id: emp.id,
+        full_name: emp.fullName,
+        email: emp.email,
+        phone: emp.phone,
+        role: emp.role,
+        designation_id: emp.designationId,
+        department: emp.department,
+        branch: emp.branch || "Mumbai Branch",
+        joining_date: emp.joiningDate,
+        status: emp.status || "Active",
+        address: emp.address,
+        avatar_url: emp.avatarUrl,
+        bio: emp.bio,
+        salary_basic: emp.salary?.basic,
+        salary_hra: emp.salary?.hra,
+        salary_allowances: emp.salary?.allowances,
+        salary_pf_deduction: emp.salary?.pfDeduction,
+        bank_account_number: emp.bankDetails?.accountNumber,
+        bank_name: emp.bankDetails?.bankName,
+        bank_ifsc: emp.bankDetails?.ifsc,
+        password: emp.password || null
+      };
+      const { error } = await supabase.from("employees").upsert(payload, { onConflict: "id" });
+      if (error) {
+        console.warn("Supabase employee upsert warning:", error.message);
+      } else {
+        console.log(`Synced single employee record ${emp.id} (${emp.fullName}) to Supabase.`);
+      }
+    } catch (err) {
+      console.warn("Supabase employee sync exception:", err);
+    }
+  }
 }
 
 async function startServer() {
@@ -648,10 +416,82 @@ async function startServer() {
 
   // API Routes
   
-  // 1. Get entire app state
-  app.get("/api/data", (req, res) => {
-    db = readDatabase(); // Always refresh from disk
-    res.json(db);
+  // 1. Get entire app state directly from Supabase tables
+  app.get("/api/data", async (req, res) => {
+    try {
+      const currentData = await fetchAllFromSupabase();
+      if (!currentData.employees || currentData.employees.length === 0) {
+        currentData.employees = initialEmployees;
+      }
+      res.json(currentData);
+    } catch (err) {
+      console.warn("GET /api/data fallback to initialData:", err);
+      res.json(initialData);
+    }
+  });
+
+  // Auth Login Endpoint
+  app.post("/api/auth/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    let employee = db.employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("employees")
+          .select("*")
+          .ilike("email", email)
+          .maybeSingle();
+
+        if (data) {
+          employee = {
+            id: data.id,
+            fullName: data.full_name || data.fullName || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            role: data.role || "employee",
+            designationId: data.designation_id || data.designationId || "des-4",
+            department: data.department || "Loans",
+            branch: data.branch || "Mumbai Branch",
+            joiningDate: data.joining_date || data.joiningDate || "2024-03-15",
+            status: data.status || "Active",
+            salary: typeof data.salary === "string" ? JSON.parse(data.salary) : (data.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
+            bankDetails: typeof data.bank_details === "string" ? JSON.parse(data.bank_details) : (data.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
+            address: data.address || "",
+            emergencyContact: typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact) : (data.emergencyContact || { name: "", relation: "", phone: "" }),
+            documents: typeof data.documents === "string" ? JSON.parse(data.documents) : (data.documents || []),
+            onboardingTasks: typeof data.onboarding_tasks === "string" ? JSON.parse(data.onboarding_tasks) : (data.onboardingTasks || []),
+            password: data.password || ""
+          };
+        }
+      } catch (err) {
+        console.warn("Express auth Supabase exception:", err);
+      }
+    }
+
+    if (!employee) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+
+    const storedHash = employee.password;
+    if (!storedHash) {
+      const isMatch = password === "Nawaz123#";
+      if (!isMatch) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+    } else {
+      const isMatch = bcrypt.compareSync(password, storedHash);
+      if (!isMatch) {
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+    }
+
+    const { password: _, ...userWithoutPassword } = employee;
+    res.json({ success: true, employee: userWithoutPassword });
   });
 
   // 2. Add designation
@@ -679,13 +519,19 @@ async function startServer() {
   });
 
   // 4. Onboard Employee
-  app.post("/api/employees", (req, res) => {
+  app.post("/api/employees", async (req, res) => {
     const empData = req.body;
     if (!empData.fullName || !empData.email) {
       return res.status(400).json({ error: "Full Name and Email are required" });
     }
     
     const newEmpId = "EMP-" + (1000 + db.employees.length + 1);
+    
+    // Hash password
+    const rawPassword = empData.password || "Nawaz123#";
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(rawPassword, salt);
+
     const newEmp: Employee = {
       id: newEmpId,
       fullName: empData.fullName,
@@ -720,7 +566,8 @@ async function startServer() {
         { id: "task-auto-3", taskName: "Allocate SnailHR Credentials & Assets", completed: false, dueDate: "2026-07-28" }
       ],
       avatarUrl: empData.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      bio: empData.bio || "Newly joined financial operations specialist."
+      bio: empData.bio || "Newly joined financial operations specialist.",
+      password: hashedPassword
     };
 
     // Add welcoming email simulation
@@ -736,11 +583,15 @@ async function startServer() {
     db.employees.push(newEmp);
     db.simulatedEmails.push(welcomEmail);
     writeDatabase(db);
+    
+    // Sync to individual Supabase table
+    await syncEmployeeToSupabase(newEmp);
+
     res.status(201).json(newEmp);
   });
 
   // 5. Update Employee Status / Bio
-  app.put("/api/employees/:id", (req, res) => {
+  app.put("/api/employees/:id", async (req, res) => {
     const { id } = req.params;
     const updateBody = req.body;
     const empIndex = db.employees.findIndex(e => e.id === id);
@@ -756,6 +607,10 @@ async function startServer() {
     };
 
     writeDatabase(db);
+    
+    // Sync single employee change to Supabase
+    await syncEmployeeToSupabase(db.employees[empIndex]);
+
     res.json(db.employees[empIndex]);
   });
 
@@ -826,7 +681,7 @@ async function startServer() {
   });
 
   // 10. Record Clock-In / Clock-Out / Break Punches
-  app.post("/api/attendance/punch", (req, res) => {
+  app.post("/api/attendance/punch", async (req, res) => {
     const { employeeId, type } = req.body; // type: 'clockin' | 'clockout' | 'breakstart' | 'breakend'
     if (!employeeId || !type) {
       return res.status(400).json({ error: "Employee ID and punch type are required" });
@@ -842,10 +697,22 @@ async function startServer() {
         return res.status(400).json({ error: "Already clocked in for today" });
       }
 
-      // Check if late (after 9:30 AM local time)
+      // Check if late based on timing settings from Supabase
       const now = new Date();
       let status: "Present" | "Late" = "Present";
-      if (now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 30)) {
+      let lateTime = "09:30";
+      if (supabase) {
+        try {
+          const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
+          if (data && data.late_threshold) {
+            lateTime = data.late_threshold;
+          }
+        } catch (e) {}
+      } else if (db.timingSettings) {
+        lateTime = db.timingSettings.lateThreshold || "09:30";
+      }
+      const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
+      if (now.getHours() > lateHours || (now.getHours() === lateHours && now.getMinutes() > lateMinutes)) {
         status = "Late";
       }
 
@@ -893,10 +760,10 @@ async function startServer() {
     res.json(activePunch);
   });
 
-  // 10b. Update Attendance Punch (WFH, status, timings)
+  // 10b. Update Attendance Punch (WFH, status, timings, breaks, notes)
   app.put("/api/attendance/:id", (req, res) => {
     const { id } = req.params;
-    const { status, workFromHome, clockIn, clockOut } = req.body;
+    const { status, workFromHome, clockIn, clockOut, breaks, notes, date } = req.body;
     
     const index = db.attendance.findIndex(a => a.id === id);
     if (index === -1) {
@@ -908,29 +775,130 @@ async function startServer() {
       ...(status !== undefined && { status }),
       ...(workFromHome !== undefined && { workFromHome }),
       ...(clockIn !== undefined && { clockIn }),
-      ...(clockOut !== undefined && { clockOut })
+      ...(clockOut !== undefined && { clockOut }),
+      ...(breaks !== undefined && { breaks }),
+      ...(notes !== undefined && { notes }),
+      ...(date !== undefined && { date })
     };
     
     writeDatabase(db);
     res.json(db.attendance[index]);
   });
 
+  // 10c. Delete Attendance Punch
+  app.delete("/api/attendance/:id", (req, res) => {
+    const { id } = req.params;
+    db.attendance = db.attendance.filter(a => a.id !== id);
+    writeDatabase(db);
+    res.json({ success: true, message: "Attendance record deleted successfully" });
+  });
+
+  // 10d. Save / Upsert Attendance Punch for Any Employee and Date
+  app.post("/api/attendance/save", async (req, res) => {
+    const { id, employeeId, date, status, clockIn, clockOut, breaks, workFromHome, notes } = req.body;
+    if (!employeeId || !date) {
+      return res.status(400).json({ error: "Employee ID and date are required" });
+    }
+
+    let existingIndex = -1;
+    if (id) {
+      existingIndex = db.attendance.findIndex(a => a.id === id);
+    }
+    if (existingIndex === -1) {
+      existingIndex = db.attendance.findIndex(a => a.employeeId === employeeId && a.date === date);
+    }
+
+    if (existingIndex !== -1) {
+      // Update existing
+      db.attendance[existingIndex] = {
+        ...db.attendance[existingIndex],
+        status: status || db.attendance[existingIndex].status,
+        clockIn: clockIn || db.attendance[existingIndex].clockIn,
+        clockOut: clockOut !== undefined ? clockOut : db.attendance[existingIndex].clockOut,
+        breaks: breaks || db.attendance[existingIndex].breaks || [],
+        workFromHome: workFromHome !== undefined ? workFromHome : db.attendance[existingIndex].workFromHome,
+        notes: notes !== undefined ? notes : db.attendance[existingIndex].notes
+      };
+      writeDatabase(db);
+      return res.json(db.attendance[existingIndex]);
+    } else {
+      // Create new punch record
+      let defaultClockIn = "09:00";
+      let defaultClockOut = "18:00";
+      if (supabase) {
+        try {
+          const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("id", "default").maybeSingle();
+          if (data) {
+            defaultClockIn = data.clock_in_time || "09:00";
+            defaultClockOut = data.clock_out_time || "18:00";
+          }
+        } catch (e) {}
+      } else if (db.timingSettings) {
+        defaultClockIn = db.timingSettings.clockInTime || "09:00";
+        defaultClockOut = db.timingSettings.clockOutTime || "18:00";
+      }
+      const newPunch: AttendancePunch = {
+        id: "pun-" + Date.now(),
+        employeeId,
+        date,
+        clockIn: clockIn || `${date}T${defaultClockIn}:00.000Z`,
+        clockOut: clockOut || `${date}T${defaultClockOut}:00.000Z`,
+        breaks: breaks || [],
+        status: status || "Present",
+        workFromHome: !!workFromHome,
+        notes: notes || ""
+      };
+      db.attendance.push(newPunch);
+      writeDatabase(db);
+      return res.status(201).json(newPunch);
+    }
+  });
+
+  // 10e. Save Attendance Timing Settings
+  app.post("/api/attendance/settings", async (req, res) => {
+    const settings = req.body;
+    const timingSettings = {
+      clockInTime: settings.clockInTime || "09:00",
+      clockOutTime: settings.clockOutTime || "18:00",
+      lateThreshold: settings.lateThreshold || "09:30",
+      breakStartTime: settings.breakStartTime || "13:00",
+      breakEndTime: settings.breakEndTime || "14:00"
+    };
+    db.timingSettings = timingSettings;
+    if (supabase) {
+      try {
+        await supabase.from("timing_settings").upsert({
+          id: "default",
+          clock_in_time: timingSettings.clockInTime,
+          clock_out_time: timingSettings.clockOutTime,
+          late_threshold: timingSettings.lateThreshold,
+          break_start_time: timingSettings.breakStartTime,
+          break_end_time: timingSettings.breakEndTime
+        }, { onConflict: "id" });
+      } catch (e) {
+        console.warn("Supabase settings sync error:", e);
+      }
+    }
+    res.json({ success: true, timingSettings });
+  });
+
   // 11. Create Leave Request
-  app.post("/api/leaves", (req, res) => {
+  app.post("/api/leaves", async (req, res) => {
     const { employeeId, leaveType, startDate, endDate, reason } = req.body;
     if (!employeeId || !leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({ error: "All leave fields are required" });
     }
 
+    // Refresh memory from Supabase
+    await fetchAllFromSupabase();
+
     const employee = db.employees.find(e => e.id === employeeId);
-    if (!employee) {
-      return res.status(404).json({ error: "Employee not found" });
-    }
+    const employeeName = employee?.fullName || "Employee " + employeeId;
 
     const newRequest: LeaveRequest = {
       id: "lv-" + Date.now(),
       employeeId,
-      employeeName: employee.fullName,
+      employeeName,
       leaveType,
       startDate,
       endDate,
@@ -941,16 +909,22 @@ async function startServer() {
 
     db.leaves.push(newRequest);
     writeDatabase(db);
+
+    // Sync to Supabase relational 'leaves' table
+    await syncLeaveToSupabase(newRequest);
+
     res.status(201).json(newRequest);
   });
 
   // 12. Approve/Reject Leave Request
-  app.put("/api/leaves/:id", (req, res) => {
+  app.put("/api/leaves/:id", async (req, res) => {
     const { id } = req.params;
     const { status } = req.body; // Approved | Rejected
     if (!status || (status !== "Approved" && status !== "Rejected")) {
       return res.status(400).json({ error: "Invalid status update" });
     }
+
+    await fetchAllFromSupabase();
 
     const leaveIndex = db.leaves.findIndex(l => l.id === id);
     if (leaveIndex === -1) {
@@ -958,6 +932,9 @@ async function startServer() {
     }
 
     db.leaves[leaveIndex].status = status;
+
+    // Save update to Supabase
+    await syncLeaveToSupabase(db.leaves[leaveIndex]);
 
     // Simulate email notification
     const employee = db.employees.find(e => e.id === db.leaves[leaveIndex].employeeId);
@@ -974,6 +951,10 @@ async function startServer() {
     }
 
     writeDatabase(db);
+
+    // Sync status update directly to Supabase 'leaves' table
+    await syncLeaveToSupabase(db.leaves[leaveIndex]);
+
     res.json(db.leaves[leaveIndex]);
   });
 
@@ -1328,7 +1309,8 @@ async function startServer() {
       const dbState = readDatabase();
       const employee = dbState.employees.find(e => e.id === employeeId);
       
-      const todayStr = "2026-07-20";
+      const d = new Date();
+      const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const todayPunches = dbState.attendance.filter(p => p.date === todayStr);
       const presentToday = todayPunches.filter(p => p.status === "Present" || p.status === "Late").length;
       const wfhToday = todayPunches.filter(p => p.workFromHome).length;
