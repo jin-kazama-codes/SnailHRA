@@ -16,11 +16,18 @@ export async function POST(request: Request) {
     // 1. Attempt to fetch from Supabase
     if (supabase) {
       try {
-        const { data, error } = await supabase
+        const queryTimeout = (ms: number) => 
+          new Promise<any>((_, reject) => 
+            setTimeout(() => reject(new Error("Supabase auth timeout")), ms)
+          );
+
+        const fetchPromise = supabase
           .from("employees")
           .select("*")
           .ilike("email", email)
           .maybeSingle();
+
+        const { data, error } = await Promise.race([fetchPromise, queryTimeout(3000)]);
 
         if (error) {
           console.warn("Supabase auth fetch error:", error.message);

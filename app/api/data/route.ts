@@ -7,20 +7,46 @@ export async function GET() {
 
   if (supabase) {
     try {
-      const [leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, inventoryRes, inventoryRequestsRes, policiesRes, finesRes, deptsRes, branchesRes, leaveTypesRes, customLeavesRes] = await Promise.all([
-        supabase.from("leaves").select("*"),
-        supabase.from("attendance").select("*"),
-        supabase.from("employees").select("*"),
-        supabase.from("holidays").select("*"),
-        supabase.from("expenses").select("*"),
-        supabase.from("inventory").select("*"),
-        supabase.from("inventory_requests").select("*").order("created_at", { ascending: false }),
-        supabase.from("policies").select("*"),
-        supabase.from("fines").select("*").order("created_at", { ascending: false }),
-        supabase.from("custom_departments").select("*"),
-        supabase.from("custom_branches").select("*"),
-        supabase.from("custom_leave_types").select("*"),
-        supabase.from("custom_leaves").select("*")
+      const safeQuery = async (query: any) => {
+        try {
+          const res = await query;
+          if (res.error) {
+            console.warn("Supabase query error:", res.error.message, res.error.details);
+            return { data: [], error: res.error };
+          }
+          return res;
+        } catch (e) {
+          console.warn("Supabase query exception:", e);
+          return { data: [], error: e };
+        }
+      };
+
+      const queryTimeout = (ms: number) => 
+        new Promise<any[]>((_, reject) => 
+          setTimeout(() => reject(new Error("Supabase query execution timed out")), ms)
+        );
+
+      const [
+        leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
+        inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
+        deptsRes, branchesRes, leaveTypesRes, customLeavesRes
+      ] = await Promise.race([
+        Promise.all([
+          safeQuery(supabase.from("leaves").select("*")),
+          safeQuery(supabase.from("attendance").select("*")),
+          safeQuery(supabase.from("employees").select("*")),
+          safeQuery(supabase.from("holidays").select("*")),
+          safeQuery(supabase.from("expenses").select("*")),
+          safeQuery(supabase.from("inventory").select("*")),
+          safeQuery(supabase.from("inventory_requests").select("*").order("created_at", { ascending: false })),
+          safeQuery(supabase.from("policies").select("*")),
+          safeQuery(supabase.from("fines").select("*").order("created_at", { ascending: false })),
+          safeQuery(supabase.from("custom_departments").select("*")),
+          safeQuery(supabase.from("custom_branches").select("*")),
+          safeQuery(supabase.from("custom_leave_types").select("*")),
+          safeQuery(supabase.from("custom_leaves").select("*"))
+        ]),
+        queryTimeout(4500)
       ]);
 
       if (finesRes.data && finesRes.data.length > 0) {

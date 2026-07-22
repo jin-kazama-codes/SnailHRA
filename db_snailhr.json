@@ -1,6 +1,1104 @@
 {
-  "designations": [],
-  "employees": [],
+  "designations": [
+    {
+      "id": "des-1",
+      "title": "Managing Director",
+      "department": "Executive"
+    },
+    {
+      "id": "des-2",
+      "title": "Head of Credit & Risk",
+      "department": "Risk"
+    },
+    {
+      "id": "des-3",
+      "title": "HR Business Partner",
+      "department": "HR"
+    },
+    {
+      "id": "des-4",
+      "title": "Senior Loan Officer",
+      "department": "Loans"
+    },
+    {
+      "id": "des-5",
+      "title": "Insurance Underwriter",
+      "department": "Insurance"
+    },
+    {
+      "id": "des-6",
+      "title": "Sales Relationship Manager",
+      "department": "Sales"
+    },
+    {
+      "id": "des-7",
+      "title": "Collections Specialist",
+      "department": "Operations"
+    },
+    {
+      "id": "des-8",
+      "title": "Compliance Officer",
+      "department": "Compliance"
+    }
+  ],
+  "employees": [
+    {
+      "id": "EMP-1001",
+      "fullName": "Amit Sharma",
+      "email": "amit.sharma@snailhr.com",
+      "phone": "+91 98765 43210",
+      "role": "admin",
+      "designationId": "des-2",
+      "department": "Risk",
+      "joiningDate": "2024-03-15",
+      "status": "Active",
+      "address": "B-402, Skyline Residency, Sector 62, Noida, UP - 201301",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Lead credit evaluation and risk assessment models for commercial and retail loan products. Over 10 years of experience in retail banking risk policies.",
+      "salary": {
+        "basic": 85000,
+        "hra": 34000,
+        "allowances": 21000,
+        "pfDeduction": 6500
+      },
+      "bankDetails": {
+        "accountNumber": "987654321098",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Suman Sharma",
+        "relation": "Spouse",
+        "phone": "+91 98765 43211"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1002",
+      "fullName": "Priya Patel",
+      "email": "priya.patel@snailhr.com",
+      "phone": "+91 87654 32109",
+      "role": "hr",
+      "designationId": "des-3",
+      "department": "HR",
+      "joiningDate": "2024-06-01",
+      "status": "Active",
+      "address": "Flat 504, Emerald Court, Andheri East, Mumbai - 400069",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Managing end-to-end talent acquisition, employee relations, and policy compliance for SnailHR. Committed to nurturing our digital-first culture.",
+      "salary": {
+        "basic": 60000,
+        "hra": 24000,
+        "allowances": 16000,
+        "pfDeduction": 5000
+      },
+      "bankDetails": {
+        "accountNumber": "876543210987",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Ramesh Patel",
+        "relation": "Father",
+        "phone": "+91 87654 32108"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1003",
+      "fullName": "Rahul Verma",
+      "email": "rahul.verma@snailhr.com",
+      "phone": "+91 76543 21098",
+      "role": "employee",
+      "designationId": "des-4",
+      "department": "Loans",
+      "joiningDate": "2024-11-10",
+      "status": "Active",
+      "address": "Row House No. 12, Rosewood Society, Baner, Pune - 411045",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Senior Loan Officer facilitating home and personal loan processing for retail clients. Awarded Top Seller for Q1 2026.",
+      "salary": {
+        "basic": 50000,
+        "hra": 20000,
+        "allowances": 15000,
+        "pfDeduction": 4200
+      },
+      "bankDetails": {
+        "accountNumber": "765432109876",
+        "bankName": "State Bank of India",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Aarti Verma",
+        "relation": "Mother",
+        "phone": "+91 76543 21099"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1004",
+      "fullName": "Sneha Iyer",
+      "email": "sneha.iyer@snailhr.com",
+      "phone": "+91 65432 10987",
+      "role": "employee",
+      "designationId": "des-5",
+      "department": "Insurance",
+      "joiningDate": "2025-01-20",
+      "status": "Active",
+      "address": "Flat 201, Green Meadows, Gachibowli, Hyderabad - 500032",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Managing underwriting risk policies for motor and life insurance distributions. Specialized in medical claim risk loading algorithms.",
+      "salary": {
+        "basic": 48000,
+        "hra": 19200,
+        "allowances": 12800,
+        "pfDeduction": 4000
+      },
+      "bankDetails": {
+        "accountNumber": "654321098765",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Venkat Iyer",
+        "relation": "Father",
+        "phone": "+91 65432 10980"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1005",
+      "fullName": "Siddharth Malhotra",
+      "email": "siddharth.malhotra@snailhr.com",
+      "phone": "+91 9379896728",
+      "role": "employee",
+      "designationId": "des-1",
+      "department": "Executive",
+      "joiningDate": "2024-07-21",
+      "status": "Active",
+      "address": "Flat 101, Shanti Enclave, Sector 12, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Managing Director metrics. Dedicated team player.",
+      "salary": {
+        "basic": 51230,
+        "hra": 20492,
+        "allowances": 10246,
+        "pfDeduction": 4098
+      },
+      "bankDetails": {
+        "accountNumber": "804962213777",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Vikram Malhotra",
+        "relation": "Spouse",
+        "phone": "+91 8491677162"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1006",
+      "fullName": "Arjun Rao",
+      "email": "arjun.rao@snailhr.com",
+      "phone": "+91 9739350338",
+      "role": "employee",
+      "designationId": "des-2",
+      "department": "Risk",
+      "joiningDate": "2024-08-03",
+      "status": "Active",
+      "address": "Flat 108, Shanti Enclave, Sector 13, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Head of Credit & Risk metrics. Dedicated team player.",
+      "salary": {
+        "basic": 44480,
+        "hra": 17792,
+        "allowances": 8896,
+        "pfDeduction": 3558
+      },
+      "bankDetails": {
+        "accountNumber": "247031512826",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Sanjay Rao",
+        "relation": "Father",
+        "phone": "+91 8196616285"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1007",
+      "fullName": "Aditi Kumar",
+      "email": "aditi.kumar@snailhr.com",
+      "phone": "+91 9379667870",
+      "role": "employee",
+      "designationId": "des-3",
+      "department": "HR",
+      "joiningDate": "2024-05-21",
+      "status": "Active",
+      "address": "Flat 115, Shanti Enclave, Sector 14, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in HR Business Partner metrics. Dedicated team player.",
+      "salary": {
+        "basic": 39967,
+        "hra": 15987,
+        "allowances": 7993,
+        "pfDeduction": 3197
+      },
+      "bankDetails": {
+        "accountNumber": "550831498643",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Kavita Kumar",
+        "relation": "Mother",
+        "phone": "+91 8945984434"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1008",
+      "fullName": "Rajesh Hegde",
+      "email": "rajesh.hegde@snailhr.com",
+      "phone": "+91 9930814093",
+      "role": "employee",
+      "designationId": "des-4",
+      "department": "Loans",
+      "joiningDate": "2024-04-05",
+      "status": "Active",
+      "address": "Flat 122, Shanti Enclave, Sector 15, Hyderabad",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Senior Loan Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 57768,
+        "hra": 23107,
+        "allowances": 11554,
+        "pfDeduction": 4621
+      },
+      "bankDetails": {
+        "accountNumber": "129942110498",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Rohan Hegde",
+        "relation": "Sibling",
+        "phone": "+91 8352646265"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1009",
+      "fullName": "Pooja Sharma",
+      "email": "pooja.sharma@snailhr.com",
+      "phone": "+91 9898375678",
+      "role": "employee",
+      "designationId": "des-5",
+      "department": "Insurance",
+      "joiningDate": "2024-02-27",
+      "status": "Active",
+      "address": "Flat 129, Shanti Enclave, Sector 16, Bangalore",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Insurance Underwriter metrics. Dedicated team player.",
+      "salary": {
+        "basic": 70437,
+        "hra": 28175,
+        "allowances": 14087,
+        "pfDeduction": 5635
+      },
+      "bankDetails": {
+        "accountNumber": "699136586171",
+        "bankName": "Kotak Mahindra",
+        "ifsc": "KKBK0000311"
+      },
+      "emergencyContact": {
+        "name": "Divya Sharma",
+        "relation": "Spouse",
+        "phone": "+91 8506381405"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1010",
+      "fullName": "Vikram Dutt",
+      "email": "vikram.dutt@snailhr.com",
+      "phone": "+91 9698191989",
+      "role": "employee",
+      "designationId": "des-6",
+      "department": "Sales",
+      "joiningDate": "2024-08-25",
+      "status": "Active",
+      "address": "Flat 136, Shanti Enclave, Sector 17, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Sales Relationship Manager metrics. Dedicated team player.",
+      "salary": {
+        "basic": 67216,
+        "hra": 26886,
+        "allowances": 13443,
+        "pfDeduction": 5377
+      },
+      "bankDetails": {
+        "accountNumber": "194688116747",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Sandeep Dutt",
+        "relation": "Father",
+        "phone": "+91 8383317609"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1011",
+      "fullName": "Sanjay Krishnamurthy",
+      "email": "sanjay.krishnamurthy@snailhr.com",
+      "phone": "+91 9546597157",
+      "role": "employee",
+      "designationId": "des-7",
+      "department": "Operations",
+      "joiningDate": "2024-05-24",
+      "status": "Active",
+      "address": "Flat 143, Shanti Enclave, Sector 18, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Collections Specialist metrics. Dedicated team player.",
+      "salary": {
+        "basic": 46537,
+        "hra": 18615,
+        "allowances": 9307,
+        "pfDeduction": 3723
+      },
+      "bankDetails": {
+        "accountNumber": "948205297154",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Neha Krishnamurthy",
+        "relation": "Mother",
+        "phone": "+91 8403521876"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1012",
+      "fullName": "Kavita Bopanna",
+      "email": "kavita.bopanna@snailhr.com",
+      "phone": "+91 9169984166",
+      "role": "employee",
+      "designationId": "des-8",
+      "department": "Compliance",
+      "joiningDate": "2024-03-10",
+      "status": "Active",
+      "address": "Flat 150, Shanti Enclave, Sector 19, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Compliance Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 72033,
+        "hra": 28813,
+        "allowances": 14407,
+        "pfDeduction": 5763
+      },
+      "bankDetails": {
+        "accountNumber": "969294531234",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Vivek Bopanna",
+        "relation": "Sibling",
+        "phone": "+91 8770316610"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1013",
+      "fullName": "Rohan Spandana",
+      "email": "rohan.spandana@snailhr.com",
+      "phone": "+91 9538462983",
+      "role": "employee",
+      "designationId": "des-1",
+      "department": "Executive",
+      "joiningDate": "2024-09-14",
+      "status": "Active",
+      "address": "Flat 157, Shanti Enclave, Sector 20, Hyderabad",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Managing Director metrics. Dedicated team player.",
+      "salary": {
+        "basic": 61600,
+        "hra": 24640,
+        "allowances": 12320,
+        "pfDeduction": 4928
+      },
+      "bankDetails": {
+        "accountNumber": "715170481900",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Swati Spandana",
+        "relation": "Spouse",
+        "phone": "+91 8581892812"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1014",
+      "fullName": "Divya Singh",
+      "email": "divya.singh@snailhr.com",
+      "phone": "+91 9584560443",
+      "role": "employee",
+      "designationId": "des-2",
+      "department": "Risk",
+      "joiningDate": "2024-06-02",
+      "status": "Active",
+      "address": "Flat 164, Shanti Enclave, Sector 21, Bangalore",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Head of Credit & Risk metrics. Dedicated team player.",
+      "salary": {
+        "basic": 67894,
+        "hra": 27158,
+        "allowances": 13579,
+        "pfDeduction": 5432
+      },
+      "bankDetails": {
+        "accountNumber": "812058798694",
+        "bankName": "Kotak Mahindra",
+        "ifsc": "KKBK0000311"
+      },
+      "emergencyContact": {
+        "name": "Abhinav Singh",
+        "relation": "Father",
+        "phone": "+91 8732161614"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1015",
+      "fullName": "Sandeep Dhupia",
+      "email": "sandeep.dhupia@snailhr.com",
+      "phone": "+91 9332036233",
+      "role": "employee",
+      "designationId": "des-3",
+      "department": "HR",
+      "joiningDate": "2024-10-24",
+      "status": "Active",
+      "address": "Flat 171, Shanti Enclave, Sector 22, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in HR Business Partner metrics. Dedicated team player.",
+      "salary": {
+        "basic": 51925,
+        "hra": 20770,
+        "allowances": 10385,
+        "pfDeduction": 4154
+      },
+      "bankDetails": {
+        "accountNumber": "859927898292",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Anjali Dhupia",
+        "relation": "Mother",
+        "phone": "+91 8750478070"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1016",
+      "fullName": "Neha Oberoi",
+      "email": "neha.oberoi@snailhr.com",
+      "phone": "+91 9738925450",
+      "role": "employee",
+      "designationId": "des-4",
+      "department": "Loans",
+      "joiningDate": "2024-04-18",
+      "status": "Active",
+      "address": "Flat 178, Shanti Enclave, Sector 23, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Senior Loan Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 46708,
+        "hra": 18683,
+        "allowances": 9342,
+        "pfDeduction": 3737
+      },
+      "bankDetails": {
+        "accountNumber": "886811106065",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Manoj Oberoi",
+        "relation": "Sibling",
+        "phone": "+91 8931372514"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1017",
+      "fullName": "Vivek Sen",
+      "email": "vivek.sen@snailhr.com",
+      "phone": "+91 9487032822",
+      "role": "employee",
+      "designationId": "des-5",
+      "department": "Insurance",
+      "joiningDate": "2024-03-18",
+      "status": "Active",
+      "address": "Flat 185, Shanti Enclave, Sector 24, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Insurance Underwriter metrics. Dedicated team player.",
+      "salary": {
+        "basic": 47132,
+        "hra": 18853,
+        "allowances": 9426,
+        "pfDeduction": 3771
+      },
+      "bankDetails": {
+        "accountNumber": "949560859354",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Kiran Sen",
+        "relation": "Spouse",
+        "phone": "+91 8441050264"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1018",
+      "fullName": "Swati Bindra",
+      "email": "swati.bindra@snailhr.com",
+      "phone": "+91 9440848248",
+      "role": "employee",
+      "designationId": "des-6",
+      "department": "Sales",
+      "joiningDate": "2024-09-05",
+      "status": "Active",
+      "address": "Flat 192, Shanti Enclave, Sector 25, Hyderabad",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Sales Relationship Manager metrics. Dedicated team player.",
+      "salary": {
+        "basic": 40112,
+        "hra": 16045,
+        "allowances": 8022,
+        "pfDeduction": 3209
+      },
+      "bankDetails": {
+        "accountNumber": "310121057236",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Milind Bindra",
+        "relation": "Father",
+        "phone": "+91 8300967528"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1019",
+      "fullName": "Abhinav Bhagwat",
+      "email": "abhinav.bhagwat@snailhr.com",
+      "phone": "+91 9720197394",
+      "role": "employee",
+      "designationId": "des-7",
+      "department": "Operations",
+      "joiningDate": "2024-07-26",
+      "status": "Active",
+      "address": "Flat 199, Shanti Enclave, Sector 26, Bangalore",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Collections Specialist metrics. Dedicated team player.",
+      "salary": {
+        "basic": 48274,
+        "hra": 19310,
+        "allowances": 9655,
+        "pfDeduction": 3862
+      },
+      "bankDetails": {
+        "accountNumber": "631303676037",
+        "bankName": "Kotak Mahindra",
+        "ifsc": "KKBK0000311"
+      },
+      "emergencyContact": {
+        "name": "Shreya Bhagwat",
+        "relation": "Mother",
+        "phone": "+91 8684932965"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1020",
+      "fullName": "Anjali Bajpayee",
+      "email": "anjali.bajpayee@snailhr.com",
+      "phone": "+91 9743880852",
+      "role": "employee",
+      "designationId": "des-8",
+      "department": "Compliance",
+      "joiningDate": "2024-02-27",
+      "status": "Active",
+      "address": "Flat 206, Shanti Enclave, Sector 27, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Compliance Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 53373,
+        "hra": 21349,
+        "allowances": 10675,
+        "pfDeduction": 4270
+      },
+      "bankDetails": {
+        "accountNumber": "479039470064",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Sonu Bajpayee",
+        "relation": "Sibling",
+        "phone": "+91 8364405870"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1021",
+      "fullName": "Manoj Hashmi",
+      "email": "manoj.hashmi@snailhr.com",
+      "phone": "+91 9558605131",
+      "role": "employee",
+      "designationId": "des-1",
+      "department": "Executive",
+      "joiningDate": "2024-11-05",
+      "status": "Active",
+      "address": "Flat 213, Shanti Enclave, Sector 28, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Managing Director metrics. Dedicated team player.",
+      "salary": {
+        "basic": 66135,
+        "hra": 26454,
+        "allowances": 13227,
+        "pfDeduction": 5291
+      },
+      "bankDetails": {
+        "accountNumber": "588102214618",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Arijit Hashmi",
+        "relation": "Spouse",
+        "phone": "+91 8311298358"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1022",
+      "fullName": "Kiran Kapoor",
+      "email": "kiran.kapoor@snailhr.com",
+      "phone": "+91 9803446703",
+      "role": "employee",
+      "designationId": "des-2",
+      "department": "Risk",
+      "joiningDate": "2024-09-04",
+      "status": "Active",
+      "address": "Flat 220, Shanti Enclave, Sector 29, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Head of Credit & Risk metrics. Dedicated team player.",
+      "salary": {
+        "basic": 65742,
+        "hra": 26297,
+        "allowances": 13148,
+        "pfDeduction": 5259
+      },
+      "bankDetails": {
+        "accountNumber": "712763233264",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Sunidhi Kapoor",
+        "relation": "Father",
+        "phone": "+91 8253348997"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1023",
+      "fullName": "Milind Bedi",
+      "email": "milind.bedi@snailhr.com",
+      "phone": "+91 9170745362",
+      "role": "employee",
+      "designationId": "des-3",
+      "department": "HR",
+      "joiningDate": "2024-08-10",
+      "status": "Active",
+      "address": "Flat 227, Shanti Enclave, Sector 30, Hyderabad",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in HR Business Partner metrics. Dedicated team player.",
+      "salary": {
+        "basic": 57373,
+        "hra": 22949,
+        "allowances": 11475,
+        "pfDeduction": 4590
+      },
+      "bankDetails": {
+        "accountNumber": "326045266517",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Rohit Bedi",
+        "relation": "Mother",
+        "phone": "+91 8855414890"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1024",
+      "fullName": "Shreya Soman",
+      "email": "shreya.soman@snailhr.com",
+      "phone": "+91 9369338830",
+      "role": "employee",
+      "designationId": "des-4",
+      "department": "Loans",
+      "joiningDate": "2024-09-23",
+      "status": "Active",
+      "address": "Flat 234, Shanti Enclave, Sector 31, Bangalore",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Senior Loan Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 70297,
+        "hra": 28119,
+        "allowances": 14059,
+        "pfDeduction": 5624
+      },
+      "bankDetails": {
+        "accountNumber": "973279703757",
+        "bankName": "Kotak Mahindra",
+        "ifsc": "KKBK0000311"
+      },
+      "emergencyContact": {
+        "name": "Virat Soman",
+        "relation": "Sibling",
+        "phone": "+91 8974581979"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1025",
+      "fullName": "Sonu Ghoshal",
+      "email": "sonu.ghoshal@snailhr.com",
+      "phone": "+91 9700501608",
+      "role": "employee",
+      "designationId": "des-5",
+      "department": "Insurance",
+      "joiningDate": "2024-08-22",
+      "status": "Active",
+      "address": "Flat 241, Shanti Enclave, Sector 32, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Insurance Underwriter metrics. Dedicated team player.",
+      "salary": {
+        "basic": 67915,
+        "hra": 27166,
+        "allowances": 13583,
+        "pfDeduction": 5433
+      },
+      "bankDetails": {
+        "accountNumber": "310878949850",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Mahendra Ghoshal",
+        "relation": "Spouse",
+        "phone": "+91 8248026154"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1026",
+      "fullName": "Arijit Nigam",
+      "email": "arijit.nigam@snailhr.com",
+      "phone": "+91 9216712483",
+      "role": "employee",
+      "designationId": "des-6",
+      "department": "Sales",
+      "joiningDate": "2024-01-10",
+      "status": "Active",
+      "address": "Flat 248, Shanti Enclave, Sector 33, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Sales Relationship Manager metrics. Dedicated team player.",
+      "salary": {
+        "basic": 36438,
+        "hra": 14575,
+        "allowances": 7288,
+        "pfDeduction": 2915
+      },
+      "bankDetails": {
+        "accountNumber": "990940214141",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Sachin Nigam",
+        "relation": "Father",
+        "phone": "+91 8306499603"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1027",
+      "fullName": "Sunidhi Singh",
+      "email": "sunidhi.singh@snailhr.com",
+      "phone": "+91 9767338160",
+      "role": "employee",
+      "designationId": "des-7",
+      "department": "Operations",
+      "joiningDate": "2024-04-24",
+      "status": "Active",
+      "address": "Flat 255, Shanti Enclave, Sector 34, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Collections Specialist metrics. Dedicated team player.",
+      "salary": {
+        "basic": 72954,
+        "hra": 29182,
+        "allowances": 14591,
+        "pfDeduction": 5836
+      },
+      "bankDetails": {
+        "accountNumber": "313419519489",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Rahul Singh",
+        "relation": "Mother",
+        "phone": "+91 8594950095"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1028",
+      "fullName": "Rohit Chauhan",
+      "email": "rohit.chauhan@snailhr.com",
+      "phone": "+91 9615212133",
+      "role": "employee",
+      "designationId": "des-8",
+      "department": "Compliance",
+      "joiningDate": "2024-05-17",
+      "status": "Active",
+      "address": "Flat 262, Shanti Enclave, Sector 35, Hyderabad",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Compliance Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 37759,
+        "hra": 15104,
+        "allowances": 7552,
+        "pfDeduction": 3021
+      },
+      "bankDetails": {
+        "accountNumber": "892388314393",
+        "bankName": "Axis Bank",
+        "ifsc": "UTIB0000084"
+      },
+      "emergencyContact": {
+        "name": "Jasprit Chauhan",
+        "relation": "Sibling",
+        "phone": "+91 8611170070"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1029",
+      "fullName": "Virat Sharma",
+      "email": "virat.sharma@snailhr.com",
+      "phone": "+91 9876608694",
+      "role": "employee",
+      "designationId": "des-1",
+      "department": "Executive",
+      "joiningDate": "2024-09-06",
+      "status": "Active",
+      "address": "Flat 269, Shanti Enclave, Sector 36, Bangalore",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Managing Director metrics. Dedicated team player.",
+      "salary": {
+        "basic": 44677,
+        "hra": 17871,
+        "allowances": 8935,
+        "pfDeduction": 3574
+      },
+      "bankDetails": {
+        "accountNumber": "879257875717",
+        "bankName": "Kotak Mahindra",
+        "ifsc": "KKBK0000311"
+      },
+      "emergencyContact": {
+        "name": "Ravindra Sharma",
+        "relation": "Spouse",
+        "phone": "+91 8957951983"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1030",
+      "fullName": "Mahendra Kohli",
+      "email": "mahendra.kohli@snailhr.com",
+      "phone": "+91 9381754842",
+      "role": "employee",
+      "designationId": "des-2",
+      "department": "Risk",
+      "joiningDate": "2024-04-03",
+      "status": "Active",
+      "address": "Flat 276, Shanti Enclave, Sector 37, Mumbai",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Head of Credit & Risk metrics. Dedicated team player.",
+      "salary": {
+        "basic": 43082,
+        "hra": 17233,
+        "allowances": 8616,
+        "pfDeduction": 3447
+      },
+      "bankDetails": {
+        "accountNumber": "599914691871",
+        "bankName": "HDFC Bank",
+        "ifsc": "HDFC0000104"
+      },
+      "emergencyContact": {
+        "name": "Siddharth Kohli",
+        "relation": "Father",
+        "phone": "+91 8305654999"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1031",
+      "fullName": "Sachin Dhoni",
+      "email": "sachin.dhoni@snailhr.com",
+      "phone": "+91 9527405372",
+      "role": "employee",
+      "designationId": "des-3",
+      "department": "HR",
+      "joiningDate": "2024-11-01",
+      "status": "Active",
+      "address": "Flat 283, Shanti Enclave, Sector 38, Noida",
+      "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in HR Business Partner metrics. Dedicated team player.",
+      "salary": {
+        "basic": 51054,
+        "hra": 20422,
+        "allowances": 10211,
+        "pfDeduction": 4084
+      },
+      "bankDetails": {
+        "accountNumber": "250352117414",
+        "bankName": "ICICI Bank",
+        "ifsc": "ICIC0000213"
+      },
+      "emergencyContact": {
+        "name": "Arjun Dhoni",
+        "relation": "Mother",
+        "phone": "+91 8479527335"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    },
+    {
+      "id": "EMP-1032",
+      "fullName": "Rahul Tendulkar",
+      "email": "rahul.tendulkar@snailhr.com",
+      "phone": "+91 9768214654",
+      "role": "employee",
+      "designationId": "des-4",
+      "department": "Loans",
+      "joiningDate": "2024-08-23",
+      "status": "Active",
+      "address": "Flat 290, Shanti Enclave, Sector 39, Pune",
+      "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+      "bio": "Operations coordinator specialized in Senior Loan Officer metrics. Dedicated team player.",
+      "salary": {
+        "basic": 73407,
+        "hra": 29363,
+        "allowances": 14681,
+        "pfDeduction": 5873
+      },
+      "bankDetails": {
+        "accountNumber": "893884822411",
+        "bankName": "SBI",
+        "ifsc": "SBIN0001234"
+      },
+      "emergencyContact": {
+        "name": "Aditi Tendulkar",
+        "relation": "Sibling",
+        "phone": "+91 8898799391"
+      },
+      "documents": [],
+      "onboardingTasks": [],
+      "password": ""
+    }
+  ],
   "attendance": [
     {
       "id": "pun-1784700287461",
@@ -35,7 +1133,32 @@
     }
   ],
   "leaves": [],
-  "holidays": [],
+  "holidays": [
+    {
+      "id": "hol-1",
+      "name": "Republic Day",
+      "date": "2026-01-26",
+      "type": "National"
+    },
+    {
+      "id": "hol-2",
+      "name": "Independence Day",
+      "date": "2026-08-15",
+      "type": "National"
+    },
+    {
+      "id": "hol-3",
+      "name": "Gandhi Jayanti",
+      "date": "2026-10-02",
+      "type": "National"
+    },
+    {
+      "id": "hol-4",
+      "name": "Christmas Day",
+      "date": "2026-12-25",
+      "type": "National"
+    }
+  ],
   "policies": [
     {
       "id": "pol-1784667016830",
