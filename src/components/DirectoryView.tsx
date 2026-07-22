@@ -53,6 +53,8 @@ export default function DirectoryView({
   const [empRole, setEmpRole] = useState<UserRole>("employee");
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
   const [department, setDepartment] = useState("Loans");
+  const [onboardBranch, setOnboardBranch] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("All");
   const [joiningDate, setJoiningDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -83,7 +85,8 @@ export default function DirectoryView({
       emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = selectedDept === "All" || emp.department === selectedDept;
-    return matchesSearch && matchesDept;
+    const matchesBranch = selectedBranch === "All" || (emp.branch || "Mumbai Branch") === selectedBranch;
+    return matchesSearch && matchesDept && matchesBranch;
   });
 
   const getDesignationTitle = (id: string) => {
@@ -97,6 +100,7 @@ export default function DirectoryView({
     }
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
+      branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
       joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf,
       bankAccount, bankName, bankIfsc, address, bio, password
     };
@@ -109,6 +113,7 @@ export default function DirectoryView({
     setPassword("");
     setAddress("");
     setBio("");
+    setOnboardBranch("");
     setShowOnboardForm(false);
   };
 
@@ -154,11 +159,29 @@ export default function DirectoryView({
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
+          {role === "admin" && (
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
+            >
+              <option value="All">All Branches</option>
+              {(customBranches && customBranches.length > 0
+                ? customBranches
+                : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
+              ).map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {(role === "admin" || role === "hr") && (
           <button
-            onClick={() => setShowOnboardForm(true)}
+            onClick={() => {
+              setShowOnboardForm(true);
+              setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"));
+            }}
             className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs shadow-emerald-600/10 dark:shadow-emerald-500/20"
           >
             <UserPlus className="w-4 h-4" />
@@ -600,6 +623,23 @@ export default function DirectoryView({
                         onChange={(e) => setJoiningDate(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Branch Office *</label>
+                      <select
+                        value={onboardBranch}
+                        onChange={(e) => setOnboardBranch(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        required
+                        disabled={role === "hr"}
+                      >
+                        {(customBranches && customBranches.length > 0
+                          ? customBranches
+                          : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
+                        ).map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 </div>
