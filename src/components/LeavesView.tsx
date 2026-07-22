@@ -119,7 +119,7 @@ export default function LeavesView({
 
   // Leave Balances (Dynamic)
   const getConsumedCount = (leaveType: string) => {
-    return leaves.filter(l => l.employeeId === currentEmployeeId && l.leaveType === leaveType && l.status === "Approved").length;
+    return leaves.filter(l => l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase() && l.leaveType === leaveType && l.status === "Approved").length;
   };
   const leaveBalances = [
     { type: "Casual Leaves", allocated: 18, consumed: getConsumedCount("Casual Leave"), color: "border-l-emerald-500 text-emerald-600 bg-emerald-500/5" },
@@ -340,7 +340,7 @@ export default function LeavesView({
 
             <div className="space-y-2.5 max-h-[480px] overflow-y-auto custom-scrollbar">
               {leaves
-                .filter(l => (role === "employee" || ledgerFilter === "mine") ? l.employeeId === currentEmployeeId : true)
+                .filter(l => (role === "employee" || ledgerFilter === "mine") ? l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase() : true)
                 .slice()
                 .sort((a, b) => {
                   // Pending / newest leaves at the top
@@ -374,7 +374,7 @@ export default function LeavesView({
                     </div>
                   );
                 })}
-              {leaves.filter(l => (role === "employee" || ledgerFilter === "mine") ? l.employeeId === currentEmployeeId : true).length === 0 && (
+              {leaves.filter(l => (role === "employee" || ledgerFilter === "mine") ? l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase() : true).length === 0 && (
                 <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No leave history logged.</p>
               )}
             </div>
