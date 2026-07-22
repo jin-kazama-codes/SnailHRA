@@ -253,7 +253,7 @@ export default function LeavesView({
                   <div key={leave.id} className="p-4 bg-slate-50/70 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-slate-800 dark:text-white text-xs">{leave.employeeName || getEmployeeName(leave.employeeId)}</span>
+                        <span className="font-bold text-slate-800 dark:text-white text-xs">{getEmployeeName(leave.employeeId, leave.employeeName)}</span>
                         <span className="text-[10px] bg-slate-200 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 px-2 py-0.5 rounded font-mono">{leave.employeeId}</span>
                         <span className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 font-bold px-2 py-0.5 rounded">{leave.leaveType}</span>
                       </div>
