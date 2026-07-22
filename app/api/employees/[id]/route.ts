@@ -31,6 +31,7 @@ export async function PUT(
           role: emp.role,
           designation_id: emp.designationId,
           department: emp.department,
+          branch: emp.branch,
           joining_date: emp.joiningDate,
           status: emp.status,
           address: emp.address,

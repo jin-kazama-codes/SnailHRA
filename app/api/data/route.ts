@@ -199,7 +199,7 @@ export async function GET() {
           role: row.role || "employee",
           designationId: row.designation_id || row.designationId || "des-4",
           department: row.department || "Loans",
-          branch: row.branch || "Mumbai Branch",
+          branch: row.branch || (db.employees || []).find((e: any) => e.id === row.id)?.branch || "Mumbai Branch",
           joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
           status: row.status || "Active",
           salary: typeof row.salary === "string" ? JSON.parse(row.salary) : (row.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),

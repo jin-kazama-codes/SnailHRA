@@ -40,7 +40,7 @@ export async function POST(request: Request) {
             role: data.role || "employee",
             designationId: data.designation_id || data.designationId || "des-4",
             department: data.department || "Loans",
-            branch: data.branch || "Mumbai Branch",
+            branch: data.branch || loadDatabase().employees?.find((e: any) => e.id === data.id)?.branch || "Mumbai Branch",
             joiningDate: data.joining_date || data.joiningDate || "2024-03-15",
             status: data.status || "Active",
             salary: typeof data.salary === "string" ? JSON.parse(data.salary) : (data.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),

@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       ],
       avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       bio: body.bio || "",
+      branch: body.branch || "Mumbai Branch",
       password: hashedPassword
     };
 
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
           role: newEmp.role,
           designation_id: newEmp.designationId,
           department: newEmp.department,
+          branch: newEmp.branch,
           joining_date: newEmp.joiningDate,
           status: newEmp.status,
           address: newEmp.address,
