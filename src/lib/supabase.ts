@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
+import { loadDatabase } from "./db";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config();
@@ -21,6 +22,7 @@ if (!supabase) {
 export async function syncPunchToSupabase(punch: any) {
   if (!supabase) return;
   try {
+    await ensureEmployeeSynced(punch.employeeId);
     const record = {
       id: punch.id,
       employee_id: punch.employeeId,
@@ -77,6 +79,7 @@ export async function deleteHolidayFromSupabase(holidayId: string) {
 export async function syncExpenseToSupabase(expense: any) {
   if (!supabase) return;
   try {
+    await ensureEmployeeSynced(expense.employeeId);
     const record = {
       id: expense.id,
       employee_id: expense.employeeId,
@@ -131,6 +134,7 @@ export async function deleteInventoryFromSupabase(itemId: string) {
 export async function syncInventoryRequestToSupabase(req: any) {
   if (!supabase) return;
   try {
+    await ensureEmployeeSynced(req.employeeId);
     const record = {
       id: req.id,
       employee_id: req.employeeId,
@@ -164,9 +168,13 @@ export async function deleteInventoryRequestFromSupabase(reqId: string) {
 export async function syncFineToSupabase(fine: any) {
   if (!supabase) return;
   try {
+    const employeeId = fine.employeeId || fine.employee_id;
+    if (employeeId) {
+      await ensureEmployeeSynced(employeeId);
+    }
     const record = {
       id: fine.id,
-      employee_id: fine.employeeId || fine.employee_id,
+      employee_id: employeeId,
       employee_name: fine.employeeName || fine.employee_name || null,
       reason: fine.reason || "",
       amount: Number(fine.amount) || 0,
@@ -309,6 +317,57 @@ export async function deleteLeaveTypeFromSupabase(name: string) {
     console.log(`Successfully deleted leave type "${name}" from Supabase 'custom_leave_types' / 'custom_leaves' table.`);
   } catch (e) {
     console.warn("Supabase custom_leave_types delete error:", e);
+  }
+}
+
+export async function ensureEmployeeSynced(employeeId: string) {
+  if (!supabase) return;
+  try {
+    // Check if employee exists in Supabase
+    const { data, error } = await supabase.from("employees").select("id").eq("id", employeeId).maybeSingle();
+    if (!error && data) {
+      return; // Already exists
+    }
+
+    // Employee not in Supabase, load from local DB and sync
+    const db = loadDatabase();
+    const emp = db.employees?.find((e: any) => e.id === employeeId);
+    if (emp) {
+      const record = {
+        id: emp.id,
+        full_name: emp.fullName,
+        email: emp.email,
+        phone: emp.phone,
+        role: emp.role,
+        designation_id: emp.designationId,
+        department: emp.department,
+        branch: emp.branch,
+        joining_date: emp.joiningDate,
+        status: emp.status,
+        address: emp.address,
+        emergency_contact_name: emp.emergencyContact?.name,
+        emergency_contact_relation: emp.emergencyContact?.relation,
+        emergency_contact_phone: emp.emergencyContact?.phone,
+        avatar_url: emp.avatarUrl,
+        bio: emp.bio,
+        salary_basic: emp.salary?.basic,
+        salary_hra: emp.salary?.hra,
+        salary_allowances: emp.salary?.allowances,
+        salary_pf_deduction: emp.salary?.pfDeduction,
+        bank_account_number: emp.bankDetails?.accountNumber,
+        bank_name: emp.bankDetails?.bankName,
+        bank_ifsc: emp.bankDetails?.ifsc,
+        password: emp.password || null
+      };
+      const { error: insertErr } = await supabase.from("employees").upsert(record, { onConflict: "id" });
+      if (insertErr) {
+        console.warn(`Failed to pre-sync fallback employee ${emp.id}:`, insertErr.message);
+      } else {
+        console.log(`Successfully pre-synced employee ${emp.id} (${emp.fullName}) to Supabase.`);
+      }
+    }
+  } catch (err) {
+    console.warn("ensureEmployeeSynced warning:", err);
   }
 }
 

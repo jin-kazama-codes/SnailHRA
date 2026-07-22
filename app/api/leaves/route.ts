@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { LeaveRequest } from "@/src/types";
-import { supabase } from "@/src/lib/supabase";
+import { supabase, ensureEmployeeSynced } from "@/src/lib/supabase";
 
 export async function GET() {
   const db = loadDatabase();
@@ -61,6 +61,9 @@ export async function POST(request: Request) {
     saveDatabase(db);
 
     if (supabase) {
+      if (newLeave.employeeId) {
+        await ensureEmployeeSynced(newLeave.employeeId);
+      }
       const payload = {
         id: leaveId,
         employee_id: newLeave.employeeId,
