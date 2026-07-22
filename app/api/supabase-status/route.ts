@@ -17,27 +17,22 @@ export async function GET() {
     });
   }
   try {
-    const { data, error } = await supabase.from("employees").select("count", { count: "exact", head: true });
-    if (error) {
-      return NextResponse.json({ 
-        connected: false, 
-        synced: false, 
-        error: error.message,
-        env: { url: maskedUrl, key: maskedKey }
-      });
-    }
+    const { data, error, status, statusText } = await supabase.from("employees").select("id").limit(1);
     return NextResponse.json({ 
-      connected: true, 
-      synced: true, 
-      count: data,
-      env: { url: maskedUrl, key: maskedKey }
+      connected: !error, 
+      synced: !error, 
+      status,
+      statusText,
+      error: error || null,
+      data: data || null,
+      env: { url: url ? maskedUrl : "missing", key: key ? maskedKey : "missing" }
     });
   } catch (err: any) {
     return NextResponse.json({ 
       connected: false, 
       synced: false, 
-      error: err.message || "Unknown error",
-      env: { url: maskedUrl, key: maskedKey }
+      error: { message: err.message || "Unknown exception", stack: err.stack },
+      env: { url: url ? maskedUrl : "missing", key: key ? maskedKey : "missing" }
     });
   }
 }
