@@ -46,7 +46,11 @@ export async function POST(request: Request) {
             salary: typeof data.salary === "string" ? JSON.parse(data.salary) : (data.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
             bankDetails: typeof data.bank_details === "string" ? JSON.parse(data.bank_details) : (data.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
             address: data.address || "",
-            emergencyContact: typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact) : (data.emergencyContact || { name: "", relation: "", phone: "" }),
+            emergencyContact: {
+              name: data.emergency_contact_name || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.name : data.emergencyContact?.name) || "",
+              relation: data.emergency_contact_relation || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.relation : data.emergencyContact?.relation) || "",
+              phone: data.emergency_contact_phone || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.phone : data.emergencyContact?.phone) || ""
+            },
             documents: typeof data.documents === "string" ? JSON.parse(data.documents) : (data.documents || []),
             onboardingTasks: typeof data.onboarding_tasks === "string" ? JSON.parse(data.onboarding_tasks) : (data.onboardingTasks || []),
             password: data.password || ""

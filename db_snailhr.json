@@ -1129,6 +1129,59 @@
       "onboardingTasks": [],
       "password": "",
       "branch": "Noida Field Hub"
+    },
+    {
+      "id": "EMP-1033",
+      "fullName": "Krishna Sharma",
+      "email": "krishna@gmail.com",
+      "phone": "9557712155",
+      "role": "hr",
+      "designationId": "des-4",
+      "department": "Risk",
+      "joiningDate": "2026-07-22",
+      "status": "Active",
+      "salary": {
+        "basic": 45000,
+        "hra": 18000,
+        "allowances": 10000,
+        "pfDeduction": 3200
+      },
+      "bankDetails": {
+        "accountNumber": "",
+        "bankName": "State Bank of India",
+        "ifsc": ""
+      },
+      "address": "",
+      "emergencyContact": {
+        "name": "Guardian",
+        "relation": "Spouse",
+        "phone": "+91 99999 88888"
+      },
+      "documents": [],
+      "onboardingTasks": [
+        {
+          "id": "tsk-auto-EMP-1033-1",
+          "taskName": "Verify KYC and Identity proof",
+          "completed": false,
+          "dueDate": "2026-07-22"
+        },
+        {
+          "id": "tsk-auto-EMP-1033-2",
+          "taskName": "Collect Bank Account proof & PAN card",
+          "completed": false,
+          "dueDate": "2026-07-22"
+        },
+        {
+          "id": "tsk-auto-EMP-1033-3",
+          "taskName": "Allocate SnailHR Credentials & Assets",
+          "completed": false,
+          "dueDate": "2026-07-22"
+        }
+      ],
+      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+      "bio": "Agent bio",
+      "branch": "Snail Mumbai HQ",
+      "password": "$2b$10$ULrUQzWKDWLxzPcIF0ToJeFqqD99/3GHoxozvM4NOiHVEtSKbqFvm"
     }
   ],
   "attendance": [

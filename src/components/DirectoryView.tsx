@@ -68,6 +68,9 @@ export default function DirectoryView({
   const [bankIfsc, setBankIfsc] = useState("");
   const [address, setAddress] = useState("");
   const [bio, setBio] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyRelation, setEmergencyRelation] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
 
   const loggedInUser = employees.find(e => e.id === currentUserId) || employees[0];
   const userBranch = loggedInUser?.branch || "Mumbai Branch";
@@ -102,7 +105,8 @@ export default function DirectoryView({
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
       branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
       joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf,
-      bankAccount, bankName, bankIfsc, address, bio, password
+      bankAccount, bankName, bankIfsc, address, bio, password,
+      emergencyName, emergencyRelation, emergencyPhone
     };
     onOnboardEmployee(data);
 
@@ -113,6 +117,9 @@ export default function DirectoryView({
     setPassword("");
     setAddress("");
     setBio("");
+    setEmergencyName("");
+    setEmergencyRelation("");
+    setEmergencyPhone("");
     setOnboardBranch("");
     setShowOnboardForm(false);
   };
@@ -724,7 +731,59 @@ export default function DirectoryView({
                   </div>
                 </div>
 
-                {/* Section 5: Biography */}
+                {/* Section 5: Contact & Address Details */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">5. Contact & Address Details</h4>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Residential Address</label>
+                    <textarea
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      rows={2}
+                      placeholder="Enter full physical residential address..."
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 6: Emergency Contact Details */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">6. Emergency Contact Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Name</label>
+                      <input
+                        type="text"
+                        value={emergencyName}
+                        onChange={(e) => setEmergencyName(e.target.value)}
+                        placeholder="e.g. Suman Sharma"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Relationship</label>
+                      <input
+                        type="text"
+                        value={emergencyRelation}
+                        onChange={(e) => setEmergencyRelation(e.target.value)}
+                        placeholder="e.g. Spouse / Parent"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Phone</label>
+                      <input
+                        type="text"
+                        value={emergencyPhone}
+                        onChange={(e) => setEmergencyPhone(e.target.value)}
+                        placeholder="e.g. +91 99999 88888"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 7: Biography */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Agent Bio / Profile Summary</label>
                   <textarea

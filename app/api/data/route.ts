@@ -205,7 +205,11 @@ export async function GET() {
           salary: typeof row.salary === "string" ? JSON.parse(row.salary) : (row.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
           bankDetails: typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : (row.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
                   address: row.address || "",
-          emergencyContact: typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : (row.emergencyContact || { name: "", relation: "", phone: "" }),
+          emergencyContact: {
+            name: row.emergency_contact_name || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.name : row.emergencyContact?.name) || "",
+            relation: row.emergency_contact_relation || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.relation : row.emergencyContact?.relation) || "",
+            phone: row.emergency_contact_phone || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.phone : row.emergencyContact?.phone) || ""
+          },
           documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || []),
           onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || []),
           password: row.password || ""
