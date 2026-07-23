@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { updateFineStatusInSupabase } from "@/src/lib/supabase";
+import { updateFineStatusInSupabase, syncPayslipToSupabase, supabase } from "@/src/lib/supabase";
 import { Payslip, SimulatedEmail } from "@/src/types";
 
 export async function POST(request: Request) {
@@ -11,7 +11,49 @@ export async function POST(request: Request) {
     }
 
     const db = loadDatabase();
-    const employee = db.employees.find(e => e.id === employeeId);
+    let employee = db.employees.find(e => e.id === employeeId);
+
+    if (!employee && supabase) {
+      const { data: empRows } = await supabase.from("employees").select("*");
+      if (empRows && empRows.length > 0) {
+        db.employees = empRows.map((row: any) => {
+          const bankDetailsFromRow = typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : row.bank_details;
+          const salaryFromRow = typeof row.salary === "string" ? JSON.parse(row.salary) : row.salary;
+          return {
+            id: row.id,
+            fullName: row.full_name || row.fullName || "",
+            email: row.email || "",
+            phone: row.phone || "",
+            role: row.role || "employee",
+            designationId: row.designation_id || row.designationId || "des-4",
+            department: row.department || "Loans",
+            branch: row.branch || row.branch_name || "Mumbai Branch",
+            joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
+            status: row.status || "Active",
+            salary: {
+              basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? 45000),
+              hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? 18000),
+              allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? 10000),
+              pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200)
+            },
+            bankDetails: {
+              accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
+              bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+              ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
+            },
+            address: row.address || "",
+            emergencyContact: { name: "", relation: "", phone: "" },
+            documents: [],
+            onboardingTasks: [],
+            avatarUrl: row.avatar_url || "",
+            bio: row.bio || "",
+            password: row.password || ""
+          };
+        });
+        employee = db.employees.find(e => e.id === employeeId);
+      }
+    }
+
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
@@ -71,6 +113,8 @@ export async function POST(request: Request) {
     db.payslips.push(newPayslip);
     db.simulatedEmails.push(newEmail);
     saveDatabase(db);
+
+    await syncPayslipToSupabase(newPayslip);
 
     // Sync fine updates to Supabase
     for (const fine of pendingFines) {

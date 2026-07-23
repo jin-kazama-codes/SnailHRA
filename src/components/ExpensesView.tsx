@@ -5,28 +5,24 @@ import {
   DollarSign, FileText, Plus, Check, X, ShieldAlert, 
   HelpCircle, Sparkles, Receipt, RefreshCw, AlertCircle
 } from "lucide-react";
-import { ExpenseClaim, Reimbursement, Employee, UserRole } from "../types";
+import { ExpenseClaim, Employee, UserRole } from "../types";
 
 interface ExpensesViewProps {
   expenses: ExpenseClaim[];
-  reimbursements: Reimbursement[];
   employees: Employee[];
   role: UserRole;
   currentEmployeeId: string;
   onSubmitExpense: (expenseData: any) => void;
   onReviewExpense: (id: string, status: "Approved" | "Rejected") => void;
-  onPayReimbursement: (id: string) => void;
 }
 
 export default function ExpensesView({
   expenses,
-  reimbursements,
   employees,
   role,
   currentEmployeeId,
   onSubmitExpense,
-  onReviewExpense,
-  onPayReimbursement
+  onReviewExpense
 }: ExpensesViewProps) {
 
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -69,11 +65,6 @@ export default function ExpensesView({
 
   const getEmployeeName = (empId: string) => {
     return employees.find(e => e.id === empId)?.fullName || "Unknown Agent";
-  };
-
-  const getEmployeeBank = (empId: string) => {
-    const emp = employees.find(e => e.id === empId);
-    return emp ? `${emp.bankDetails.bankName} (A/C ****${emp.bankDetails.accountNumber.slice(-4)})` : "Registered Bank";
   };
 
   return (

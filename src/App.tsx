@@ -165,7 +165,12 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch SnailHR database.");
       const data = await res.json();
 
-      setEmployees(data.employees || []);
+      const fetchedEmployees = (data.employees || []).sort((a: any, b: any) => {
+        const numA = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
+        const numB = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
+        return numA - numB;
+      });
+      setEmployees(fetchedEmployees);
       setDesignations(data.designations || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
@@ -1089,7 +1094,6 @@ export default function App() {
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
     { id: "payroll", label: "Payroll & Payslips", icon: <IndianRupee className="w-4.5 h-4.5" /> },
-    { id: "expenses", label: "Expense & Claims", icon: <Receipt className="w-4.5 h-4.5" /> },
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },
     { id: "fines", label: "Disciplinary Fines", icon: <Scale className="w-4.5 h-4.5" /> },
@@ -1367,6 +1371,7 @@ export default function App() {
               designations={designations}
               payslips={payslips}
               emails={emails}
+              fines={fines}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               onAddDesignation={handleAddDesignation}
@@ -1379,13 +1384,11 @@ export default function App() {
           {currentView === "expenses" && (
             <ExpensesView
               expenses={expenses}
-              reimbursements={reimbursements}
               employees={employees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               onSubmitExpense={handleSubmitExpense}
               onReviewExpense={handleReviewExpense}
-              onPayReimbursement={handlePayReimbursement}
             />
           )}
 

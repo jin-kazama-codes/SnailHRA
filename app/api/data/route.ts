@@ -29,7 +29,8 @@ export async function GET() {
       const [
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
-        deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes
+        deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
+        payslipsRes, designationsRes
       ] = await Promise.race([
         Promise.all([
           safeQuery(supabase.from("leaves").select("*")),
@@ -46,10 +47,41 @@ export async function GET() {
           safeQuery(supabase.from("custom_leave_types").select("*")),
           safeQuery(supabase.from("custom_leaves").select("*")),
           safeQuery(supabase.from("attendance_breaks").select("*")),
-          safeQuery(supabase.from("employee_documents").select("*"))
+          safeQuery(supabase.from("employee_documents").select("*")),
+          safeQuery(supabase.from("payslips").select("*")),
+          safeQuery(supabase.from("designations").select("*"))
         ]),
         queryTimeout(4500)
       ]);
+
+      if (designationsRes && designationsRes.data && designationsRes.data.length > 0) {
+        db.designations = designationsRes.data.map((row: any) => ({
+          id: row.id,
+          title: row.title,
+          department: row.department
+        }));
+      }
+
+      if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
+        const sbPayslips = payslipsRes.data.map((row: any) => ({
+          id: row.id,
+          employeeId: row.employee_id || row.employeeId || "",
+          month: row.month || "",
+          basic: Number(row.basic) || 0,
+          hra: Number(row.hra) || 0,
+          allowances: Number(row.allowances) || 0,
+          finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
+          pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
+          taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
+          netPay: Number(row.net_pay ?? row.netPay ?? 0),
+          status: row.status || "Generated",
+          generatedAt: row.generated_at || row.generatedAt || new Date().toISOString(),
+          sentToEmail: row.sent_to_email || row.sentToEmail || ""
+        }));
+        const slipMap = new Map();
+        sbPayslips.forEach((p: any) => { if (p.id) slipMap.set(p.id, p); });
+        db.payslips = Array.from(slipMap.values());
+      }
 
       if (finesRes.data && finesRes.data.length > 0) {
         const sbFines = finesRes.data.map((row: any) => ({
@@ -265,7 +297,11 @@ export async function GET() {
         const empMap = new Map();
         (db.employees || []).forEach((e: any) => { if (e.id) empMap.set(e.id, e); });
         sbEmployees.forEach((e: any) => { empMap.set(e.id, e); });
-        db.employees = Array.from(empMap.values());
+        db.employees = Array.from(empMap.values()).sort((a: any, b: any) => {
+          const numA = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
+          const numB = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
+          return numA - numB;
+        });
       }
 
       if (deptsRes.data && deptsRes.data.length > 0) {

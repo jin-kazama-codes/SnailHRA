@@ -238,13 +238,6 @@ export default function DashboardView({
                       <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                     </button>
                     <button
-                      onClick={() => setCurrentView("expenses")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <span className="flex items-center"><IndianRupee className="w-3.5 h-3.5 mr-2 text-teal-500" /> Review Expenses</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                    <button
                       onClick={() => setCurrentView("directory")}
                       className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
                     >

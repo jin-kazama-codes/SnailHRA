@@ -4,20 +4,21 @@ import React, { useState } from "react";
 import { 
   IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText, 
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, RefreshCw
 } from "lucide-react";
-import { Employee, Designation, Payslip, SimulatedEmail, UserRole } from "../types";
+import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine } from "../types";
 
 interface PayrollViewProps {
   employees: Employee[];
   designations: Designation[];
   payslips: Payslip[];
   emails: SimulatedEmail[];
+  fines?: Fine[];
   role: UserRole;
   currentEmployeeId: string;
   onAddDesignation: (title: string, department: string) => void;
   onRemoveDesignation: (id: string) => void;
-  onGeneratePayslip: (employeeId: string, month: string) => void;
+  onGeneratePayslip: (employeeId: string, month: string) => Promise<void> | void;
   onPayAllPayslips: (month: string) => void;
 }
 
@@ -26,6 +27,7 @@ export default function PayrollView({
   designations,
   payslips,
   emails,
+  fines = [],
   role,
   currentEmployeeId,
   onAddDesignation,
@@ -35,6 +37,7 @@ export default function PayrollView({
 }: PayrollViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"payslips" | "designations" | "emailLogs">("payslips");
   const [selectedMonth, setSelectedMonth] = useState("July 2026");
+  const [compilingEmpId, setCompilingEmpId] = useState<string | null>(null);
 
   // Designation state
   const [newTitle, setNewTitle] = useState("");
@@ -54,6 +57,16 @@ export default function PayrollView({
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
   const paginatedEmployees = employees.slice(startIndex, endIndex);
+
+  const handleCompileSlip = async (empId: string) => {
+    if (compilingEmpId) return;
+    setCompilingEmpId(empId);
+    try {
+      await onGeneratePayslip(empId, selectedMonth);
+    } finally {
+      setCompilingEmpId(null);
+    }
+  };
 
   const handleAddDesg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,9 +132,9 @@ export default function PayrollView({
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-1.5 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-bold focus:outline-hidden"
             >
-              <option value="June 2026">June 2026</option>
-              <option value="July 2026">July 2026</option>
-              <option value="August 2026">August 2026</option>
+              {Array.from(new Set(["June 2026", "July 2026", "August 2026", ...payslips.map(p => p.month)])).map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
           </div>
         )}
@@ -249,8 +262,12 @@ export default function PayrollView({
                       {paginatedEmployees.map(emp => {
                         const hasSlip = currentMonthPayslips.find(p => p.employeeId === emp.id);
                         const grossEarnings = emp.salary.basic + emp.salary.hra + emp.salary.allowances;
+                        const pfDeduction = emp.salary.pfDeduction || Math.round(emp.salary.basic * 0.08);
+                        const empPendingFines = (fines || [])
+                          .filter(f => f.employeeId === emp.id && f.status === "Pending")
+                          .reduce((sum, f) => sum + f.amount, 0);
                         const defaultTaxes = Math.round(grossEarnings * 0.05);
-                        const netSalaryEstimate = grossEarnings - emp.salary.pfDeduction - defaultTaxes;
+                        const netSalaryEstimate = Math.max(0, grossEarnings - pfDeduction - empPendingFines - defaultTaxes);
 
                         return (
                           <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
@@ -266,7 +283,7 @@ export default function PayrollView({
                             <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400 font-semibold whitespace-nowrap">₹{emp.salary.basic.toLocaleString()}</td>
                             <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-500 whitespace-nowrap">₹{(emp.salary.hra + emp.salary.allowances).toLocaleString()}</td>
                             <td className="py-3 px-3 font-mono text-rose-500 whitespace-nowrap">
-                              {hasSlip ? `₹${hasSlip.finesDeducted.toLocaleString()}` : "Evaluated"}
+                              ₹{hasSlip ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
                             </td>
                             <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
@@ -292,11 +309,21 @@ export default function PayrollView({
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => onGeneratePayslip(emp.id, selectedMonth)}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap"
+                                  onClick={() => handleCompileSlip(emp.id)}
+                                  disabled={compilingEmpId === emp.id}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                                  <span>Compile Slip</span>
+                                  {compilingEmpId === emp.id ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                                      <span>Compiling...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Compile Slip</span>
+                                    </>
+                                  )}
                                 </button>
                               )}
                             </td>

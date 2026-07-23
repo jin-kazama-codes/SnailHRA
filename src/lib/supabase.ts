@@ -404,5 +404,38 @@ export async function ensureEmployeeSynced(employeeId: string) {
   }
 }
 
+export async function syncPayslipToSupabase(payslip: any) {
+  if (!supabase) return;
+  try {
+    const employeeId = payslip.employeeId || payslip.employee_id;
+    if (employeeId) {
+      await ensureEmployeeSynced(employeeId);
+    }
+    const record = {
+      id: payslip.id,
+      employee_id: employeeId,
+      month: payslip.month || "",
+      basic: Number(payslip.basic) || 0,
+      hra: Number(payslip.hra) || 0,
+      allowances: Number(payslip.allowances) || 0,
+      fines_deducted: Number(payslip.finesDeducted ?? payslip.fines_deducted ?? 0),
+      pf_deduction: Number(payslip.pfDeduction ?? payslip.pf_deduction ?? 0),
+      tax_deduction: Number(payslip.taxDeduction ?? payslip.tax_deduction ?? 0),
+      net_pay: Number(payslip.netPay ?? payslip.net_pay ?? 0),
+      status: payslip.status || "Generated",
+      generated_at: payslip.generatedAt || payslip.generated_at || new Date().toISOString(),
+      sent_to_email: payslip.sentToEmail || payslip.sent_to_email || ""
+    };
+    const { error } = await supabase.from("payslips").upsert(record, { onConflict: "id" });
+    if (error) {
+      console.warn("Supabase payslips table upsert error:", error.message, error.details);
+    } else {
+      console.log("Successfully synced payslip to Supabase 'payslips' table:", payslip.id);
+    }
+  } catch (e) {
+    console.warn("Supabase payslip sync warning:", e);
+  }
+}
+
 
 

@@ -195,9 +195,10 @@ export function saveDatabase(state: AppState): void {
       });
     }
 
-    fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
+    // Note: Local db_snailhr.json file writing is disabled because Supabase is active.
+    // fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
   } catch (err) {
-    console.warn("Could not write db_snailhr.json:", err);
+    console.warn("Could not save state in memory:", err);
   }
 }
 
