@@ -17,7 +17,7 @@ interface DirectoryViewProps {
   customDepartments?: string[];
   customBranches?: string[];
   onOnboardEmployee: (empData: any) => void;
-  onUpdateEmployee: (id: string, updatedData: any) => void;
+  onUpdateEmployee: (id: string, updatedData: any) => Promise<void> | void;
   onAddDocument: (empId: string, docData: any) => void;
   onDeleteDocument: (empId: string, docId: string) => void;
   onToggleOnboardingTask: (empId: string, taskId: string, completed: boolean) => void;
@@ -42,6 +42,7 @@ export default function DirectoryView({
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; category?: string; size?: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -269,47 +270,54 @@ export default function DirectoryView({
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeEmployee) return;
+    if (!activeEmployee || isSavingEdit) return;
 
-    let avatarUrl = activeEmployee.avatarUrl || "";
-    if (editProfileImageFile) {
-      avatarUrl = await uploadEditProfileImage();
-    } else if (editProfileImagePreview) {
-      avatarUrl = editProfileImagePreview;
+    setIsSavingEdit(true);
+    try {
+      let avatarUrl = activeEmployee.avatarUrl || "";
+      if (editProfileImageFile) {
+        avatarUrl = await uploadEditProfileImage();
+      } else if (editProfileImagePreview) {
+        avatarUrl = editProfileImagePreview;
+      }
+
+      const updated = {
+        ...activeEmployee,
+        fullName: editFullName,
+        email: editEmail,
+        phone: editPhone,
+        role: editRole,
+        designationId: editDesigId,
+        department: editDept,
+        branch: editBranch,
+        status: editStatus,
+        address: editAddress,
+        bio: editBio,
+        avatarUrl: avatarUrl,
+        salary: {
+          basic: Number(editSalaryBasic),
+          hra: Number(editSalaryHra),
+          allowances: Number(editSalaryAllowances),
+          pfDeduction: Number(editSalaryPf),
+        },
+        bankDetails: {
+          accountNumber: editBankAccount,
+          bankName: editBankName,
+          ifsc: editBankIfsc,
+        },
+        emergencyContact: {
+          name: editEmergencyName,
+          relation: editEmergencyRelation,
+          phone: editEmergencyPhone,
+        },
+      };
+      await onUpdateEmployee(activeEmployee.id, updated);
+      setShowEditModal(false);
+    } catch (err) {
+      console.error("Error updating employee details:", err);
+    } finally {
+      setIsSavingEdit(false);
     }
-
-    const updated = {
-      ...activeEmployee,
-      fullName: editFullName,
-      email: editEmail,
-      phone: editPhone,
-      role: editRole,
-      designationId: editDesigId,
-      department: editDept,
-      branch: editBranch,
-      status: editStatus,
-      address: editAddress,
-      bio: editBio,
-      avatarUrl: avatarUrl,
-      salary: {
-        basic: Number(editSalaryBasic),
-        hra: Number(editSalaryHra),
-        allowances: Number(editSalaryAllowances),
-        pfDeduction: Number(editSalaryPf),
-      },
-      bankDetails: {
-        accountNumber: editBankAccount,
-        bankName: editBankName,
-        ifsc: editBankIfsc,
-      },
-      emergencyContact: {
-        name: editEmergencyName,
-        relation: editEmergencyRelation,
-        phone: editEmergencyPhone,
-      },
-    };
-    onUpdateEmployee(activeEmployee.id, updated);
-    setShowEditModal(false);
   };
 
   // Handle profile photo selection for onboard form
@@ -1397,10 +1405,20 @@ export default function DirectoryView({
                   </button>
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
+                    disabled={isSavingEdit}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-all"
                   >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Save Changes</span>
+                    {isSavingEdit ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

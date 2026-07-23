@@ -1317,6 +1317,7 @@ export default function App() {
               customBranches={customBranches}
               onOnboardEmployee={handleOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
+                showToast("Saving employee information...", "info");
                 try {
                   const res = await fetch(`/api/employees/${id}`, {
                     method: "PUT",
