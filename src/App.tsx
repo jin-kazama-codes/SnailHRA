@@ -165,25 +165,7 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch SnailHR database.");
       const data = await res.json();
 
-      setEmployees(prev => {
-        const fetchedEmps: Employee[] = data.employees || [];
-        if (!prev || prev.length === 0) return fetchedEmps;
-        const prevMap = new Map(prev.map(e => [e.id, e]));
-        return fetchedEmps.map(emp => {
-          const prevEmp = prevMap.get(emp.id);
-          if (prevEmp) {
-            const docMap = new Map();
-            (emp.documents || []).forEach((d: any) => docMap.set(d.id || d.name, d));
-            (prevEmp.documents || []).forEach((d: any) => {
-              if (!docMap.has(d.id || d.name)) {
-                docMap.set(d.id || d.name, d);
-              }
-            });
-            return { ...emp, documents: Array.from(docMap.values()) };
-          }
-          return emp;
-        });
-      });
+      setEmployees(data.employees || []);
       setDesignations(data.designations || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
@@ -410,17 +392,21 @@ export default function App() {
           if (e.id === empId) {
             return {
               ...e,
-              documents: (e.documents || []).filter((d: any) => d.id !== docId)
+              documents: (e.documents || []).filter((d: any) => d.id !== docId && d.name !== docId)
             };
           }
           return e;
         })
       );
-      const res = await fetch(`/api/employees/${empId}/documents/${docId}`, {
+      const res = await fetch(`/api/employees/${empId}/documents/${encodeURIComponent(docId)}`, {
         method: "DELETE"
       });
       if (res.ok) {
         showToast("Document removed from Vault.", "info");
+        await refreshDatabase();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        showToast(errorData.error || "Failed to delete document", "error");
         await refreshDatabase();
       }
     } catch (err) {

@@ -8,14 +8,15 @@ export async function DELETE(
 ) {
   try {
     const resolvedParams = await params;
-    const { id: empId, docId } = resolvedParams;
+    const { id: empId, docId: rawDocId } = resolvedParams;
+    const docId = decodeURIComponent(rawDocId);
 
     const db = loadDatabase();
     if (!db.employees) db.employees = [];
     const empIndex = db.employees.findIndex(e => e.id === empId);
 
     if (empIndex >= 0 && db.employees[empIndex].documents) {
-      db.employees[empIndex].documents = db.employees[empIndex].documents.filter(d => d.id !== docId);
+      db.employees[empIndex].documents = db.employees[empIndex].documents.filter(d => d.id !== docId && d.name !== docId);
       saveDatabase(db);
     }
 
@@ -27,7 +28,7 @@ export async function DELETE(
           }).eq('id', empId);
         }
 
-        await supabase.from('employee_documents').delete().eq('id', docId);
+        await supabase.from('employee_documents').delete().or(`id.eq.${docId},name.eq.${docId}`);
       } catch (sbErr) {
         console.warn('Supabase sync documents delete warning:', sbErr);
       }
