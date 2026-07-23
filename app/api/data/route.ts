@@ -29,7 +29,7 @@ export async function GET() {
       const [
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
-        deptsRes, branchesRes, leaveTypesRes, customLeavesRes
+        deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes
       ] = await Promise.race([
         Promise.all([
           safeQuery(supabase.from("leaves").select("*")),
@@ -44,7 +44,8 @@ export async function GET() {
           safeQuery(supabase.from("custom_departments").select("*")),
           safeQuery(supabase.from("custom_branches").select("*")),
           safeQuery(supabase.from("custom_leave_types").select("*")),
-          safeQuery(supabase.from("custom_leaves").select("*"))
+          safeQuery(supabase.from("custom_leaves").select("*")),
+          safeQuery(supabase.from("attendance_breaks").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -154,17 +155,27 @@ export async function GET() {
       }
 
       if (attendanceRes.data && attendanceRes.data.length > 0) {
-        const sbAttendance = attendanceRes.data.map((row: any) => ({
-          id: row.id,
-          employeeId: row.employee_id || row.employeeId || "",
-          date: row.date,
-          clockIn: row.clock_in || row.clockIn,
-          clockOut: row.clock_out || row.clockOut,
-          breaks: typeof row.breaks === "string" ? JSON.parse(row.breaks) : (row.breaks || []),
-          status: row.status || "Present",
-          workFromHome: row.work_from_home ?? row.workFromHome ?? false,
-          notes: row.notes || ""
-        }));
+        const sbAttendance = attendanceRes.data.map((row: any) => {
+          const relatedBreaks = (breaksRes && breaksRes.data)
+            ? breaksRes.data
+                .filter((b: any) => b.attendance_id === row.id)
+                .map((b: any) => ({
+                  start: b.break_start,
+                  end: b.break_end
+                }))
+            : [];
+          return {
+            id: row.id,
+            employeeId: row.employee_id || row.employeeId || "",
+            date: row.date,
+            clockIn: row.clock_in || row.clockIn,
+            clockOut: row.clock_out || row.clockOut,
+            breaks: relatedBreaks,
+            status: row.status || "Present",
+            workFromHome: row.work_from_home ?? row.workFromHome ?? false,
+            notes: row.notes || ""
+          };
+        });
         const attMap = new Map<string, any>();
         (db.attendance || []).forEach((a: any) => {
           if (a.id) attMap.set(a.id, a);

@@ -4,7 +4,7 @@ import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak
 } from "../types";
 
 export interface AppState {
@@ -25,6 +25,7 @@ export interface AppState {
   customDepartments: string[];
   customBranches: string[];
   timingSettings: TimingSettings;
+  attendanceBreaks?: AttendanceBreak[];
 }
 
 const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
@@ -87,7 +88,8 @@ export function getInitialState(): AppState {
       lateThreshold: "09:30",
       breakStartTime: "13:00",
       breakEndTime: "14:00"
-    }
+    },
+    attendanceBreaks: []
   };
 }
 
@@ -98,11 +100,40 @@ export function loadDatabase(): AppState {
     if (fs.existsSync(DB_FILE)) {
       const fileData = fs.readFileSync(DB_FILE, "utf-8");
       const parsed = JSON.parse(fileData);
+      const attendanceBreaks = parsed.attendanceBreaks || [];
+      
+      const reconstructedAttendance = (parsed.attendance || []).map((a: any) => {
+        const relatedBreaks = attendanceBreaks
+          .filter((b: any) => b.attendanceId === a.id)
+          .map((b: any) => ({
+            start: b.breakStart,
+            end: b.breakEnd
+          }));
+        
+        let breakMs = 0;
+        relatedBreaks.forEach((b: any) => {
+          const bStart = new Date(b.start);
+          const bEnd = b.end ? new Date(b.end) : bStart;
+          breakMs += (bEnd.getTime() - bStart.getTime());
+        });
+        const mins = Math.round(breakMs / 60000);
+        const hrs = Math.floor(mins / 60);
+        const remainingMins = mins % 60;
+        const totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
+
+        return {
+          ...a,
+          breaks: relatedBreaks,
+          totalBreakDuration: a.totalBreakDuration !== undefined ? a.totalBreakDuration : totalBreakDuration
+        };
+      });
+
       cachedState = {
         ...getInitialState(),
         ...cachedState,
         ...parsed,
-        attendance: parsed.attendance !== undefined ? parsed.attendance : (cachedState.attendance || []),
+        attendance: reconstructedAttendance,
+        attendanceBreaks: attendanceBreaks,
         employees: parsed.employees || [],
         designations: parsed.designations || [],
         holidays: parsed.holidays || [],
@@ -123,6 +154,47 @@ export function saveDatabase(state: AppState): void {
   try {
     const clone = { ...state };
     delete (clone as any).timingSettings;
+
+    // Dynamically rebuild the top-level attendanceBreaks array from the nested breaks of state.attendance
+    const allBreaks: any[] = [];
+    if (state.attendance) {
+      state.attendance.forEach(a => {
+        if (a.id && a.breaks) {
+          a.breaks.forEach((b, index) => {
+            allBreaks.push({
+              id: `brk-${a.id}-${index}`,
+              attendanceId: a.id,
+              breakStart: b.start,
+              breakEnd: b.end || null
+            });
+          });
+        }
+      });
+    }
+    clone.attendanceBreaks = allBreaks;
+
+    // Strip breaks from attendance punches to prevent nesting them in the JSON database
+    if (clone.attendance) {
+      clone.attendance = clone.attendance.map(a => {
+        const { breaks, ...rest } = a;
+        // Calculate total break duration in hours and minutes
+        let breakMs = 0;
+        (breaks || []).forEach(b => {
+          const bStart = new Date(b.start);
+          const bEnd = b.end ? new Date(b.end) : bStart;
+          breakMs += (bEnd.getTime() - bStart.getTime());
+        });
+        const mins = Math.round(breakMs / 60000);
+        const hrs = Math.floor(mins / 60);
+        const remainingMins = mins % 60;
+        const totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
+        return {
+          ...rest,
+          totalBreakDuration: a.totalBreakDuration !== undefined ? a.totalBreakDuration : totalBreakDuration
+        } as any;
+      });
+    }
+
     fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
   } catch (err) {
     console.warn("Could not write db_snailhr.json:", err);

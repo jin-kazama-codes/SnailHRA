@@ -1191,10 +1191,10 @@
       "date": "2026-07-22",
       "clockIn": "2026-07-22T06:04:00.000Z",
       "clockOut": "2026-07-22T12:52:00.000Z",
-      "breaks": [],
       "status": "Late",
       "workFromHome": true,
-      "notes": ""
+      "notes": "",
+      "totalBreakDuration": 0
     },
     {
       "id": "pun-1784715549713",
@@ -1202,9 +1202,9 @@
       "date": "2026-07-22",
       "clockIn": "2026-07-22T10:19:09.713Z",
       "clockOut": "2026-07-22T17:31:40.124Z",
-      "breaks": [],
       "status": "Late",
-      "workFromHome": false
+      "workFromHome": false,
+      "totalBreakDuration": 0
     },
     {
       "id": "pun-1784724839555",
@@ -1212,9 +1212,19 @@
       "date": "2026-07-22",
       "clockIn": "2026-07-22T12:53:59.286Z",
       "clockOut": "2026-07-22T12:54:27.013Z",
-      "breaks": [],
       "status": "Late",
-      "workFromHome": false
+      "workFromHome": false,
+      "totalBreakDuration": 0
+    },
+    {
+      "id": "pun-1784788859623",
+      "employeeId": "EMP-1001",
+      "date": "2026-07-23",
+      "clockIn": "2026-07-23T06:40:59.331Z",
+      "clockOut": null,
+      "status": "Late",
+      "workFromHome": false,
+      "totalBreakDuration": "00h 32m"
     }
   ],
   "leaves": [
@@ -1460,9 +1470,84 @@
       "pfDeduction": 6500,
       "taxDeduction": 7000,
       "netPay": 126500,
-      "status": "Generated",
+      "status": "Paid",
       "generatedAt": "2026-07-23T06:37:04.201Z",
       "sentToEmail": "amit.sharma@snailhr.com"
+    },
+    {
+      "id": "pay-1784788695382",
+      "employeeId": "EMP-1002",
+      "month": "July 2026",
+      "basic": 60000,
+      "hra": 24000,
+      "allowances": 16000,
+      "finesDeducted": 0,
+      "pfDeduction": 5000,
+      "taxDeduction": 5000,
+      "netPay": 90000,
+      "status": "Paid",
+      "generatedAt": "2026-07-23T06:38:15.382Z",
+      "sentToEmail": "priya.patel@snailhr.com"
+    },
+    {
+      "id": "pay-1784788696864",
+      "employeeId": "EMP-1003",
+      "month": "July 2026",
+      "basic": 50000,
+      "hra": 20000,
+      "allowances": 15000,
+      "finesDeducted": 0,
+      "pfDeduction": 4200,
+      "taxDeduction": 4250,
+      "netPay": 76550,
+      "status": "Paid",
+      "generatedAt": "2026-07-23T06:38:16.864Z",
+      "sentToEmail": "rahul.verma@snailhr.com"
+    },
+    {
+      "id": "pay-1784788699151",
+      "employeeId": "EMP-1004",
+      "month": "July 2026",
+      "basic": 48000,
+      "hra": 19200,
+      "allowances": 12800,
+      "finesDeducted": 0,
+      "pfDeduction": 4000,
+      "taxDeduction": 4000,
+      "netPay": 72000,
+      "status": "Paid",
+      "generatedAt": "2026-07-23T06:38:19.151Z",
+      "sentToEmail": "sneha.iyer@snailhr.com"
+    },
+    {
+      "id": "pay-1784788700817",
+      "employeeId": "EMP-1007",
+      "month": "July 2026",
+      "basic": 39967,
+      "hra": 15987,
+      "allowances": 7993,
+      "finesDeducted": 0,
+      "pfDeduction": 3197,
+      "taxDeduction": 3197,
+      "netPay": 57553,
+      "status": "Paid",
+      "generatedAt": "2026-07-23T06:38:20.817Z",
+      "sentToEmail": "aditi.kumar@snailhr.com"
+    },
+    {
+      "id": "pay-1784788716887",
+      "employeeId": "EMP-1005",
+      "month": "July 2026",
+      "basic": 51230,
+      "hra": 20492,
+      "allowances": 10246,
+      "finesDeducted": 0,
+      "pfDeduction": 4098,
+      "taxDeduction": 4098,
+      "netPay": 73772,
+      "status": "Paid",
+      "generatedAt": "2026-07-23T06:38:36.887Z",
+      "sentToEmail": "siddharth.malhotra@snailhr.com"
     }
   ],
   "simulatedEmails": [
@@ -1473,6 +1558,46 @@
       "subject": "Payslip Generated for July 2026 - SnailHR Admin",
       "body": "Dear Amit Sharma,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 85,000\n- HRA: Rs. 34,000\n- Special Allowances: Rs. 21,000\n- PF Deduction: Rs. 6,500\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 7,000\n------------------------------------------------\n- Net Disbursed Pay: Rs. 1,26,500\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (HDFC Bank, A/C: ****1098) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
       "sentAt": "2026-07-23T06:37:04.216Z"
+    },
+    {
+      "id": "em-1784788695382",
+      "recipientEmail": "priya.patel@snailhr.com",
+      "recipientName": "Priya Patel",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Priya Patel,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 60,000\n- HRA: Rs. 24,000\n- Special Allowances: Rs. 16,000\n- PF Deduction: Rs. 5,000\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 5,000\n------------------------------------------------\n- Net Disbursed Pay: Rs. 90,000\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (ICICI Bank, A/C: ****0987) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:38:15.382Z"
+    },
+    {
+      "id": "em-1784788696864",
+      "recipientEmail": "rahul.verma@snailhr.com",
+      "recipientName": "Rahul Verma",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Rahul Verma,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 50,000\n- HRA: Rs. 20,000\n- Special Allowances: Rs. 15,000\n- PF Deduction: Rs. 4,200\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 4,250\n------------------------------------------------\n- Net Disbursed Pay: Rs. 76,550\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (State Bank of India, A/C: ****9876) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:38:16.864Z"
+    },
+    {
+      "id": "em-1784788699151",
+      "recipientEmail": "sneha.iyer@snailhr.com",
+      "recipientName": "Sneha Iyer",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Sneha Iyer,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 48,000\n- HRA: Rs. 19,200\n- Special Allowances: Rs. 12,800\n- PF Deduction: Rs. 4,000\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 4,000\n------------------------------------------------\n- Net Disbursed Pay: Rs. 72,000\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (Axis Bank, A/C: ****8765) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:38:19.151Z"
+    },
+    {
+      "id": "em-1784788700817",
+      "recipientEmail": "aditi.kumar@snailhr.com",
+      "recipientName": "Aditi Kumar",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Aditi Kumar,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 39,967\n- HRA: Rs. 15,987\n- Special Allowances: Rs. 7,993\n- PF Deduction: Rs. 3,197\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 3,197\n------------------------------------------------\n- Net Disbursed Pay: Rs. 57,553\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (SBI, A/C: ****8643) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:38:20.817Z"
+    },
+    {
+      "id": "em-1784788716887",
+      "recipientEmail": "siddharth.malhotra@snailhr.com",
+      "recipientName": "Siddharth Malhotra",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Siddharth Malhotra,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 51,230\n- HRA: Rs. 20,492\n- Special Allowances: Rs. 10,246\n- PF Deduction: Rs. 4,098\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 4,098\n------------------------------------------------\n- Net Disbursed Pay: Rs. 73,772\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (HDFC Bank, A/C: ****3777) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:38:36.887Z"
     }
   ],
   "customLeaveTypes": [
@@ -1502,5 +1627,31 @@
     "Hyderabad Insurance Center",
     "Bangalore Tech Hub",
     "Bareilly"
+  ],
+  "attendanceBreaks": [
+    {
+      "id": "brk-pun-1784788859623-0",
+      "attendanceId": "pun-1784788859623",
+      "breakStart": "2026-07-23T07:08:27.051Z",
+      "breakEnd": "2026-07-23T07:38:25.835Z"
+    },
+    {
+      "id": "brk-pun-1784788859623-1",
+      "attendanceId": "pun-1784788859623",
+      "breakStart": "2026-07-23T07:55:03.182Z",
+      "breakEnd": "2026-07-23T07:56:33.856Z"
+    },
+    {
+      "id": "brk-pun-1784788859623-2",
+      "attendanceId": "pun-1784788859623",
+      "breakStart": "2026-07-23T07:58:43.644Z",
+      "breakEnd": "2026-07-23T07:59:15.835Z"
+    },
+    {
+      "id": "brk-pun-1784788859623-3",
+      "attendanceId": "pun-1784788859623",
+      "breakStart": "2026-07-23T08:00:18.872Z",
+      "breakEnd": "2026-07-23T08:00:31.320Z"
+    }
   ]
 }

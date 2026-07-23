@@ -45,13 +45,31 @@ export async function POST(request: Request) {
           .eq("date", todayStr);
         if (data && data.length > 0) {
           const row = data[0];
+
+          // Fetch related breaks from attendance_breaks
+          let fetchedBreaks: any[] = [];
+          try {
+            const { data: breakData } = await supabase
+              .from("attendance_breaks")
+              .select("*")
+              .eq("attendance_id", row.id);
+            if (breakData && breakData.length > 0) {
+              fetchedBreaks = breakData.map((b: any) => ({
+                start: b.break_start,
+                end: b.break_end
+              }));
+            }
+          } catch (bErr) {
+            console.warn("Error fetching breaks for punch from Supabase:", bErr);
+          }
+
           const fetchedPunch: AttendancePunch = {
             id: row.id,
             employeeId: row.employee_id || row.employeeId,
             date: row.date,
             clockIn: row.clock_in || row.clockIn,
             clockOut: row.clock_out || row.clockOut,
-            breaks: typeof row.breaks === "string" ? JSON.parse(row.breaks) : (row.breaks || []),
+            breaks: fetchedBreaks,
             status: row.status || "Present",
             workFromHome: row.work_from_home ?? false
           };
@@ -183,6 +201,29 @@ export async function POST(request: Request) {
       }
     } else {
       return NextResponse.json({ error: `Invalid punch type: ${type}` }, { status: 400 });
+    }
+
+    // Compute total break duration in hours and minutes before saving
+    if (punch) {
+      let breakMs = 0;
+      (punch.breaks || []).forEach((b: any) => {
+        const bStart = new Date(b.start);
+        const bEnd = b.end ? new Date(b.end) : bStart;
+        breakMs += (bEnd.getTime() - bStart.getTime());
+      });
+      const mins = Math.round(breakMs / 60000);
+      const hrs = Math.floor(mins / 60);
+      const remainingMins = mins % 60;
+      punch.totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
+      
+      if (existingIndex >= 0) {
+        db.attendance[existingIndex] = punch;
+      } else {
+        const lastIdx = db.attendance.findIndex(a => a.id === punch.id);
+        if (lastIdx >= 0) {
+          db.attendance[lastIdx] = punch;
+        }
+      }
     }
 
     saveDatabase(db);

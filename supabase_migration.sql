@@ -83,13 +83,14 @@ CREATE TABLE IF NOT EXISTS employee_onboarding_tasks (
 -- 5. ATTENDANCE
 -- ============================================================
 CREATE TABLE IF NOT EXISTS attendance (
-  id            TEXT PRIMARY KEY,          -- e.g. "pun-1"
-  employee_id   TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  date          DATE NOT NULL,
-  clock_in      TIMESTAMPTZ,
-  clock_out     TIMESTAMPTZ,
-  status        TEXT,                      -- "Present" | "Late" | "Absent"
-  created_at    TIMESTAMPTZ DEFAULT NOW()
+  id                    TEXT PRIMARY KEY,          -- e.g. "pun-1"
+  employee_id           TEXT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  date                  DATE NOT NULL,
+  clock_in              TIMESTAMPTZ,
+  clock_out             TIMESTAMPTZ,
+  status                TEXT,                      -- "Present" | "Late" | "Absent"
+  total_break_duration  TEXT DEFAULT '00h 00m',
+  created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
@@ -855,6 +856,11 @@ INSERT INTO custom_branches (name) VALUES
   ('Hyderabad Insurance Center'),
   ('Bangalore Tech Hub')
 ON CONFLICT (name) DO NOTHING;
+
+-- Migration to add total_break_duration column to attendance table if not exists, and alter to TEXT type
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS total_break_duration TEXT DEFAULT '00h 00m';
+ALTER TABLE attendance ALTER COLUMN total_break_duration TYPE TEXT;
+ALTER TABLE attendance ALTER COLUMN total_break_duration SET DEFAULT '00h 00m';
 
 -- ============================================================
 -- END OF MIGRATION

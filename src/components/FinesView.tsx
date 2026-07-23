@@ -25,6 +25,39 @@ export default function FinesView({
 }: FinesViewProps) {
   const [showFineForm, setShowFineForm] = useState(false);
 
+  // Group employees by branch and sort within each branch: Admin, HR, Employee
+  const groupedEmployees = React.useMemo(() => {
+    const groups: { [branch: string]: Employee[] } = {};
+    
+    employees.forEach(emp => {
+      const branchName = emp.branch || "Mumbai Branch";
+      if (!groups[branchName]) {
+        groups[branchName] = [];
+      }
+      groups[branchName].push(emp);
+    });
+
+    const rolePriority: { [key: string]: number } = {
+      admin: 1,
+      hr: 2,
+      employee: 3
+    };
+
+    const sortedBranchNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    return sortedBranchNames.map(branch => {
+      const branchEmps = [...groups[branch]].sort((a, b) => {
+        const priorityA = rolePriority[a.role] || 4;
+        const priorityB = rolePriority[b.role] || 4;
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+        return a.fullName.localeCompare(b.fullName);
+      });
+      return { branch, employees: branchEmps };
+    });
+  }, [employees]);
+
   // Fine form fields
   const [fineEmpId, setFineEmpId] = useState(employees[0]?.id || "");
   const [fineReason, setFineReason] = useState<string>("Late Coming");
@@ -97,10 +130,14 @@ export default function FinesView({
                   onChange={(e) => setFineEmpId(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2.5 rounded-xl border border-slate-100 dark:border-[#2a2a2a]"
                 >
-                  {employees.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.fullName} ({emp.id}) - Role: {emp.role === "hr" ? "HR" : emp.role === "admin" ? "Admin" : "Employee"}
-                    </option>
+                  {groupedEmployees.map(group => (
+                    <optgroup key={group.branch} label={group.branch}>
+                      {group.employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.fullName} ({emp.id}) - Role: {emp.role === "hr" ? "HR" : emp.role === "admin" ? "Admin" : "Employee"}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

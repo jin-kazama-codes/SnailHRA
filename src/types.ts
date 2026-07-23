@@ -56,6 +56,13 @@ export interface Employee {
   password?: string;
 }
 
+export interface AttendanceBreak {
+  id: string;
+  attendanceId: string;
+  breakStart: string; // ISO string
+  breakEnd: string | null; // ISO string
+}
+
 export interface AttendancePunch {
   id: string;
   employeeId: string;
@@ -69,6 +76,7 @@ export interface AttendancePunch {
   status: "Present" | "Late" | "Half Day" | "Absent" | "On Leave";
   workFromHome?: boolean;
   notes?: string;
+  totalBreakDuration?: string;
 }
 
 export interface LeaveRequest {

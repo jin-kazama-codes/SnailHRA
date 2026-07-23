@@ -65,6 +65,29 @@ export async function POST(request: Request) {
       db.attendance.push(punch);
     }
 
+    // Compute total break duration in hours and minutes before saving
+    if (punch) {
+      let breakMs = 0;
+      (punch.breaks || []).forEach((b: any) => {
+        const bStart = new Date(b.start);
+        const bEnd = b.end ? new Date(b.end) : bStart;
+        breakMs += (bEnd.getTime() - bStart.getTime());
+      });
+      const mins = Math.round(breakMs / 60000);
+      const hrs = Math.floor(mins / 60);
+      const remainingMins = mins % 60;
+      punch.totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
+      
+      if (existingIndex !== -1) {
+        db.attendance[existingIndex] = punch;
+      } else {
+        const idx = db.attendance.findIndex(a => a.id === punch.id);
+        if (idx >= 0) {
+          db.attendance[idx] = punch;
+        }
+      }
+    }
+
     saveDatabase(db);
 
     if (supabase) {

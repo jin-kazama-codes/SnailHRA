@@ -52,6 +52,26 @@ export default function AttendanceView({
   );
   const [currentTime, setCurrentTime] = useState(new Date());
   const [punchLoading, setPunchLoading] = useState(false);
+  const [expandedBreaksRowId, setExpandedBreaksRowId] = useState<string | null>(null);
+
+  const calculateTotalBreakMinutes = (punch: AttendancePunch) => {
+    let breakMs = 0;
+    (punch.breaks || []).forEach(b => {
+      const bStart = new Date(b.start);
+      const bEnd = b.end ? new Date(b.end) : (punch.clockOut ? new Date(b.start) : currentTime);
+      breakMs += (bEnd.getTime() - bStart.getTime());
+    });
+    return Math.round(breakMs / 60000);
+  };
+
+  const formatBreakDuration = (punch: AttendancePunch) => {
+    const mins = calculateTotalBreakMinutes(punch);
+    if (mins <= 0) return "0m";
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const remainingMins = mins % 60;
+    return `${hrs}h ${remainingMins}m`;
+  };
 
   const handlePunchClick = async (type: "clockin" | "clockout" | "breakstart" | "breakend") => {
     if (punchLoading) return;
@@ -88,6 +108,39 @@ export default function AttendanceView({
       return employees.filter(e => e.id === currentEmployeeId);
     }
   }, [employees, role, userBranch, currentEmployeeId]);
+
+  // Group accessibleEmployees by branch and sort within each branch: Admin, HR, Employee
+  const groupedEmployees = React.useMemo(() => {
+    const groups: { [branch: string]: Employee[] } = {};
+    
+    accessibleEmployees.forEach(emp => {
+      const branchName = emp.branch || "Mumbai Branch";
+      if (!groups[branchName]) {
+        groups[branchName] = [];
+      }
+      groups[branchName].push(emp);
+    });
+
+    const rolePriority: { [key: string]: number } = {
+      admin: 1,
+      hr: 2,
+      employee: 3
+    };
+
+    const sortedBranchNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    return sortedBranchNames.map(branch => {
+      const branchEmps = [...groups[branch]].sort((a, b) => {
+        const priorityA = rolePriority[a.role] || 4;
+        const priorityB = rolePriority[b.role] || 4;
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+        return a.fullName.localeCompare(b.fullName);
+      });
+      return { branch, employees: branchEmps };
+    });
+  }, [accessibleEmployees]);
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(
     role === "employee" ? currentEmployeeId : (accessibleEmployees[0]?.id || currentEmployeeId)
@@ -196,7 +249,7 @@ export default function AttendanceView({
   };
 
   const getLiveBreakDuration = () => {
-    if (!todayPunch || todayPunch.breaks.length === 0) return "00m 00s";
+    if (!todayPunch || todayPunch.breaks.length === 0) return "00h 00m 00s";
     
     let totalMs = 0;
     todayPunch.breaks.forEach(b => {
@@ -205,9 +258,10 @@ export default function AttendanceView({
       totalMs += (bEnd.getTime() - bStart.getTime());
     });
 
-    const minutes = Math.floor(totalMs / (1000 * 60));
+    const hours = Math.floor(totalMs / (1000 * 60 * 60));
+    const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
-    return `${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`;
+    return `${hours.toString().padStart(2, "0")}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`;
   };
 
   const hasActiveBreak = todayPunch?.breaks.some(b => b.end === null) || false;
@@ -845,6 +899,7 @@ export default function AttendanceView({
                   <th className="py-2.5 px-3">Clock In</th>
                   <th className="py-2.5 px-3">Clock Out</th>
                   <th className="py-2.5 px-3">Mode</th>
+                  <th className="py-2.5 px-3">Breaks</th>
                   <th className="py-2.5 px-3">Hours</th>
                   <th className="py-2.5 px-3 text-right">Action</th>
                 </tr>
@@ -852,47 +907,109 @@ export default function AttendanceView({
               <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
                 {attendance
                   .filter(punch => accessibleEmployees.some(e => e.id === punch.employeeId))
+                  .sort((a, b) => {
+                    const dateCompare = b.date.localeCompare(a.date);
+                    if (dateCompare !== 0) return dateCompare;
+                    return new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime();
+                  })
                   .map(punch => {
                     const hrs = calculatePunchHours(punch);
+                    const isExpanded = expandedBreaksRowId === punch.id;
+                    const breakCount = punch.breaks?.length || 0;
+                    
                     return (
-                      <tr key={punch.id} className="hover:bg-slate-50/80 dark:hover:bg-[#1a1a1a]/60 transition-colors">
-                        <td className="py-3 px-3 font-mono font-medium text-slate-400 dark:text-gray-500">{punch.employeeId}</td>
-                        <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300">
-                          {getEmployeeName(punch.employeeId)}
-                        </td>
-                        <td className="py-3 px-3 text-slate-500 dark:text-gray-400 font-medium">
-                          {getEmployeeBranch(punch.employeeId)} ({getEmployeeDept(punch.employeeId)})
-                        </td>
-                        <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-400">{punch.date}</td>
-                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
-                          {new Date(punch.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
-                          {punch.clockOut 
-                            ? new Date(punch.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : <span className="text-emerald-500 animate-pulse font-semibold">Working...</span>
-                          }
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
-                            punch.workFromHome 
-                              ? "bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400" 
-                              : "bg-slate-100 text-slate-600 dark:bg-[#1a1a1a] dark:text-gray-400"
-                          }`}>
-                            {punch.workFromHome ? <Home className="w-3 h-3 text-blue-500" /> : <Briefcase className="w-3 h-3 text-slate-400" />}
-                            {punch.workFromHome ? "WFH" : "Office"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-gray-300">{formatPunchDuration(punch)}</td>
-                        <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => openDayDetailsModal(punch.date, punch.employeeId)}
-                            className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all border border-emerald-200/50 dark:border-emerald-800/40 cursor-pointer"
-                          >
-                            Edit / Details
-                          </button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={punch.id}>
+                        <tr className="hover:bg-slate-50/80 dark:hover:bg-[#1a1a1a]/60 transition-colors">
+                          <td className="py-3 px-3 font-mono font-medium text-slate-400 dark:text-gray-500">{punch.employeeId}</td>
+                          <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300">
+                            {getEmployeeName(punch.employeeId)}
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 dark:text-gray-400 font-medium">
+                            {getEmployeeBranch(punch.employeeId)} ({getEmployeeDept(punch.employeeId)})
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-400">{punch.date}</td>
+                          <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
+                            {new Date(punch.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
+                            {punch.clockOut 
+                              ? new Date(punch.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : <span className="text-emerald-500 animate-pulse font-semibold">Working...</span>
+                            }
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                              punch.workFromHome 
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400" 
+                                : "bg-slate-100 text-slate-600 dark:bg-[#1a1a1a] dark:text-gray-400"
+                            }`}>
+                              {punch.workFromHome ? <Home className="w-3 h-3 text-blue-500" /> : <Briefcase className="w-3 h-3 text-slate-400" />}
+                              {punch.workFromHome ? "WFH" : "Office"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {breakCount > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedBreaksRowId(isExpanded ? null : punch.id)}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                                  breakCount > 1
+                                    ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/40 hover:scale-105"
+                                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/40 hover:bg-amber-100/50"
+                                }`}
+                              >
+                                <Coffee className="w-3.5 h-3.5" />
+                                <span>
+                                  {breakCount > 1 ? `⚠️ ${breakCount} Breaks (${formatBreakDuration(punch)})` : `1 Break (${formatBreakDuration(punch)})`}
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 dark:text-slate-500 font-semibold bg-slate-50 dark:bg-[#1a1a1a]/50 px-2.5 py-1 rounded-xl border border-slate-100 dark:border-[#222]/30 text-[10px] select-none">No Breaks</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-gray-300">{formatPunchDuration(punch)}</td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              onClick={() => openDayDetailsModal(punch.date, punch.employeeId)}
+                              className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all border border-emerald-200/50 dark:border-emerald-800/40 cursor-pointer"
+                            >
+                              Edit / Details
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && breakCount > 0 && (
+                          <tr className="bg-slate-50/50 dark:bg-[#0a0a0a]/30">
+                            <td colSpan={10} className="p-3 border-t border-b border-slate-100/50 dark:border-[#1a1a1a]/50">
+                              <div className="pl-8 pr-4 py-2 space-y-1.5">
+                                <h5 className="font-semibold text-[10px] uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                                  <Coffee className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+                                  <span>Break Log Details ({punch.date})</span>
+                                </h5>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                  {punch.breaks.map((b, idx) => {
+                                    const bStart = new Date(b.start);
+                                    const bEnd = b.end ? new Date(b.end) : null;
+                                    const diff = bEnd ? Math.round((bEnd.getTime() - bStart.getTime()) / 60000) : null;
+                                    return (
+                                      <div key={idx} className="bg-white dark:bg-[#121212] p-2.5 rounded-xl border border-slate-100 dark:border-[#1e1e1e] flex justify-between items-center text-[11px] font-mono shadow-xs">
+                                        <div>
+                                          <span className="text-slate-400 text-[10px] block uppercase font-bold">Break {idx + 1}</span>
+                                          <span className="text-slate-700 dark:text-gray-300 font-semibold mt-0.5 inline-block">
+                                            {bStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {bEnd ? bEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Active"}
+                                          </span>
+                                        </div>
+                                        <span className={`font-bold ${bEnd ? "text-amber-600" : "text-rose-500 animate-pulse font-semibold"}`}>
+                                          {bEnd ? `${diff} mins` : "Active"}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
               </tbody>
@@ -919,10 +1036,14 @@ export default function AttendanceView({
                     onChange={(e) => setSelectedEmployeeId(e.target.value)}
                     className="bg-slate-50 dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] text-xs font-bold p-2 rounded-xl text-slate-800 dark:text-white focus:outline-hidden"
                   >
-                    {accessibleEmployees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.fullName} ({emp.id}) - {emp.role.toUpperCase()}
-                      </option>
+                    {groupedEmployees.map(group => (
+                      <optgroup key={group.branch} label={group.branch}>
+                        {group.employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.id}) - {emp.role.toUpperCase()}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
@@ -1511,8 +1632,14 @@ export default function AttendanceView({
                   onChange={(e) => setManualEmpId(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] p-2.5 rounded-xl text-slate-800 dark:text-white focus:outline-hidden"
                 >
-                  {accessibleEmployees.map(emp => (
-                    <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.id})</option>
+                  {groupedEmployees.map(group => (
+                    <optgroup key={group.branch} label={group.branch}>
+                      {group.employees.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.fullName} ({emp.id}) - {emp.role.toUpperCase()}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

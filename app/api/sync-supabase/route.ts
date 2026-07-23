@@ -107,7 +107,7 @@ export async function POST() {
       }
     }
 
-    // 5. Sync attendance
+    // 5. Sync attendance and breaks
     if (db.attendance && db.attendance.length > 0) {
       const attendanceRecords = db.attendance.map(a => ({
         id: a.id,
@@ -115,11 +115,54 @@ export async function POST() {
         date: a.date,
         clock_in: a.clockIn || null,
         clock_out: a.clockOut || null,
-        status: a.status || "Present"
+        status: a.status || "Present",
+        total_break_duration: a.totalBreakDuration || "00h 00m"
       }));
-      const { error } = await supabase.from("attendance").upsert(attendanceRecords, { onConflict: "id" });
+      let { error } = await supabase.from("attendance").upsert(attendanceRecords, { onConflict: "id" });
       if (error) {
-        console.warn("Sync: attendance upsert warning:", error.message);
+        console.warn("Sync: bulk upsert with total_break_duration failed. Attempting fallback bulk upsert without it...", error.message);
+        const fallbackRecords = db.attendance.map(a => ({
+          id: a.id,
+          employee_id: a.employeeId,
+          date: a.date,
+          clock_in: a.clockIn || null,
+          clock_out: a.clockOut || null,
+          status: a.status || "Present"
+        }));
+        const { error: fallbackErr } = await supabase.from("attendance").upsert(fallbackRecords, { onConflict: "id" });
+        if (fallbackErr) {
+          console.warn("Sync: attendance bulk fallback upsert warning:", fallbackErr.message);
+        }
+      }
+
+      // Collect breaks to sync
+      const breakRecords: any[] = [];
+      const attendanceIdsToClear: string[] = [];
+      db.attendance.forEach(a => {
+        if (a.id) {
+          attendanceIdsToClear.push(a.id);
+          if (a.breaks && a.breaks.length > 0) {
+            a.breaks.forEach(b => {
+              breakRecords.push({
+                attendance_id: a.id,
+                break_start: b.start,
+                break_end: b.end || null
+              });
+            });
+          }
+        }
+      });
+
+      if (attendanceIdsToClear.length > 0) {
+        // Clear existing breaks first
+        await supabase.from("attendance_breaks").delete().in("attendance_id", attendanceIdsToClear);
+      }
+
+      if (breakRecords.length > 0) {
+        const { error: breakErr } = await supabase.from("attendance_breaks").insert(breakRecords);
+        if (breakErr) {
+          console.warn("Sync: attendance_breaks bulk insert warning:", breakErr.message);
+        }
       }
     }
 

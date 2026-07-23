@@ -29,11 +29,44 @@ export async function syncPunchToSupabase(punch: any) {
       date: punch.date,
       clock_in: punch.clockIn || null,
       clock_out: punch.clockOut || null,
-      status: punch.status || "Present"
+      status: punch.status || "Present",
+      total_break_duration: punch.totalBreakDuration || "00h 00m"
     };
-    const { error } = await supabase.from("attendance").upsert(record, { onConflict: "id" });
+    let { error } = await supabase.from("attendance").upsert(record, { onConflict: "id" });
     if (error) {
-      console.warn("Supabase attendance table upsert error:", error.message, error.details);
+      console.warn("Supabase upsert with total_break_duration failed. Attempting fallback upsert without it...", error.message);
+      const fallbackRecord = {
+        id: punch.id,
+        employee_id: punch.employeeId,
+        date: punch.date,
+        clock_in: punch.clockIn || null,
+        clock_out: punch.clockOut || null,
+        status: punch.status || "Present"
+      };
+      const { error: fallbackErr } = await supabase.from("attendance").upsert(fallbackRecord, { onConflict: "id" });
+      if (fallbackErr) {
+        console.warn("Supabase attendance fallback upsert error:", fallbackErr.message, fallbackErr.details);
+        return;
+      }
+    }
+
+    // Sync breaks to attendance_breaks
+    if (punch.breaks && punch.breaks.length > 0) {
+      const breakRecords = punch.breaks.map((b: any) => ({
+        attendance_id: punch.id,
+        break_start: b.start,
+        break_end: b.end || null
+      }));
+      // First delete existing breaks for this punch to avoid duplicates
+      await supabase.from("attendance_breaks").delete().eq("attendance_id", punch.id);
+      // Then insert the new ones
+      const { error: breakErr } = await supabase.from("attendance_breaks").insert(breakRecords);
+      if (breakErr) {
+        console.warn("Supabase attendance_breaks insert error:", breakErr.message, breakErr.details);
+      }
+    } else {
+      // If there are no breaks, delete any existing ones
+      await supabase.from("attendance_breaks").delete().eq("attendance_id", punch.id);
     }
   } catch (e) {
     console.warn("Supabase attendance sync warning:", e);
