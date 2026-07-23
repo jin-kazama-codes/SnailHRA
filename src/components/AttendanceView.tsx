@@ -73,6 +73,29 @@ export default function AttendanceView({
     return `${hrs}h ${remainingMins}m`;
   };
 
+  const getEditBreaksTotalDuration = () => {
+    let totalMins = 0;
+    (editBreaks || []).forEach(b => {
+      if (!b.start || !b.end) return;
+      const [startH, startM] = b.start.split(":").map(Number);
+      const [endH, endM] = b.end.split(":").map(Number);
+      
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      
+      let diff = endMinutes - startMinutes;
+      if (diff < 0) {
+        diff += 24 * 60;
+      }
+      totalMins += diff;
+    });
+    
+    if (totalMins <= 0) return "00h 00m";
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    return `${hrs.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}m`;
+  };
+
   const handlePunchClick = async (type: "clockin" | "clockout" | "breakstart" | "breakend") => {
     if (punchLoading) return;
     try {
@@ -1268,6 +1291,11 @@ export default function AttendanceView({
                             <p className="text-[10px] font-bold text-slate-700 dark:text-gray-300 font-mono">
                               {calculatePunchHours(punch)} hrs
                             </p>
+                            {punch.breaks && punch.breaks.length > 0 && (
+                              <p className="text-[9px] text-amber-600 dark:text-amber-500 font-mono font-medium mt-0.5">
+                                Break: {formatBreakDuration(punch)}
+                              </p>
+                            )}
                           </div>
                         ) : approvedLeave ? (
                           <p className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400 line-clamp-1" title={approvedLeave.reason}>
@@ -1405,9 +1433,16 @@ export default function AttendanceView({
 
                       {/* Breaks Breakdown */}
                       <div className="p-3 bg-slate-50 dark:bg-[#1a1a1a] rounded-xl border border-slate-100 dark:border-[#2a2a2a] space-y-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1">
-                          <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                          <span>Breaks Taken ({punch?.breaks.length || 0})</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-1 justify-between w-full">
+                          <span className="flex items-center gap-1">
+                            <Coffee className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Breaks Taken ({punch?.breaks.length || 0})</span>
+                          </span>
+                          {punch && (
+                            <span className="text-amber-600 dark:text-amber-400 font-mono font-bold">
+                              Total: {formatBreakDuration(punch)}
+                            </span>
+                          )}
                         </span>
                         {punch && punch.breaks.length > 0 ? (
                           <div className="space-y-1 pt-1">
@@ -1514,7 +1549,7 @@ export default function AttendanceView({
                   <div className="flex justify-between items-center">
                     <label className="text-[10px] uppercase font-bold tracking-wider text-slate-400 flex items-center gap-1">
                       <Coffee className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Break Intervals ({editBreaks.length})</span>
+                      <span>Break Intervals ({editBreaks.length}) • Total: <b className="text-amber-600 dark:text-amber-400">{getEditBreaksTotalDuration()}</b></span>
                     </label>
                     <button
                       type="button"
