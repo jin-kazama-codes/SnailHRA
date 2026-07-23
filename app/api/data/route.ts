@@ -202,29 +202,47 @@ export async function GET() {
       }
 
       if (employeesRes.data && employeesRes.data.length > 0) {
-        const sbEmployees = employeesRes.data.map((row: any) => ({
-          id: row.id,
-          fullName: row.full_name || row.fullName || "",
-          email: row.email || "",
-          phone: row.phone || "",
-          role: row.role || "employee",
-          designationId: row.designation_id || row.designationId || "des-4",
-          department: row.department || "Loans",
-          branch: row.branch || (db.employees || []).find((e: any) => e.id === row.id)?.branch || "Mumbai Branch",
-          joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
-          status: row.status || "Active",
-          salary: typeof row.salary === "string" ? JSON.parse(row.salary) : (row.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
-          bankDetails: typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : (row.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
-                  address: row.address || "",
-          emergencyContact: {
-            name: row.emergency_contact_name || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.name : row.emergencyContact?.name) || "",
-            relation: row.emergency_contact_relation || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.relation : row.emergencyContact?.relation) || "",
-            phone: row.emergency_contact_phone || (row.emergency_contact && typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact)?.phone : row.emergencyContact?.phone) || ""
-          },
-          documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || []),
-          onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || []),
-          password: row.password || ""
-        }));
+        const sbEmployees = employeesRes.data.map((row: any) => {
+          const bankDetailsFromRow = typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : row.bank_details;
+          const salaryFromRow = typeof row.salary === "string" ? JSON.parse(row.salary) : row.salary;
+          const emergencyFromRow = typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : row.emergency_contact;
+          const fallbackEmp = (db.employees || []).find((e: any) => e.id === row.id);
+
+          return {
+            id: row.id,
+            fullName: row.full_name || row.fullName || fallbackEmp?.fullName || "",
+            email: row.email || fallbackEmp?.email || "",
+            phone: row.phone || fallbackEmp?.phone || "",
+            role: row.role || fallbackEmp?.role || "employee",
+            designationId: row.designation_id || row.designationId || fallbackEmp?.designationId || "des-4",
+            department: row.department || fallbackEmp?.department || "Loans",
+            branch: row.branch || row.branch_name || fallbackEmp?.branch || "Mumbai Branch",
+            joiningDate: row.joining_date || row.joiningDate || fallbackEmp?.joiningDate || "2024-03-15",
+            status: row.status || fallbackEmp?.status || "Active",
+            salary: {
+              basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? fallbackEmp?.salary?.basic ?? 45000),
+              hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? fallbackEmp?.salary?.hra ?? 18000),
+              allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? fallbackEmp?.salary?.allowances ?? 10000),
+              pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? fallbackEmp?.salary?.pfDeduction ?? 3200)
+            },
+            bankDetails: {
+              accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? fallbackEmp?.bankDetails?.accountNumber ?? ""),
+              bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? fallbackEmp?.bankDetails?.bankName ?? "State Bank of India"),
+              ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? fallbackEmp?.bankDetails?.ifsc ?? "")
+            },
+            address: row.address || fallbackEmp?.address || "",
+            emergencyContact: {
+              name: row.emergency_contact_name || emergencyFromRow?.name || fallbackEmp?.emergencyContact?.name || "",
+              relation: row.emergency_contact_relation || emergencyFromRow?.relation || fallbackEmp?.emergencyContact?.relation || "",
+              phone: row.emergency_contact_phone || emergencyFromRow?.phone || fallbackEmp?.emergencyContact?.phone || ""
+            },
+            documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || fallbackEmp?.documents || []),
+            onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || fallbackEmp?.onboardingTasks || []),
+            avatarUrl: row.avatar_url || row.avatarUrl || fallbackEmp?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+            bio: row.bio || fallbackEmp?.bio || "",
+            password: row.password || fallbackEmp?.password || ""
+          };
+        });
         const empMap = new Map();
         (db.employees || []).forEach((e: any) => { if (e.id) empMap.set(e.id, e); });
         sbEmployees.forEach((e: any) => { empMap.set(e.id, e); });

@@ -28,7 +28,7 @@ export default function ExpensesView({
   onReviewExpense,
   onPayReimbursement
 }: ExpensesViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"claims" | "reimbursements">("claims");
+
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -78,28 +78,14 @@ export default function ExpensesView({
 
   return (
     <div className="space-y-6">
-      {/* Subtab navigation */}
+      {/* Page header */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-gray-900 border border-slate-100 dark:border-gray-800 rounded-2xl p-4 shadow-xs dark:neon-glow">
-        <div className="flex space-x-1.5 bg-slate-50 dark:bg-gray-800 p-1 rounded-xl border border-slate-100 dark:border-gray-700 text-xs font-semibold">
-          <button
-            onClick={() => setActiveSubTab("claims")}
-            className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${activeSubTab === "claims" ? "bg-white dark:bg-gray-700 text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            Expense Claims Tracker
-          </button>
-          <button
-            onClick={() => setActiveSubTab("reimbursements")}
-            className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${activeSubTab === "reimbursements" ? "bg-white dark:bg-gray-700 text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            Reimbursement Disbursements {reimbursements.filter(r => r.status === "Pending").length > 0 && (
-              <span className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-mono font-bold text-[9px] px-2 py-0.5 rounded-full ml-1.5">
-                {reimbursements.filter(r => r.status === "Pending").length} Action
-              </span>
-            )}
-          </button>
+        <div>
+          <h2 className="font-display font-bold text-slate-800 dark:text-white text-sm">Expense Claims Tracker</h2>
+          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Submit and review business expense claims</p>
         </div>
 
-        {activeSubTab === "claims" && role === "employee" && (
+        {role === "employee" && (
           <button
             onClick={() => setShowClaimForm(!showClaimForm)}
             className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer"
@@ -110,8 +96,8 @@ export default function ExpensesView({
         )}
       </div>
 
-      {/* SUBTAB 1: Claims Logs & Review panel */}
-      {activeSubTab === "claims" && (
+      {/* Claims Logs & Review panel */}
+      {(
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Action Area */}
           <div className="lg:col-span-2 space-y-6">
@@ -316,84 +302,7 @@ export default function ExpensesView({
         </div>
       )}
 
-      {/* SUBTAB 2: Reimbursement Board */}
-      {activeSubTab === "reimbursements" && (
-        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-          <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Reimbursement Settlement Board</h3>
-            <p className="text-xs text-slate-400 dark:text-gray-500">Payout approved employee allowances directly to bank records</p>
-          </div>
 
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                  <th className="py-2.5 px-3">Agent Name</th>
-                  <th className="py-2.5 px-3">Expense Class</th>
-                  <th className="py-2.5 px-3">Direct Bank Account Details</th>
-                  <th className="py-2.5 px-3">Payout Amount</th>
-                  <th className="py-2.5 px-3">Cleared Date</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
-                {reimbursements
-                  .filter(r => role === "employee" ? r.employeeId === currentEmployeeId : true)
-                  .map(reim => (
-                    <tr key={reim.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/40 transition-colors">
-                      <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
-                        <div className="w-5.5 h-5.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
-                          {reim.employeeName.charAt(0)}
-                        </div>
-                        <div>
-                          <span className="block leading-tight">{reim.employeeName}</span>
-                          <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal font-mono">{reim.employeeId}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-slate-600 dark:text-gray-400 font-medium">{reim.category}</td>
-                      <td className="py-3 px-3 text-slate-500 dark:text-gray-500 font-mono">{getEmployeeBank(reim.employeeId)}</td>
-                      <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold">₹{reim.amount.toLocaleString()}</td>
-                      <td className="py-3 px-3 font-mono text-slate-400 dark:text-gray-500">{reim.processedDate || "Pending Process"}</td>
-                      <td className="py-3 px-3">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase ${
-                          reim.status === "Paid" 
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 animate-pulse"
-                        }`}>
-                          {reim.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        {reim.status === "Pending" ? (
-                          (role === "admin" || role === "hr") ? (
-                            <button
-                              onClick={() => onPayReimbursement(reim.id)}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg cursor-pointer inline-block"
-                            >
-                              Pay Reimbursement
-                            </button>
-                          ) : (
-                            <span className="text-slate-400 italic">Awaiting Finance</span>
-                          )
-                        ) : (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center justify-end">
-                            <Check className="w-3.5 h-3.5 mr-1" /> Settled
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                {reimbursements.filter(r => role === "employee" ? r.employeeId === currentEmployeeId : true).length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400 dark:text-gray-500">No reimbursement payouts recorded.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

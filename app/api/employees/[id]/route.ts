@@ -14,14 +14,18 @@ export async function PUT(
 
     if (!db.employees) db.employees = [];
     const index = db.employees.findIndex(e => e.id === empId);
+    let emp: any;
     if (index >= 0) {
       db.employees[index] = { ...db.employees[index], ...body };
+      emp = db.employees[index];
+    } else {
+      emp = { ...body, id: empId };
+      db.employees.push(emp);
     }
 
     saveDatabase(db);
 
-    if (index >= 0 && supabase) {
-      const emp = db.employees[index];
+    if (supabase) {
       try {
         await supabase.from("employees").upsert({
           id: emp.id,
@@ -54,7 +58,7 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json({ success: true, employee: db.employees[index] });
+    return NextResponse.json({ success: true, employee: emp });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to update employee" }, { status: 500 });
   }

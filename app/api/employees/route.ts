@@ -102,8 +102,48 @@ export async function PUT(request: Request) {
   try {
     const updatedEmp: Employee = await request.json();
     const db = loadDatabase();
-    db.employees = db.employees.map(e => e.id === updatedEmp.id ? updatedEmp : e);
+    if (!db.employees) db.employees = [];
+    const index = db.employees.findIndex(e => e.id === updatedEmp.id);
+    if (index >= 0) {
+      db.employees[index] = updatedEmp;
+    } else {
+      db.employees.push(updatedEmp);
+    }
     saveDatabase(db);
+
+    if (supabase) {
+      try {
+        await supabase.from("employees").upsert({
+          id: updatedEmp.id,
+          full_name: updatedEmp.fullName,
+          email: updatedEmp.email,
+          phone: updatedEmp.phone,
+          role: updatedEmp.role,
+          designation_id: updatedEmp.designationId,
+          department: updatedEmp.department,
+          branch: updatedEmp.branch,
+          joining_date: updatedEmp.joiningDate,
+          status: updatedEmp.status,
+          address: updatedEmp.address,
+          emergency_contact_name: updatedEmp.emergencyContact?.name,
+          emergency_contact_relation: updatedEmp.emergencyContact?.relation,
+          emergency_contact_phone: updatedEmp.emergencyContact?.phone,
+          avatar_url: updatedEmp.avatarUrl,
+          bio: updatedEmp.bio,
+          salary_basic: updatedEmp.salary?.basic,
+          salary_hra: updatedEmp.salary?.hra,
+          salary_allowances: updatedEmp.salary?.allowances,
+          salary_pf_deduction: updatedEmp.salary?.pfDeduction,
+          bank_account_number: updatedEmp.bankDetails?.accountNumber,
+          bank_name: updatedEmp.bankDetails?.bankName,
+          bank_ifsc: updatedEmp.bankDetails?.ifsc,
+          password: updatedEmp.password
+        });
+      } catch (sbErr) {
+        console.warn("Supabase PUT sync warning:", sbErr);
+      }
+    }
+
     return NextResponse.json({ success: true, employee: updatedEmp });
   } catch (error) {
     return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });

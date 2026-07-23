@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
-  Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark
+  Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
+  Camera, Download, X, RefreshCw
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask } from "../types";
 
@@ -40,10 +41,46 @@ export default function DirectoryView({
   const [activeEmpId, setActiveEmpId] = useState<string | null>(employees[0]?.id || null);
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Upload state
   const [docName, setDocName] = useState("");
   const [docCategory, setDocCategory] = useState<any>("ID Proof");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const docFileRef = useRef<HTMLInputElement>(null);
+
+  // Edit employee state
+  const [editFullName, setEditFullName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editRole, setEditRole] = useState<any>("employee");
+  const [editDesigId, setEditDesigId] = useState("");
+  const [editDept, setEditDept] = useState("");
+  const [editBranch, setEditBranch] = useState("");
+  const [editStatus, setEditStatus] = useState<any>("Active");
+  const [editAddress, setEditAddress] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editSalaryBasic, setEditSalaryBasic] = useState("");
+  const [editSalaryHra, setEditSalaryHra] = useState("");
+  const [editSalaryAllowances, setEditSalaryAllowances] = useState("");
+  const [editSalaryPf, setEditSalaryPf] = useState("");
+  const [editBankAccount, setEditBankAccount] = useState("");
+  const [editBankName, setEditBankName] = useState("");
+  const [editBankIfsc, setEditBankIfsc] = useState("");
+  const [editEmergencyName, setEditEmergencyName] = useState("");
+  const [editEmergencyRelation, setEditEmergencyRelation] = useState("");
+  const [editEmergencyPhone, setEditEmergencyPhone] = useState("");
+
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
+  const [profileImagePreview, setProfileImagePreview] = useState<string>("");
+  const [profileImageUrl, setProfileImageUrl] = useState<string>("");
+  const profileImageRef = useRef<HTMLInputElement>(null);
+
+  const [editProfileImageFile, setEditProfileImageFile] = useState<File | null>(null);
+  const [editProfileImagePreview, setEditProfileImagePreview] = useState<string>("");
+  const editProfileImageRef = useRef<HTMLInputElement>(null);
 
   // Onboard form state
   const [fullName, setFullName] = useState("");
@@ -96,17 +133,24 @@ export default function DirectoryView({
     return designations.find(d => d.id === id)?.title || "Specialist";
   };
 
-  const handleOnboardSubmit = (e: React.FormEvent) => {
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !password) {
       return;
     }
+
+    let avatarUrl = "";
+    if (profileImageFile) {
+      avatarUrl = await uploadProfileImage();
+    }
+
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
       branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
       joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf,
       bankAccount, bankName, bankIfsc, address, bio, password,
-      emergencyName, emergencyRelation, emergencyPhone
+      emergencyName, emergencyRelation, emergencyPhone,
+      avatarUrl
     };
     onOnboardEmployee(data);
 
@@ -121,21 +165,179 @@ export default function DirectoryView({
     setEmergencyRelation("");
     setEmergencyPhone("");
     setOnboardBranch("");
+    setProfileImageFile(null);
+    setProfileImagePreview("");
     setShowOnboardForm(false);
   };
 
-  const handleDocUpload = (e: React.FormEvent) => {
+  const handleDocUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docName) return;
-    if (activeEmployee) {
+    if (!docName || !activeEmployee) return;
+
+    setUploadingDoc(true);
+    let fileUrl = "";
+    let fileSize = "N/A";
+
+    try {
+      // If a real file was selected, upload to Supabase S3
+      if (docFile) {
+        const formData = new FormData();
+        formData.append("file", docFile);
+        formData.append("bucket", "employee-documents");
+
+        const res = await fetch("/api/upload", { method: "POST", body: formData });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          fileUrl = data.url;
+        }
+        fileSize = (docFile.size / 1024 / 1024).toFixed(1) + " MB";
+      } else {
+        fileSize = (Math.random() * 2 + 0.5).toFixed(1) + " MB";
+      }
+
       onAddDocument(activeEmployee.id, {
-        name: docName.endsWith(".pdf") ? docName : docName + ".pdf",
+        name: docName.endsWith(".pdf") || docFile ? (docFile ? docFile.name : docName + ".pdf") : docName + ".pdf",
         category: docCategory,
-        size: (Math.random() * 2 + 0.5).toFixed(1) + " MB"
+        size: fileSize,
+        fileUrl,
       });
       setDocName("");
+      setDocFile(null);
+      if (docFileRef.current) docFileRef.current.value = "";
       setShowUploadModal(false);
+    } catch (err) {
+      console.error("Document upload error:", err);
+    } finally {
+      setUploadingDoc(false);
     }
+  };
+
+  // Open edit modal and pre-fill all fields from the active employee
+  const openEditModal = (emp: any) => {
+    setEditFullName(emp.fullName || "");
+    setEditEmail(emp.email || "");
+    setEditPhone(emp.phone || "");
+    setEditRole(emp.role || "employee");
+    setEditDesigId(emp.designationId || "");
+    setEditDept(emp.department || "");
+    setEditBranch(emp.branch || "");
+    setEditStatus(emp.status || "Active");
+    setEditAddress(emp.address || "");
+    setEditBio(emp.bio || "");
+    setEditSalaryBasic(String(emp.salary?.basic || ""));
+    setEditSalaryHra(String(emp.salary?.hra || ""));
+    setEditSalaryAllowances(String(emp.salary?.allowances || ""));
+    setEditSalaryPf(String(emp.salary?.pfDeduction || ""));
+    setEditBankAccount(emp.bankDetails?.accountNumber || "");
+    setEditBankName(emp.bankDetails?.bankName || "");
+    setEditBankIfsc(emp.bankDetails?.ifsc || "");
+    setEditEmergencyName(emp.emergencyContact?.name || "");
+    setEditEmergencyRelation(emp.emergencyContact?.relation || "");
+    setEditEmergencyPhone(emp.emergencyContact?.phone || "");
+    setEditProfileImageFile(null);
+    setEditProfileImagePreview(emp.avatarUrl || "");
+    setShowEditModal(true);
+  };
+
+  const handleEditProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditProfileImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setEditProfileImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const uploadEditProfileImage = async (): Promise<string> => {
+    if (!editProfileImageFile) return editProfileImagePreview || "";
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", editProfileImageFile);
+      formData.append("bucket", "employee-avatars");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) return data.url;
+    } catch (err) {
+      console.error("Edit avatar upload error:", err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+    return editProfileImagePreview || "";
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeEmployee) return;
+
+    let avatarUrl = activeEmployee.avatarUrl || "";
+    if (editProfileImageFile) {
+      avatarUrl = await uploadEditProfileImage();
+    } else if (editProfileImagePreview) {
+      avatarUrl = editProfileImagePreview;
+    }
+
+    const updated = {
+      ...activeEmployee,
+      fullName: editFullName,
+      email: editEmail,
+      phone: editPhone,
+      role: editRole,
+      designationId: editDesigId,
+      department: editDept,
+      branch: editBranch,
+      status: editStatus,
+      address: editAddress,
+      bio: editBio,
+      avatarUrl: avatarUrl,
+      salary: {
+        basic: Number(editSalaryBasic),
+        hra: Number(editSalaryHra),
+        allowances: Number(editSalaryAllowances),
+        pfDeduction: Number(editSalaryPf),
+      },
+      bankDetails: {
+        accountNumber: editBankAccount,
+        bankName: editBankName,
+        ifsc: editBankIfsc,
+      },
+      emergencyContact: {
+        name: editEmergencyName,
+        relation: editEmergencyRelation,
+        phone: editEmergencyPhone,
+      },
+    };
+    onUpdateEmployee(activeEmployee.id, updated);
+    setShowEditModal(false);
+  };
+
+  // Handle profile photo selection for onboard form
+  const handleProfileImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfileImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setProfileImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // Upload profile image to Supabase S3 and return URL
+  const uploadProfileImage = async (): Promise<string> => {
+    if (!profileImageFile) return profileImagePreview || "";
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", profileImageFile);
+      formData.append("bucket", "employee-avatars");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.url) return data.url;
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+    return profileImagePreview || "";
   };
 
   return (
@@ -281,6 +483,15 @@ export default function DirectoryView({
 
                   {/* Actions for Onboard Checklists */}
                   <div className="flex items-center space-x-2 bg-slate-50 dark:bg-[#0a0a0a]/50 p-1.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a] w-full sm:w-auto justify-around sm:justify-start">
+                    {(role === "admin" || role === "hr") && (
+                      <button
+                        onClick={() => openEditModal(activeEmployee)}
+                        className="p-2 hover:bg-white dark:hover:bg-[#1a1a1a] rounded-lg text-slate-500 dark:text-gray-400 hover:text-emerald-500 transition-all cursor-pointer"
+                        title="Edit Employee Details"
+                      >
+                        <Pencil className="w-4.5 h-4.5" />
+                      </button>
+                    )}
                     <a href={`mailto:${activeEmployee.email}`} className="p-2 hover:bg-white dark:hover:bg-[#1a1a1a] rounded-lg text-slate-500 dark:text-gray-400 hover:text-emerald-500 transition-all">
                       <Mail className="w-4.5 h-4.5" />
                     </a>
@@ -423,9 +634,21 @@ export default function DirectoryView({
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        <button className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300" title="Download Mock">
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        {doc.fileUrl ? (
+                          <a 
+                            href={doc.fileUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
+                            title="View Document"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </a>
+                        ) : (
+                          <button className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300" title="Download Mock">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        )}
                         {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
                           <button
                             onClick={() => onDeleteDocument(activeEmployee.id, doc.id)}
@@ -462,7 +685,24 @@ export default function DirectoryView({
 
             <form onSubmit={handleDocUpload} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Document Name</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Select File *</label>
+                <input
+                  type="file"
+                  ref={docFileRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setDocFile(file);
+                    if (file && !docName) {
+                      setDocName(file.name.replace(/\.[^/.]+$/, ""));
+                    }
+                  }}
+                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 dark:file:bg-emerald-950/30 dark:file:text-emerald-400 cursor-pointer"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Document Display Name *</label>
                 <input
                   type="text"
                   value={docName}
@@ -491,16 +731,22 @@ export default function DirectoryView({
               <div className="flex justify-end space-x-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setDocFile(null);
+                    setDocName("");
+                  }}
                   className="bg-slate-100 hover:bg-slate-200 dark:bg-[#0a0a0a] dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                  disabled={uploadingDoc}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
                 >
-                  Upload
+                  {uploadingDoc && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{uploadingDoc ? "Uploading..." : "Upload"}</span>
                 </button>
               </div>
             </form>
@@ -576,7 +822,7 @@ export default function DirectoryView({
                         required
                       />
                     </div>
-                    <div>
+                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
                       <select
                         value={empRole}
@@ -587,6 +833,36 @@ export default function DirectoryView({
                         <option value="hr">HR Manager</option>
                         <option value="admin">Administrator</option>
                       </select>
+                    </div>
+
+                    <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
+                      <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700">
+                        {profileImagePreview ? (
+                          <img src={profileImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <Camera className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Agent Profile Photo</label>
+                        <input
+                          type="file"
+                          ref={profileImageRef}
+                          accept="image/*"
+                          onChange={handleProfileImageSelect}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => profileImageRef.current?.click()}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-100 dark:border-emerald-900/30 cursor-pointer"
+                        >
+                          Choose Photo
+                        </button>
+                        {profileImageFile && (
+                          <span className="text-[10px] text-slate-400 ml-2 font-mono">{profileImageFile.name}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -809,6 +1085,323 @@ export default function DirectoryView({
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Complete Onboarding</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Employee Slideover */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end">
+          <div className="bg-white dark:bg-[#0f0f0f] border-l border-slate-100 dark:border-[#1a1a1a] w-full max-w-2xl h-full p-6 overflow-y-auto custom-scrollbar flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
+                <div>
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-lg flex items-center">
+                    <Pencil className="w-5 h-5 text-emerald-500 mr-2" /> Edit Employee Information
+                  </h3>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">Modify personnel credentials, financial specs, and settings</p>
+                </div>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-1.5 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-400"
+                >
+                  Close
+                </button>
+              </div>
+
+              <form onSubmit={handleEditSubmit} className="space-y-5">
+                {/* Section 1: Basic Info */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">1. Personnel Credentials</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        value={editFullName}
+                        onChange={(e) => setEditFullName(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Email Address *</label>
+                      <input
+                        type="email"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Phone Number</label>
+                      <input
+                        type="text"
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value as any)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        <option value="employee">Employee / Agent</option>
+                        <option value="hr">HR Manager</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Status</label>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as any)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Probation">Probation</option>
+                        <option value="Suspended">Suspended</option>
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
+                      <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700 shrink-0">
+                        {editProfileImagePreview ? (
+                          <img src={editProfileImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <Camera className="w-5 h-5 text-slate-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Agent Profile Photo</label>
+                        <input
+                          type="file"
+                          ref={editProfileImageRef}
+                          accept="image/*"
+                          onChange={handleEditProfileImageSelect}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => editProfileImageRef.current?.click()}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-100 dark:border-emerald-900/30 cursor-pointer"
+                        >
+                          Choose Photo
+                        </button>
+                        {editProfileImageFile && (
+                          <span className="text-[10px] text-slate-400 ml-2 font-mono">{editProfileImageFile.name}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Department and Designations */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">2. Designation & Placement</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Department</label>
+                      <select
+                        value={editDept}
+                        onChange={(e) => setEditDept(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        {(customDepartments && customDepartments.length > 0
+                          ? customDepartments
+                          : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+                        ).map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Corporate Designation</label>
+                      <select
+                        value={editDesigId}
+                        onChange={(e) => setEditDesigId(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        {designations.map(desg => (
+                          <option key={desg.id} value={desg.id}>{desg.title} ({desg.department})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Branch Office</label>
+                      <select
+                        value={editBranch}
+                        onChange={(e) => setEditBranch(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        {(customBranches && customBranches.length > 0
+                          ? customBranches
+                          : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
+                        ).map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Salary structure */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">3. Salary Allocation Break-up (Monthly)</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
+                      <input
+                        type="number"
+                        value={editSalaryBasic}
+                        onChange={(e) => setEditSalaryBasic(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
+                      <input
+                        type="number"
+                        value={editSalaryHra}
+                        onChange={(e) => setEditSalaryHra(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
+                      <input
+                        type="number"
+                        value={editSalaryAllowances}
+                        onChange={(e) => setEditSalaryAllowances(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
+                      <input
+                        type="number"
+                        value={editSalaryPf}
+                        onChange={(e) => setEditSalaryPf(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 4: Bank specs */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">4. Bank & Compensation Account</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Account Number</label>
+                      <input
+                        type="text"
+                        value={editBankAccount}
+                        onChange={(e) => setEditBankAccount(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Bank Name</label>
+                      <input
+                        type="text"
+                        value={editBankName}
+                        onChange={(e) => setEditBankName(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">IFSC Code</label>
+                      <input
+                        type="text"
+                        value={editBankIfsc}
+                        onChange={(e) => setEditBankIfsc(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 5: Contact & Address Details */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">5. Contact & Address Details</h4>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Residential Address</label>
+                    <textarea
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      rows={2}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Section 6: Emergency Contact Details */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">6. Emergency Contact Details</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Name</label>
+                      <input
+                        type="text"
+                        value={editEmergencyName}
+                        onChange={(e) => setEditEmergencyName(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Relationship</label>
+                      <input
+                        type="text"
+                        value={editEmergencyRelation}
+                        onChange={(e) => setEditEmergencyRelation(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Phone</label>
+                      <input
+                        type="text"
+                        value={editEmergencyPhone}
+                        onChange={(e) => setEditEmergencyPhone(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 7: Biography */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Agent Bio / Profile Summary</label>
+                  <textarea
+                    value={editBio}
+                    onChange={(e) => setEditBio(e.target.value)}
+                    rows={2}
+                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="bg-slate-100 hover:bg-slate-200 dark:bg-[#0a0a0a] dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 px-4 py-2.5 rounded-xl text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Save Changes</span>
                   </button>
                 </div>
               </form>

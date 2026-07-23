@@ -32,6 +32,10 @@ export async function POST(request: Request) {
         if (error) {
           console.warn("Supabase auth fetch error:", error.message);
         } else if (data) {
+          const bankDetailsFromRow = typeof data.bank_details === "string" ? JSON.parse(data.bank_details) : data.bank_details;
+          const salaryFromRow = typeof data.salary === "string" ? JSON.parse(data.salary) : data.salary;
+          const emergencyFromRow = typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact) : data.emergency_contact;
+
           employee = {
             id: data.id,
             fullName: data.full_name || data.fullName || "",
@@ -43,16 +47,27 @@ export async function POST(request: Request) {
             branch: data.branch || loadDatabase().employees?.find((e: any) => e.id === data.id)?.branch || "Mumbai Branch",
             joiningDate: data.joining_date || data.joiningDate || "2024-03-15",
             status: data.status || "Active",
-            salary: typeof data.salary === "string" ? JSON.parse(data.salary) : (data.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
-            bankDetails: typeof data.bank_details === "string" ? JSON.parse(data.bank_details) : (data.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
+            salary: {
+              basic: Number(data.salary_basic ?? salaryFromRow?.basic ?? 45000),
+              hra: Number(data.salary_hra ?? salaryFromRow?.hra ?? 18000),
+              allowances: Number(data.salary_allowances ?? salaryFromRow?.allowances ?? 10000),
+              pfDeduction: Number(data.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200)
+            },
+            bankDetails: {
+              accountNumber: String(data.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
+              bankName: String(data.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+              ifsc: String(data.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
+            },
             address: data.address || "",
             emergencyContact: {
-              name: data.emergency_contact_name || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.name : data.emergencyContact?.name) || "",
-              relation: data.emergency_contact_relation || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.relation : data.emergencyContact?.relation) || "",
-              phone: data.emergency_contact_phone || (data.emergency_contact && typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact)?.phone : data.emergencyContact?.phone) || ""
+              name: data.emergency_contact_name || emergencyFromRow?.name || "",
+              relation: data.emergency_contact_relation || emergencyFromRow?.relation || "",
+              phone: data.emergency_contact_phone || emergencyFromRow?.phone || ""
             },
             documents: typeof data.documents === "string" ? JSON.parse(data.documents) : (data.documents || []),
             onboardingTasks: typeof data.onboarding_tasks === "string" ? JSON.parse(data.onboarding_tasks) : (data.onboardingTasks || []),
+            avatarUrl: data.avatar_url || data.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+            bio: data.bio || "",
             password: data.password || ""
           };
         }

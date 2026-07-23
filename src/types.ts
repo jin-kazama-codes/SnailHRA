@@ -12,6 +12,7 @@ export interface EmployeeDocument {
   category: "ID Proof" | "Contract" | "Tax Document" | "Educational" | "Other";
   uploadedAt: string;
   size: string;
+  fileUrl?: string;
 }
 
 export interface OnboardingTask {

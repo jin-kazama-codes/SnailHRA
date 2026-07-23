@@ -231,25 +231,46 @@ async function fetchAllFromSupabase(): Promise<AppState> {
     }
 
     if (employeesRes.data && employeesRes.data.length > 0) {
-      db.employees = employeesRes.data.map((row: any) => ({
-        id: row.id,
-        fullName: row.full_name || row.fullName || "",
-        email: row.email || "",
-        phone: row.phone || "",
-        role: row.role || "employee",
-        designationId: row.designation_id || row.designationId || "des-4",
-        department: row.department || "Loans",
-        branch: row.branch || "Mumbai Branch",
-        joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
-        status: row.status || "Active",
-        salary: typeof row.salary === "string" ? JSON.parse(row.salary) : (row.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
-        bankDetails: typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : (row.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
-        address: row.address || "",
-        emergencyContact: typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : (row.emergencyContact || { name: "", relation: "", phone: "" }),
-        documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || []),
-        onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || []),
-        password: row.password || ""
-      }));
+      db.employees = employeesRes.data.map((row: any) => {
+        const bankDetailsFromRow = typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : row.bank_details;
+        const salaryFromRow = typeof row.salary === "string" ? JSON.parse(row.salary) : row.salary;
+        const emergencyFromRow = typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : row.emergency_contact;
+
+        return {
+          id: row.id,
+          fullName: row.full_name || row.fullName || "",
+          email: row.email || "",
+          phone: row.phone || "",
+          role: row.role || "employee",
+          designationId: row.designation_id || row.designationId || "des-4",
+          department: row.department || "Loans",
+          branch: row.branch || "Mumbai Branch",
+          joiningDate: row.joining_date || row.joiningDate || "2024-03-15",
+          status: row.status || "Active",
+          salary: {
+            basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? 45000),
+            hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? 18000),
+            allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? 10000),
+            pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200)
+          },
+          bankDetails: {
+            accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
+            bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+            ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
+          },
+          address: row.address || "",
+          emergencyContact: {
+            name: row.emergency_contact_name || emergencyFromRow?.name || "",
+            relation: row.emergency_contact_relation || emergencyFromRow?.relation || "",
+            phone: row.emergency_contact_phone || emergencyFromRow?.phone || ""
+          },
+          documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || []),
+          onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || []),
+          avatarUrl: row.avatar_url || row.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+          bio: row.bio || "",
+          password: row.password || ""
+        };
+      });
     } else {
       console.log("Supabase 'employees' table empty - Hydrating initial employee roster and seeding to Supabase...");
       db.employees = initialEmployees;

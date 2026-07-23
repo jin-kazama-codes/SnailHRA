@@ -351,7 +351,7 @@ export default function App() {
     }
   };
 
-  // 3. Upload simulated document
+  // 3. Upload document
   const handleAddDocument = async (empId: string, docData: any) => {
     try {
       const res = await fetch(`/api/employees/${empId}/documents`, {
@@ -361,9 +361,11 @@ export default function App() {
       });
       if (res.ok) {
         await refreshDatabase();
+        showToast("Document uploaded successfully to Vault!", "success");
       }
     } catch (err) {
       console.error(err);
+      showToast("Failed to upload document", "error");
     }
   };
 
@@ -375,6 +377,7 @@ export default function App() {
       });
       if (res.ok) {
         await refreshDatabase();
+        showToast("Document removed from Vault.", "info");
       }
     } catch (err) {
       console.error(err);
@@ -1269,12 +1272,22 @@ export default function App() {
               customBranches={customBranches}
               onOnboardEmployee={handleOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
-                await fetch(`/api/employees/${id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(updatedData)
-                });
-                await refreshDatabase();
+                try {
+                  const res = await fetch(`/api/employees/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedData)
+                  });
+                  if (res.ok) {
+                    await refreshDatabase();
+                    showToast("Employee details updated successfully!", "success");
+                  } else {
+                    showToast("Failed to update employee information", "error");
+                  }
+                } catch (err) {
+                  console.error(err);
+                  showToast("Error updating employee information", "error");
+                }
               }}
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
