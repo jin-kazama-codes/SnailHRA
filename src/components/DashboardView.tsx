@@ -306,7 +306,7 @@ export default function DashboardView({
       {role === "admin" && (
         <div className="space-y-6">
           {/* Top Dynamic Stat Bento Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
@@ -351,7 +351,7 @@ export default function DashboardView({
       {role === "hr" && (
         <div className="space-y-6">
           {/* HR Branch Stat Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
                 <span className="font-bold uppercase tracking-wider">Branch Staff</span>
@@ -395,7 +395,7 @@ export default function DashboardView({
       {role === "employee" && (
         <div className="space-y-6">
           {/* Employee Personal Bento Stat Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
@@ -440,7 +440,7 @@ export default function DashboardView({
       )}
 
       {/* Lower Insights Grid: Holidays & Leave Tracker */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         
         {/* Upcoming Holidays Card */}
         <div id="holidays-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">

@@ -1116,12 +1116,13 @@ export default function App() {
     <div id="snailhr-panel" className="min-h-screen flex flex-col font-sans text-slate-700 dark:text-gray-200 antialiased">
 
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-md border-b border-slate-100 dark:border-[#1a1a1a]/80 px-4 py-3 shadow-xs flex items-center justify-between">
-        <div className="flex items-center space-x-3">
+      <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur-md border-b border-slate-100 dark:border-[#1a1a1a]/80 px-3 sm:px-4 py-2.5 sm:py-3 shadow-xs flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-1 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-500"
+            className="lg:hidden p-1.5 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-500 cursor-pointer"
+            aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -1130,18 +1131,18 @@ export default function App() {
             <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-black text-sm tracking-tighter">
               S
             </div>
-            <span className="font-display font-extrabold text-lg text-slate-800 dark:text-white tracking-tight">Snail<span className="text-emerald-500">HR</span></span>
+            <span className="font-display font-extrabold text-base sm:text-lg text-slate-800 dark:text-white tracking-tight">Snail<span className="text-emerald-500">HR</span></span>
           </div>
         </div>
 
-        {/* Global Access Controls (Role Toggler and Simulation bar) */}
-        <div className="flex items-center space-x-3 flex-wrap">
+        {/* Global Access Controls */}
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 min-w-0">
 
           {/* Active Logged In User Badge */}
-          <div className="flex items-center bg-slate-50 dark:bg-[#0f0f0f] px-3.5 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs gap-2 shadow-xs">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+          <div className="flex items-center bg-slate-50 dark:bg-[#0f0f0f] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] sm:text-xs gap-1.5 sm:gap-2 shadow-xs min-w-0">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shrink-0"></div>
             <span className="text-slate-400 font-semibold hidden md:inline">Logged In:</span>
-            <span className="text-slate-800 dark:text-gray-200 font-bold">
+            <span className="text-slate-800 dark:text-gray-200 font-bold truncate max-w-[110px] sm:max-w-none">
               {currentEmployee?.fullName} ({currentEmployee?.role.toUpperCase()})
             </span>
           </div>
@@ -1152,7 +1153,7 @@ export default function App() {
             className="hidden lg:flex items-center space-x-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-bold text-xs rounded-xl border border-rose-100/50 dark:border-rose-900/20 transition-all cursor-pointer shadow-xs"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
+            <span>Sign Out</span>
           </button>
 
           {/* Quick Theme Switcher */}
@@ -1287,7 +1288,7 @@ export default function App() {
         )}
 
         {/* Content Viewer viewport */}
-        <main className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] p-4 md:p-6 overflow-y-auto custom-scrollbar">
+        <main className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] p-3 sm:p-4 md:p-6 overflow-y-auto custom-scrollbar min-w-0 max-w-full overflow-x-hidden">
 
           {/* Active View Router */}
           {currentView === "dashboard" && (

@@ -352,46 +352,48 @@ export default function DirectoryView({
   return (
     <div className="space-y-6">
       {/* Search Filter and Action Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow">
-        <div className="flex items-center space-x-3 flex-1 min-w-[280px]">
-          <div className="relative w-full">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-3.5 sm:p-4 shadow-xs dark:neon-glow">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:space-x-3 flex-1 min-w-0">
+          <div className="relative w-full sm:w-auto flex-1 min-w-0">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Search NBFC agents by name, email, or employee ID..."
+              placeholder="Search NBFC agents by name, email, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
             />
           </div>
-          <select
-            value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
-            className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
-          >
-            <option value="All">All Departments</option>
-            {(customDepartments && customDepartments.length > 0
-              ? customDepartments
-              : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
-            ).map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-          {role === "admin" && (
+          <div className="flex items-center gap-2">
             <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              className="w-full sm:w-auto bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
             >
-              <option value="All">All Branches</option>
-              {(customBranches && customBranches.length > 0
-                ? customBranches
-                : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
-              ).map((b) => (
-                <option key={b} value={b}>{b}</option>
+              <option value="All">All Departments</option>
+              {(customDepartments && customDepartments.length > 0
+                ? customDepartments
+                : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+              ).map((d) => (
+                <option key={d} value={d}>{d}</option>
               ))}
             </select>
-          )}
+            {role === "admin" && (
+              <select
+                value={selectedBranch}
+                onChange={(e) => setSelectedBranch(e.target.value)}
+                className="w-full sm:w-auto bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
+              >
+                <option value="All">All Branches</option>
+                {(customBranches && customBranches.length > 0
+                  ? customBranches
+                  : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
+                ).map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
         {(role === "admin" || role === "hr") && (
@@ -400,7 +402,7 @@ export default function DirectoryView({
               setShowOnboardForm(true);
               setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"));
             }}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs shadow-emerald-600/10 dark:shadow-emerald-500/20"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs shadow-emerald-600/10 dark:shadow-emerald-500/20 shrink-0"
           >
             <UserPlus className="w-4 h-4" />
             <span>Onboard New Agent</span>

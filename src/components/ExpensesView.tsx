@@ -79,7 +79,7 @@ export default function ExpensesView({
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-gray-900 border border-slate-100 dark:border-gray-800 rounded-2xl p-4 shadow-xs dark:neon-glow">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-gray-900 border border-slate-100 dark:border-gray-800 rounded-2xl p-3.5 sm:p-4 shadow-xs dark:neon-glow">
         <div>
           <h2 className="font-display font-bold text-slate-800 dark:text-white text-sm">Expense Claims Tracker</h2>
           <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Submit and review business expense claims</p>
@@ -88,7 +88,7 @@ export default function ExpensesView({
         {role === "employee" && (
           <button
             onClick={() => setShowClaimForm(!showClaimForm)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>{showClaimForm ? "Hide Form" : "Claim Business Expense"}</span>

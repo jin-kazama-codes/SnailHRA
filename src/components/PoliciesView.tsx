@@ -85,7 +85,7 @@ export default function PoliciesView({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Policy list sidebar */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex flex-col space-y-2 h-[480px]">
+        <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex flex-col space-y-2 h-[260px] lg:h-[480px]">
           <div className="mb-3 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] flex justify-between items-center">
             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-xs uppercase tracking-wider text-slate-400">Chapters & Modules</h3>
             <span className="text-[10px] bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 font-bold px-2 py-0.5 rounded-full">{policies.length}</span>

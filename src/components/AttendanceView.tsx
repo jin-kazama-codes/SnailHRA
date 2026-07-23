@@ -751,17 +751,17 @@ export default function AttendanceView({
       </div>
 
       {/* Main Navigation Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
         <div>
-          <h2 className="text-lg font-bold font-display text-slate-800 dark:text-white">Attendance Control Desk</h2>
+          <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">Attendance Control Desk</h2>
           <p className="text-xs text-slate-400 dark:text-gray-400">Roster calendars, real-time metrics, and monthly tracking records</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {(role === "admin" || role === "hr") && (
             <button
               onClick={() => setShowTimingSettingsModal(true)}
-              className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] text-slate-700 dark:text-gray-300 font-semibold text-xs px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all hover:bg-slate-50 dark:hover:bg-[#1a1a1a] shadow-xs cursor-pointer group"
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] text-slate-700 dark:text-gray-300 font-semibold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all hover:bg-slate-50 dark:hover:bg-[#1a1a1a] shadow-xs cursor-pointer group shrink-0"
               title="Configure company-wide standard shift and break times"
             >
               <Sliders className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
@@ -769,34 +769,34 @@ export default function AttendanceView({
             </button>
           )}
 
-          <div className="flex flex-wrap gap-2 bg-slate-100 dark:bg-[#0f0f0f] p-1.5 rounded-2xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold">
-          <button 
-            onClick={() => setActiveTab("personal")}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${activeTab === "personal" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            My Punches
-          </button>
-
-          {/* Roster Tab: Visible ONLY to Admin and HR */}
-          {role !== "employee" && (
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-2xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
             <button 
-              onClick={() => setActiveTab("roster")}
-              className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${activeTab === "roster" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+              onClick={() => setActiveTab("personal")}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "personal" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
             >
-              Branch Roster ({userBranch})
+              My Punches
             </button>
-          )}
 
-          {/* Monthly Matrix Tab: Accessible to ALL roles */}
-          <button 
-            onClick={() => setActiveTab("monthly-view")}
-            className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${activeTab === "monthly-view" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white dark:text-emerald-400" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            {role === "employee" ? "My Monthly Attendance Matrix" : "Monthly Analytics Matrix"}
-          </button>
+            {/* Roster Tab: Visible ONLY to Admin and HR */}
+            {role !== "employee" && (
+              <button 
+                onClick={() => setActiveTab("roster")}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "roster" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                Branch Roster
+              </button>
+            )}
+
+            {/* Monthly Matrix Tab: Accessible to ALL roles */}
+            <button 
+              onClick={() => setActiveTab("monthly-view")}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "monthly-view" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white dark:text-emerald-400" : "text-slate-400 hover:text-slate-600"}`}
+            >
+              Monthly Matrix
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
       {/* TAB 1: My Punches (Current Employee Only) */}
       {activeTab === "personal" && (

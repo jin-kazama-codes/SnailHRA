@@ -131,7 +131,7 @@ export default function LeavesView({
   return (
     <div className="space-y-6">
       {/* Leave balance grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {leaveBalances.map((bal, idx) => (
           <div key={idx} className={`border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] rounded-xl p-4 shadow-xs dark:neon-glow border-l-3 ${bal.color}`}>
             <h4 className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider">{bal.type}</h4>

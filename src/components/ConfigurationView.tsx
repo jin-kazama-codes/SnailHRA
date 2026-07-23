@@ -150,28 +150,28 @@ ON CONFLICT (key) DO NOTHING;`;
   return (
     <div className="space-y-6">
       {/* Header and Sub Tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
         <div>
-          <h2 className="text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
+          <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
           <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, leave policies, and Cloud storage states</p>
         </div>
 
-        <div className="flex bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold">
+        <div className="flex items-center bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
           <button 
             onClick={() => setActiveSubTab("general")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeSubTab === "general" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "general" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             General Variables
           </button>
           <button 
             onClick={() => setActiveSubTab("designations")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Designations Matrix
           </button>
           <button 
             onClick={() => setActiveSubTab("supabase")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${activeSubTab === "supabase" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white flex items-center gap-1" : "text-slate-400 hover:text-slate-600 flex items-center gap-1"}`}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "supabase" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white flex items-center gap-1" : "text-slate-400 hover:text-slate-600 flex items-center gap-1"}`}
           >
             <Database className="w-3.5 h-3.5" />
             Supabase Cloud

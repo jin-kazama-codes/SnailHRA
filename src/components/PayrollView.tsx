@@ -84,26 +84,26 @@ export default function PayrollView({
   return (
     <div className="space-y-6">
       {/* Tab Navigation header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow">
-        <div className="flex space-x-1.5 bg-slate-50 dark:bg-[#0a0a0a] p-1 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs font-semibold">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-3.5 sm:p-4 shadow-xs dark:neon-glow">
+        <div className="flex items-center space-x-1.5 bg-slate-50 dark:bg-[#0a0a0a] p-1 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
           <button
             onClick={() => setActiveSubTab("payslips")}
-            className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${activeSubTab === "payslips" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "payslips" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
           >
-            {role === "employee" ? "My Salary Payslips" : "Payroll Processing Dashboard"}
+            {role === "employee" ? "My Salary Payslips" : "Payroll Dashboard"}
           </button>
           
           {(role === "admin" || role === "hr") && (
             <>
               <button
                 onClick={() => setActiveSubTab("designations")}
-                className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
+                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
               >
-                Designation Manager (Admin Settings)
+                Designation Manager
               </button>
               <button
                 onClick={() => setActiveSubTab("emailLogs")}
-                className={`px-3.5 py-2 rounded-lg transition-all cursor-pointer ${activeSubTab === "emailLogs" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
+                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "emailLogs" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
               >
                 Emailed Payslips Ledger
               </button>
@@ -112,7 +112,7 @@ export default function PayrollView({
         </div>
 
         {activeSubTab === "payslips" && (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 shrink-0">
             <label className="text-xs font-semibold text-slate-400">Month Ledger:</label>
             <select
               value={selectedMonth}
