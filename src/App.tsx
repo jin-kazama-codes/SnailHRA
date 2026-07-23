@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  LayoutDashboard, Users, Clock, Calendar, DollarSign,
+  LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   Receipt, Package, ShieldAlert, Sun, Moon, RefreshCw,
   Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut
 } from "lucide-react";
@@ -1054,7 +1054,7 @@ export default function App() {
     ] : []),
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
-    { id: "payroll", label: "Payroll & Payslips", icon: <DollarSign className="w-4.5 h-4.5" /> },
+    { id: "payroll", label: "Payroll & Payslips", icon: <IndianRupee className="w-4.5 h-4.5" /> },
     { id: "expenses", label: "Expense & Claims", icon: <Receipt className="w-4.5 h-4.5" /> },
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },

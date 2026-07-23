@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { 
-  DollarSign, Mail, Plus, Trash2, ShieldCheck, FileText, 
+  IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText, 
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
   ChevronLeft, ChevronRight
 } from "lucide-react";
@@ -190,7 +190,7 @@ export default function PayrollView({
                     </p>
                   </div>
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                    <DollarSign className="w-5 h-5" />
+                    <IndianRupee className="w-5 h-5" />
                   </div>
                 </div>
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
-  CheckCircle2, Users, FileText, AlertCircle, DollarSign, Package, Briefcase, Home,
+  CheckCircle2, Users, FileText, AlertCircle, IndianRupee, Package, Briefcase, Home,
   Award, ChevronRight, Activity, TrendingUp
 } from "lucide-react";
 import { Employee, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine } from "../types";
@@ -241,7 +241,7 @@ export default function DashboardView({
                       onClick={() => setCurrentView("expenses")}
                       className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
                     >
-                      <span className="flex items-center"><DollarSign className="w-3.5 h-3.5 mr-2 text-teal-500" /> Review Expenses</span>
+                      <span className="flex items-center"><IndianRupee className="w-3.5 h-3.5 mr-2 text-teal-500" /> Review Expenses</span>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                     </button>
                     <button
@@ -382,7 +382,7 @@ export default function DashboardView({
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
                 <span className="font-bold uppercase tracking-wider">Branch Expense Claims</span>
-                <DollarSign className="w-4 h-4 text-teal-500" />
+                <IndianRupee className="w-4 h-4 text-teal-500" />
               </div>
               <p className="text-3xl font-extrabold text-teal-600 font-mono">{hrBranchPendingExpenses}</p>
               <p className="text-xs text-slate-400 mt-1">Claims submitted</p>
@@ -427,7 +427,7 @@ export default function DashboardView({
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
                 <span className="font-bold uppercase tracking-wider">Net Monthly Pay</span>
-                <DollarSign className="w-4 h-4 text-teal-500" />
+                <IndianRupee className="w-4 h-4 text-teal-500" />
               </div>
               <p className="text-2xl font-extrabold text-slate-800 dark:text-white font-mono">
                 ₹ {myPayslip ? myPayslip.netPay.toLocaleString('en-IN') : "65,000"}

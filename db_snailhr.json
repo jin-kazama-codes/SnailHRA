@@ -1448,8 +1448,33 @@
       "processedDate": null
     }
   ],
-  "payslips": [],
-  "simulatedEmails": [],
+  "payslips": [
+    {
+      "id": "pay-1784788624201",
+      "employeeId": "EMP-1001",
+      "month": "July 2026",
+      "basic": 85000,
+      "hra": 34000,
+      "allowances": 21000,
+      "finesDeducted": 0,
+      "pfDeduction": 6500,
+      "taxDeduction": 7000,
+      "netPay": 126500,
+      "status": "Generated",
+      "generatedAt": "2026-07-23T06:37:04.201Z",
+      "sentToEmail": "amit.sharma@snailhr.com"
+    }
+  ],
+  "simulatedEmails": [
+    {
+      "id": "em-1784788624216",
+      "recipientEmail": "amit.sharma@snailhr.com",
+      "recipientName": "Amit Sharma",
+      "subject": "Payslip Generated for July 2026 - SnailHR Admin",
+      "body": "Dear Amit Sharma,\n\nYour salary payslip for the month of July 2026 has been successfully compiled and processed by the SnailHR automation pipeline.\n\nSummary of Earnings & Deductions:\n------------------------------------------------\n- Basic Salary: Rs. 85,000\n- HRA: Rs. 34,000\n- Special Allowances: Rs. 21,000\n- PF Deduction: Rs. 6,500\n- Corporate Fines Deducted: Rs. 0\n- Tax Deduction (TDS/PT): Rs. 7,000\n------------------------------------------------\n- Net Disbursed Pay: Rs. 1,26,500\n------------------------------------------------\n\nYour salary will be disbursed directly to your registered bank account (HDFC Bank, A/C: ****1098) within the next 48 hours.\n\nYou can access your SnailHR dashboard to download a detailed tabular break-up.\n\nWarm Regards,\nSnailHR Payroll Automation Portal",
+      "sentAt": "2026-07-23T06:37:04.216Z"
+    }
+  ],
   "customLeaveTypes": [
     "Casual Leave",
     "Medical Leave",
