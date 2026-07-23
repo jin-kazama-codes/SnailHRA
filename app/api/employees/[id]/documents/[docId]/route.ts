@@ -11,21 +11,23 @@ export async function DELETE(
     const { id: empId, docId } = resolvedParams;
 
     const db = loadDatabase();
+    if (!db.employees) db.employees = [];
     const empIndex = db.employees.findIndex(e => e.id === empId);
-    if (empIndex === -1) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-    }
 
-    if (db.employees[empIndex].documents) {
+    if (empIndex >= 0 && db.employees[empIndex].documents) {
       db.employees[empIndex].documents = db.employees[empIndex].documents.filter(d => d.id !== docId);
+      saveDatabase(db);
     }
-    saveDatabase(db);
 
     if (supabase) {
       try {
-        await supabase.from('employees').update({
-          documents: db.employees[empIndex].documents
-        }).eq('id', empId);
+        if (empIndex >= 0) {
+          await supabase.from('employees').update({
+            documents: db.employees[empIndex].documents
+          }).eq('id', empId);
+        }
+
+        await supabase.from('employee_documents').delete().eq('id', docId);
       } catch (sbErr) {
         console.warn('Supabase sync documents delete warning:', sbErr);
       }

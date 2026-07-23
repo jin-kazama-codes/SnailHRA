@@ -71,7 +71,16 @@
         "relation": "Spouse",
         "phone": "+91 98765 43211"
       },
-      "documents": [],
+      "documents": [
+        {
+          "id": "doc-1784813824675",
+          "name": "1517001179020.jpg.jpeg",
+          "category": "ID Proof",
+          "uploadedAt": "2026-07-23",
+          "size": "0.0 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/1784813820406_1517001179020.jpg.jpeg"
+        }
+      ],
       "onboardingTasks": [],
       "password": "$2b$10$mEADFVQJ5IFLOxsmaoV41eHYE3q3RrdHJCbGgZO8uxMV2EDxlVjqi",
       "branch": "Noida Field Hub"

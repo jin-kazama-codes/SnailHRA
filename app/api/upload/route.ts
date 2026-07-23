@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/src/lib/supabase";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
+const s3 = new S3Client({
+  region: process.env.SUPABASE_S3_REGION || "ap-southeast-1",
+  endpoint: process.env.SUPABASE_S3_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.NEXT_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.NEXT_ACCESS_KEY_SECRET!,
+  },
+  forcePathStyle: true, // Required for Supabase S3-compatible endpoint
+});
+
+const BUCKET = process.env.SUPABASE_S3_BUCKET || "employee-documents";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    const bucket = (formData.get("bucket") as string) || "employee-documents";
+    const bucketOverride = (formData.get("bucket") as string) || BUCKET;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -14,57 +27,44 @@ export async function POST(request: Request) {
     const timestamp = Date.now();
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const filePath = `${timestamp}_${sanitizedName}`;
+    const mimeType = file.type || "application/octet-stream";
 
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = new Uint8Array(arrayBuffer);
-    const mimeType = file.type || "image/jpeg";
 
-    if (supabase) {
+    if (process.env.NEXT_ACCESS_KEY_ID && process.env.NEXT_ACCESS_KEY_SECRET) {
       try {
-        // Attempt upload to Supabase storage
-        let { data, error } = await supabase.storage
-          .from(bucket)
-          .upload(filePath, fileBuffer, {
-            contentType: mimeType,
-            upsert: true,
-          });
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: bucketOverride,
+            Key: filePath,
+            Body: fileBuffer,
+            ContentType: mimeType,
+          })
+        );
 
-        // If bucket not found, attempt to create it dynamically
-        if (error && (error.message?.toLowerCase().includes("not found") || error.message?.toLowerCase().includes("bucket"))) {
-          try {
-            await supabase.storage.createBucket(bucket, { public: true });
-            const retry = await supabase.storage.from(bucket).upload(filePath, fileBuffer, {
-              contentType: mimeType,
-              upsert: true,
-            });
-            data = retry.data;
-            error = retry.error;
-          } catch (createErr) {
-            console.warn("Auto-create bucket notice:", createErr);
-          }
-        }
+        // Build Supabase public URL for the uploaded file
+        const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucketOverride}/${filePath}`;
 
-        if (!error && data) {
-          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
-          return NextResponse.json({
-            success: true,
-            url: urlData.publicUrl,
-            path: data.path,
-          });
-        }
-      } catch (storageErr) {
-        console.warn("Supabase storage exception:", storageErr);
+        return NextResponse.json({
+          success: true,
+          url: publicUrl,
+          path: filePath,
+        });
+      } catch (s3Err: any) {
+        console.error("S3 upload error:", s3Err?.message || s3Err);
+        // Fall through to Base64 fallback
       }
     }
 
-    // Base64 Data URL Fallback if S3 bucket is unconfigured
+    // Base64 Data URL fallback if S3 is unavailable
     const base64String = Buffer.from(fileBuffer).toString("base64");
     const dataUrl = `data:${mimeType};base64,${base64String}`;
 
     return NextResponse.json({
       success: true,
       url: dataUrl,
-      isBase64Fallback: true
+      isBase64Fallback: true,
     });
   } catch (error: any) {
     console.error("Upload API error:", error);

@@ -29,7 +29,7 @@ export async function GET() {
       const [
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
-        deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes
+        deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes
       ] = await Promise.race([
         Promise.all([
           safeQuery(supabase.from("leaves").select("*")),
@@ -45,7 +45,8 @@ export async function GET() {
           safeQuery(supabase.from("custom_branches").select("*")),
           safeQuery(supabase.from("custom_leave_types").select("*")),
           safeQuery(supabase.from("custom_leaves").select("*")),
-          safeQuery(supabase.from("attendance_breaks").select("*"))
+          safeQuery(supabase.from("attendance_breaks").select("*")),
+          safeQuery(supabase.from("employee_documents").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -208,6 +209,24 @@ export async function GET() {
           const emergencyFromRow = typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : row.emergency_contact;
           const fallbackEmp = (db.employees || []).find((e: any) => e.id === row.id);
 
+          let docList: any[] = typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || fallbackEmp?.documents || []);
+          if (empDocsRes?.data && empDocsRes.data.length > 0) {
+            const relDocs = empDocsRes.data
+              .filter((d: any) => (d.employee_id || d.employeeId) === row.id)
+              .map((d: any) => ({
+                id: d.id,
+                name: d.name,
+                category: d.category || "ID Proof",
+                uploadedAt: d.uploaded_at || d.uploadedAt || new Date().toISOString().split('T')[0],
+                size: d.size || "1.5 MB",
+                fileUrl: d.file_url || d.fileUrl || ""
+              }));
+            const docMap = new Map();
+            docList.forEach(d => docMap.set(d.id, d));
+            relDocs.forEach(d => docMap.set(d.id, d));
+            docList = Array.from(docMap.values());
+          }
+
           return {
             id: row.id,
             fullName: row.full_name || row.fullName || fallbackEmp?.fullName || "",
@@ -236,7 +255,7 @@ export async function GET() {
               relation: row.emergency_contact_relation || emergencyFromRow?.relation || fallbackEmp?.emergencyContact?.relation || "",
               phone: row.emergency_contact_phone || emergencyFromRow?.phone || fallbackEmp?.emergencyContact?.phone || ""
             },
-            documents: typeof row.documents === "string" ? JSON.parse(row.documents) : (row.documents || fallbackEmp?.documents || []),
+            documents: docList,
             onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || fallbackEmp?.onboardingTasks || []),
             avatarUrl: row.avatar_url || row.avatarUrl || fallbackEmp?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
             bio: row.bio || fallbackEmp?.bio || "",
