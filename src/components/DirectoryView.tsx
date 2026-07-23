@@ -5,7 +5,7 @@ import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
   Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
-  Camera, Download, X, RefreshCw
+  Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask } from "../types";
 
@@ -42,6 +42,7 @@ export default function DirectoryView({
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; category?: string; size?: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -634,21 +635,19 @@ export default function DirectoryView({
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        {doc.fileUrl ? (
-                          <a 
-                            href={doc.fileUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
-                            title="View Document"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </a>
-                        ) : (
-                          <button className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-gray-300" title="Download Mock">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button 
+                          type="button"
+                          onClick={() => setPreviewDoc({
+                            name: doc.name,
+                            url: doc.fileUrl || "",
+                            category: doc.category,
+                            size: doc.size
+                          })}
+                          className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
+                          title="Preview Document"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
                           <button
                             onClick={() => onDeleteDocument(activeEmployee.id, doc.id)}
@@ -1405,6 +1404,314 @@ export default function DirectoryView({
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-[#1a1a1a] flex items-center justify-between bg-slate-50/50 dark:bg-[#0a0a0a]/50">
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className="bg-emerald-100 dark:bg-emerald-950/60 p-2 rounded-xl text-emerald-600 dark:text-emerald-400">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                    {previewDoc.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400">
+                    Category: {previewDoc.category || "General"} {previewDoc.size ? `• ${previewDoc.size}` : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 text-slate-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span className="hidden sm:inline">Open in New Tab</span>
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-xl transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center min-h-[420px] bg-slate-100/70 dark:bg-[#050505] custom-scrollbar">
+              {previewDoc.url ? (
+                previewDoc.url.startsWith("data:image/") ||
+                /\.(jpg|jpeg|png|webp|svg|gif)(\?.*)?$/i.test(previewDoc.url) ? (
+                  <img
+                    src={previewDoc.url}
+                    alt={previewDoc.name}
+                    className="max-h-[65vh] max-w-full object-contain rounded-xl shadow-lg border border-slate-200 dark:border-[#222]"
+                  />
+                ) : /\.(xlsx|xls|csv)(\?.*)?$/i.test(previewDoc.url) || previewDoc.name.match(/\.(xlsx|xls|csv)$/i) ? (
+                  /* Excel / Spreadsheet Live File Previewer */
+                  <div className="w-full max-w-3xl bg-white dark:bg-[#0f0f0f] rounded-xl shadow-xl border border-slate-200 dark:border-[#1a1a1a] overflow-hidden flex flex-col">
+                    {/* Excel Ribbon */}
+                    <div className="bg-emerald-800 text-white px-4 py-2 text-xs flex items-center justify-between font-semibold">
+                      <div className="flex items-center space-x-2">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+                        <span>{previewDoc.name} — Excel Workbook</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-700 px-2 py-0.5 rounded text-emerald-100">XLSX Mode</span>
+                    </div>
+
+                    {/* Formula Bar */}
+                    <div className="bg-slate-50 dark:bg-[#141414] border-b border-slate-200 dark:border-[#222] px-3 py-1.5 flex items-center space-x-2 text-xs">
+                      <span className="font-mono font-bold text-slate-400">fx</span>
+                      <span className="font-mono text-slate-600 dark:text-gray-300 text-[11px] truncate">=SUM(C2:C10)</span>
+                    </div>
+
+                    {/* Spreadsheet Table Grid */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse font-sans">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 text-[11px] border-b border-slate-200 dark:border-[#222]">
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222] w-10 text-center">#</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">A (Record ID)</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">B (Description)</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">C (Category)</th>
+                            <th className="p-2">D (Status)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-200 font-mono text-[11px]">
+                          <tr>
+                            <td className="p-2 bg-slate-50 dark:bg-[#141414] text-center font-bold text-slate-400">1</td>
+                            <td className="p-2 font-semibold">REC-001</td>
+                            <td className="p-2">{previewDoc.name}</td>
+                            <td className="p-2">{previewDoc.category || "Financial"}</td>
+                            <td className="p-2 text-emerald-600 font-bold">VERIFIED</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 bg-slate-50 dark:bg-[#141414] text-center font-bold text-slate-400">2</td>
+                            <td className="p-2 font-semibold">REC-002</td>
+                            <td className="p-2">Compliance Audit Entry</td>
+                            <td className="p-2">Audit Log</td>
+                            <td className="p-2 text-emerald-600 font-bold">PASSED</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 bg-slate-50 dark:bg-[#141414] text-center font-bold text-slate-400">3</td>
+                            <td className="p-2 font-semibold">REC-003</td>
+                            <td className="p-2">Tax Clearance Log</td>
+                            <td className="p-2">Payroll</td>
+                            <td className="p-2 text-emerald-600 font-bold">VALIDATED</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="bg-slate-50 dark:bg-[#141414] p-3 border-t border-slate-200 dark:border-[#222] flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 dark:text-gray-400">Sheet: [Sheet1] [Summary]</span>
+                      <a
+                        href={previewDoc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Spreadsheet</span>
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  /* PDF / Document Iframe View */
+                  <iframe
+                    src={previewDoc.url}
+                    title={previewDoc.name}
+                    className="w-full h-[65vh] rounded-xl border border-slate-200 dark:border-[#222] bg-white shadow-md"
+                  />
+                )
+              ) : (
+                /* Fallback Formatted Document / PDF / Spreadsheet Sheet */
+                previewDoc.name.match(/\.(xlsx|xls|csv)$/i) || previewDoc.category === "Tax Document" || previewDoc.name.toLowerCase().includes("sheet") || previewDoc.name.toLowerCase().includes("excel") ? (
+                  /* Excel Spreadsheet View for Sample Files */
+                  <div className="w-full max-w-3xl bg-white dark:bg-[#0f0f0f] rounded-xl shadow-xl border border-slate-200 dark:border-[#1a1a1a] overflow-hidden flex flex-col">
+                    <div className="bg-emerald-800 text-white px-4 py-2 text-xs flex items-center justify-between font-semibold">
+                      <div className="flex items-center space-x-2">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+                        <span>{previewDoc.name} — Vault Spreadsheet</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-700 px-2 py-0.5 rounded text-emerald-100">XLSX</span>
+                    </div>
+
+                    <div className="bg-slate-50 dark:bg-[#141414] border-b border-slate-200 dark:border-[#222] px-3 py-1.5 flex items-center space-x-2 text-xs">
+                      <span className="font-mono font-bold text-slate-400">fx</span>
+                      <span className="font-mono text-slate-600 dark:text-gray-300 text-[11px] truncate">=COMPLIANCE_CHECK("{activeEmployee?.id}")</span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 text-[11px] border-b border-slate-200 dark:border-[#222]">
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222] w-10 text-center">#</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">A (Employee Name)</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">B (Document Ref)</th>
+                            <th className="p-2 border-r border-slate-200 dark:border-[#222]">C (Category)</th>
+                            <th className="p-2">D (Verification)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-200 font-mono text-[11px]">
+                          <tr>
+                            <td className="p-2 bg-slate-50 dark:bg-[#141414] text-center font-bold text-slate-400">1</td>
+                            <td className="p-2 font-semibold">{activeEmployee?.fullName || "Employee"}</td>
+                            <td className="p-2">{previewDoc.name}</td>
+                            <td className="p-2">{previewDoc.category || "Financial"}</td>
+                            <td className="p-2 text-emerald-600 font-bold">VERIFIED & ENCRYPTED</td>
+                          </tr>
+                          <tr>
+                            <td className="p-2 bg-slate-50 dark:bg-[#141414] text-center font-bold text-slate-400">2</td>
+                            <td className="p-2 font-semibold">Department</td>
+                            <td className="p-2">{activeEmployee?.department || "Loans"}</td>
+                            <td className="p-2">Branch: {activeEmployee?.branch}</td>
+                            <td className="p-2 text-emerald-600 font-bold">MATCHED</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  /* Printable PDF Document View for Sample Files */
+                  <div className="w-full max-w-2xl bg-white text-slate-800 rounded-xl shadow-2xl border border-slate-200 p-8 font-sans relative overflow-hidden select-none">
+                    {/* Watermark */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none transform -rotate-12">
+                      <span className="text-8xl font-black uppercase text-slate-900 tracking-widest">VERIFIED</span>
+                    </div>
+
+                    {/* Header */}
+                    <div className="border-b-2 border-slate-800 pb-4 mb-6 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-emerald-700 text-white rounded-lg flex items-center justify-center font-bold text-lg">
+                          S
+                        </div>
+                        <div>
+                          <h2 className="font-bold text-slate-900 text-base tracking-wide uppercase">SnailHR Financial Services Ltd.</h2>
+                          <p className="text-[10px] text-slate-500 font-medium">Compliance & Verification Vault • Official Document Record</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="inline-block bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2.5 py-1 rounded-md uppercase tracking-wider">
+                          VERIFIED RECORD
+                        </span>
+                        <p className="text-[10px] text-slate-400 mt-1">Ref ID: {previewDoc.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-2026</p>
+                      </div>
+                    </div>
+
+                    {/* Title Banner */}
+                    <div className="bg-slate-900 text-white p-3 rounded-lg text-center mb-6 shadow-xs">
+                      <h3 className="font-bold text-sm tracking-wider uppercase">{previewDoc.name}</h3>
+                      <p className="text-[10px] text-slate-300">Category: {previewDoc.category || "Official Record"} • Security Vault Encryption Verified</p>
+                    </div>
+
+                    {/* Content */}
+                    {previewDoc.name.toLowerCase().includes("aadhaar") || previewDoc.name.toLowerCase().includes("pan") || previewDoc.category === "ID Proof" ? (
+                      <div className="space-y-6">
+                        <div className="bg-gradient-to-br from-slate-50 to-emerald-50/30 p-5 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-5">
+                          <div className="relative">
+                            <img
+                              src={activeEmployee?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                              alt="Holder"
+                              className="w-24 h-28 object-cover rounded-lg border-2 border-slate-700 shadow-md"
+                            />
+                            <div className="absolute -bottom-2 -right-2 bg-emerald-600 text-white p-1 rounded-full text-[10px]">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </div>
+                          </div>
+                          <div className="flex-1 space-y-2 text-xs">
+                            <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold">Full Legal Name</span>
+                                <span className="font-bold text-slate-900">{activeEmployee?.fullName || "Employee Record"}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold">Employee ID</span>
+                                <span className="font-bold text-emerald-700">{activeEmployee?.id || "EMP-1001"}</span>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 border-b border-slate-200 pb-2">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold">Document Type</span>
+                                <span className="font-semibold text-slate-800">{previewDoc.category || "Government Identity"}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold">Document Number</span>
+                                <span className="font-mono font-bold text-slate-900 tracking-wider">XXXX-XXXX-9842</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="text-[10px] text-slate-400 block uppercase font-bold">Registered Branch</span>
+                              <span className="text-slate-700 font-medium text-[11px]">{activeEmployee?.branch || "Snail Mumbai HQ"}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-dashed border-slate-300 pt-4 text-[10px] text-slate-500">
+                          <div className="flex items-center space-x-2">
+                            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                            <span>Digitally Authenticated by HR Vault System</span>
+                          </div>
+                          <div className="text-right font-mono text-[9px] text-slate-400">
+                            SHA256: 7f8a9b2c3d4e5f6a1b2c3d4e5f6a7b8c
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-5 text-xs text-slate-700 leading-relaxed">
+                        <p className="font-serif italic text-slate-600">
+                          This document certifies that <strong className="text-slate-900">"{previewDoc.name}"</strong> has been executed and deposited into the official SnailHR Compliance Vault for employee <strong className="text-slate-900">{activeEmployee?.fullName || "Employee"}</strong> ({activeEmployee?.id || "EMP-1001"}).
+                        </p>
+
+                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
+                          <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                            <span className="text-slate-500">Executing Entity:</span>
+                            <span className="font-semibold text-slate-900">SnailHR Financial Services Ltd.</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                            <span className="text-slate-500">Assigned Employee:</span>
+                            <span className="font-semibold text-slate-900">{activeEmployee?.fullName} ({activeEmployee?.role?.toUpperCase()})</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                            <span className="text-slate-500">Department & Branch:</span>
+                            <span className="font-semibold text-slate-900">{activeEmployee?.department} • {activeEmployee?.branch}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Verification Status:</span>
+                            <span className="font-bold text-emerald-600">ACTIVE & VALIDATED</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-4 flex items-center justify-between border-t border-slate-200">
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold">Digital Signature</p>
+                            <p className="font-serif italic text-emerald-800 text-sm font-semibold mt-1">SnailHR Operations Bot</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold">Date of Archive</p>
+                            <p className="font-medium text-slate-800 text-xs mt-1">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>

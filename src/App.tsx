@@ -165,7 +165,25 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch SnailHR database.");
       const data = await res.json();
 
-      setEmployees(data.employees || []);
+      setEmployees(prev => {
+        const fetchedEmps: Employee[] = data.employees || [];
+        if (!prev || prev.length === 0) return fetchedEmps;
+        const prevMap = new Map(prev.map(e => [e.id, e]));
+        return fetchedEmps.map(emp => {
+          const prevEmp = prevMap.get(emp.id);
+          if (prevEmp) {
+            const docMap = new Map();
+            (emp.documents || []).forEach((d: any) => docMap.set(d.id || d.name, d));
+            (prevEmp.documents || []).forEach((d: any) => {
+              if (!docMap.has(d.id || d.name)) {
+                docMap.set(d.id || d.name, d);
+              }
+            });
+            return { ...emp, documents: Array.from(docMap.values()) };
+          }
+          return emp;
+        });
+      });
       setDesignations(data.designations || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
@@ -232,15 +250,15 @@ export default function App() {
         });
         return updated;
       });
-      setFines(data.fines);
+      setFines(data.fines || []);
       setReimbursements(prev => {
         const reimMap = new Map();
-        (prev || []).forEach((r: any) => { if (r.id) reimMap.set(r.id, r); });
-        (data.reimbursements || []).forEach((r: any) => { if (r.id) reimMap.set(r.id, r); });
+        (prev || []).forEach((r: any) => { if (r && r.id) reimMap.set(r.id, r); });
+        (data.reimbursements || []).forEach((r: any) => { if (r && r.id) reimMap.set(r.id, r); });
         return Array.from(reimMap.values());
       });
-      setPayslips(data.payslips);
-      setEmails(data.simulatedEmails);
+      setPayslips(data.payslips || []);
+      setEmails(data.simulatedEmails || []);
 
       setCustomLeaveTypes(prev => Array.from(new Set([...(prev || []), ...(data.customLeaveTypes || [])])));
       setCustomDepartments(prev => Array.from(new Set([...(prev || []), ...(data.customDepartments || [])])));
@@ -257,11 +275,11 @@ export default function App() {
         console.warn("Could not check Supabase sync status:", subErr);
       }
 
-      setLoading(false);
       setError(null);
     } catch (err: any) {
-      console.error(err);
+      console.error("refreshDatabase error:", err);
       setError("Could not establish a connection to the SnailHR full-stack service.");
+    } finally {
       setLoading(false);
     }
   };
@@ -360,8 +378,23 @@ export default function App() {
         body: JSON.stringify(docData)
       });
       if (res.ok) {
-        await refreshDatabase();
+        const resData = await res.json();
+        const addedDoc = resData.document || { id: "doc-" + Date.now(), ...docData };
+        setEmployees(prev =>
+          (prev || []).map(e => {
+            if (e.id === empId) {
+              const existing = e.documents || [];
+              const exists = existing.some((d: any) => d.id === addedDoc.id || d.name === addedDoc.name);
+              return {
+                ...e,
+                documents: exists ? existing : [...existing, addedDoc]
+              };
+            }
+            return e;
+          })
+        );
         showToast("Document uploaded successfully to Vault!", "success");
+        await refreshDatabase();
       }
     } catch (err) {
       console.error(err);
@@ -372,15 +405,27 @@ export default function App() {
   // 4. Delete document
   const handleDeleteDocument = async (empId: string, docId: string) => {
     try {
+      setEmployees(prev =>
+        (prev || []).map(e => {
+          if (e.id === empId) {
+            return {
+              ...e,
+              documents: (e.documents || []).filter((d: any) => d.id !== docId)
+            };
+          }
+          return e;
+        })
+      );
       const res = await fetch(`/api/employees/${empId}/documents/${docId}`, {
         method: "DELETE"
       });
       if (res.ok) {
-        await refreshDatabase();
         showToast("Document removed from Vault.", "info");
+        await refreshDatabase();
       }
     } catch (err) {
       console.error(err);
+      showToast("Failed to delete document", "error");
     }
   };
 

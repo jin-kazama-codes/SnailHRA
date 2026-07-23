@@ -79,6 +79,30 @@
           "uploadedAt": "2026-07-23",
           "size": "0.0 MB",
           "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/1784813820406_1517001179020.jpg.jpeg"
+        },
+        {
+          "id": "doc-1784814692222",
+          "name": "WhatsApp Image 2026-07-23 at 7.20.58 PM.jpeg",
+          "category": "ID Proof",
+          "uploadedAt": "2026-07-23",
+          "size": "0.1 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/1784814688233_WhatsApp_Image_2026-07-23_at_7.20.58_PM.jpeg"
+        },
+        {
+          "id": "doc-1784814879917",
+          "name": "Green leaf traders.pdf",
+          "category": "ID Proof",
+          "uploadedAt": "2026-07-23",
+          "size": "0.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/1784814866275_Green_leaf_traders.pdf"
+        },
+        {
+          "id": "doc-1784814917556",
+          "name": "Green leaf traders.pdf",
+          "category": "ID Proof",
+          "uploadedAt": "2026-07-23",
+          "size": "0.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/1784814916007_Green_leaf_traders.pdf"
         }
       ],
       "onboardingTasks": [],
