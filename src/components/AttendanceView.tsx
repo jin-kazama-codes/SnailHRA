@@ -821,6 +821,11 @@ export default function AttendanceView({
               <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
                 {attendance
                   .filter(a => a.employeeId === currentEmployeeId)
+                  .sort((a, b) => {
+                    const dateCompare = b.date.localeCompare(a.date);
+                    if (dateCompare !== 0) return dateCompare;
+                    return new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime();
+                  })
                   .map(punch => {
                     const hrs = calculatePunchHours(punch);
                     return (
