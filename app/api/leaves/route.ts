@@ -5,6 +5,7 @@ import { supabase, ensureEmployeeSynced } from "@/src/lib/supabase";
 
 export async function GET() {
   const db = loadDatabase();
+  let leavesList = db.leaves || [];
   if (supabase) {
     try {
       const { data } = await supabase.from("leaves").select("*");
@@ -23,15 +24,24 @@ export async function GET() {
         const leaveMap = new Map();
         (db.leaves || []).forEach((l: any) => { if (l.id) leaveMap.set(l.id, l); });
         mappedLeaves.forEach((l: any) => { leaveMap.set(l.id, l); });
-        const mergedLeaves = Array.from(leaveMap.values());
-        db.leaves = mergedLeaves;
-        return NextResponse.json(mergedLeaves);
+        leavesList = Array.from(leaveMap.values());
+        db.leaves = leavesList;
       }
     } catch (err) {
       console.warn("Supabase fetch leaves error:", err);
     }
   }
-  return NextResponse.json(db.leaves || []);
+
+  // Resolve real employee names
+  const resolvedLeaves = (leavesList || []).map((l: LeaveRequest) => {
+    const emp = db.employees?.find(e => e.id === l.employeeId);
+    return {
+      ...l,
+      employeeName: emp?.fullName || (l.employeeName && !l.employeeName.startsWith("Employee EMP-") ? l.employeeName : (emp?.fullName || l.employeeId))
+    };
+  });
+
+  return NextResponse.json(resolvedLeaves);
 }
 
 export async function POST(request: Request) {
@@ -42,8 +52,8 @@ export async function POST(request: Request) {
     const appliedDate = leaveData.appliedDate || new Date().toISOString().split('T')[0];
 
     const db = loadDatabase();
-    const emp = db.employees.find(e => e.id === leaveData.employeeId);
-    const empName = leaveData.employeeName || emp?.fullName || "Employee " + leaveData.employeeId;
+    const emp = db.employees?.find(e => e.id === leaveData.employeeId);
+    const empName = emp?.fullName || (leaveData.employeeName && !leaveData.employeeName.startsWith("Employee ") ? leaveData.employeeName : leaveData.employeeId);
 
     const newLeave: LeaveRequest = {
       id: leaveId,

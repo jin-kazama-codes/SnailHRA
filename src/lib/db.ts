@@ -4,7 +4,7 @@ import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord
 } from "../types";
 
 export interface AppState {
@@ -26,11 +26,21 @@ export interface AppState {
   customBranches: string[];
   timingSettings: TimingSettings;
   attendanceBreaks?: AttendanceBreak[];
+  excelUploads?: ExcelUploadRecord[];
 }
 
 const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
 
-const initialDesignations: Designation[] = [];
+const initialDesignations: Designation[] = [
+  { id: "des-1", title: "Managing Director", department: "Executive" },
+  { id: "des-2", title: "Head of Credit & Risk", department: "Risk" },
+  { id: "des-3", title: "HR Business Partner", department: "HR" },
+  { id: "des-4", title: "Senior Loan Officer", department: "Loans" },
+  { id: "des-5", title: "Insurance Underwriter", department: "Insurance" },
+  { id: "des-6", title: "Sales Relationship Manager", department: "Sales" },
+  { id: "des-7", title: "Collections Specialist", department: "Operations" },
+  { id: "des-8", title: "Compliance Officer", department: "Compliance" }
+];
 const initialHolidays: Holiday[] = [];
 const initialPolicies: Policy[] = [
   {
@@ -62,12 +72,95 @@ const initialPolicies: Policy[] = [
     lastUpdated: "2026-04-05"
   }
 ];
-const initialEmployees: Employee[] = [];
+
+const initialEmployees: Employee[] = [
+  {
+    id: "EMP-1001",
+    fullName: "Ratul Mohindra",
+    email: "ratul.mohindra@mgmfinanciers.com",
+    phone: "+91 98765 43210",
+    role: "admin",
+    designationId: "des-1",
+    department: "Executive",
+    joiningDate: "2024-03-15",
+    status: "Active",
+    salary: { basic: 95000, hra: 18000, allowances: 10000, pfDeduction: 6500 },
+    bankDetails: { accountNumber: "**** (BFHL)", bankName: "HDFC Bank", ifsc: "HDFC0000104" },
+    address: "B-402, Skyline Residency, Sector 62, Noida, UP - 201301",
+    emergencyContact: { name: "Suman Sharma", relation: "Spouse", phone: "+91 98765 43211" },
+    documents: [],
+    onboardingTasks: [],
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
+    bio: "Managing Director leading MGM FINANCIERS PRIV LIMITED.",
+    branch: "Mumbai Branch",
+    password: "$2a$10$e8w.gT60J12F0z1m8dC.e.a3x5z3y7w2x1v0"
+  },
+  {
+    id: "EMP-1002",
+    fullName: "Priya Patel",
+    email: "priya.patel@mgmfinanciers.com",
+    phone: "+91 87654 32109",
+    role: "hr",
+    designationId: "des-3",
+    department: "HR",
+    joiningDate: "2024-06-01",
+    status: "Active",
+    salary: { basic: 60000, hra: 24000, allowances: 16000, pfDeduction: 5000 },
+    bankDetails: { accountNumber: "876543210987", bankName: "ICICI Bank", ifsc: "ICIC0000213" },
+    address: "Flat 504, Emerald Court, Andheri East, Mumbai - 400069",
+    emergencyContact: { name: "Ramesh Patel", relation: "Father", phone: "+91 87654 32108" },
+    documents: [],
+    onboardingTasks: [],
+    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
+    bio: "HR Business Partner managing talent and culture.",
+    branch: "Mumbai Branch"
+  },
+  {
+    id: "EMP-1003",
+    fullName: "Rahul Verma",
+    email: "rahul.verma@mgmfinanciers.com",
+    phone: "+91 76543 21098",
+    role: "employee",
+    designationId: "des-4",
+    department: "Loans",
+    joiningDate: "2024-11-10",
+    status: "Active",
+    salary: { basic: 50000, hra: 20000, allowances: 15000, pfDeduction: 4200 },
+    bankDetails: { accountNumber: "765432109876", bankName: "State Bank of India", ifsc: "SBIN0001234" },
+    address: "Row House No. 12, Rosewood Society, Baner, Pune - 411045",
+    emergencyContact: { name: "Aarti Verma", relation: "Mother", phone: "+91 76543 21099" },
+    documents: [],
+    onboardingTasks: [],
+    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=256&auto=format&fit=crop",
+    bio: "Senior Loan Officer.",
+    branch: "Mumbai Branch"
+  },
+  {
+    id: "EMP-1004",
+    fullName: "Sneha Iyer",
+    email: "sneha.iyer@mgmfinanciers.com",
+    phone: "+91 65432 10987",
+    role: "employee",
+    designationId: "des-5",
+    department: "Insurance",
+    joiningDate: "2025-01-20",
+    status: "Active",
+    salary: { basic: 48000, hra: 19200, allowances: 12800, pfDeduction: 4000 },
+    bankDetails: { accountNumber: "654321098765", bankName: "Axis Bank", ifsc: "UTIB0000084" },
+    address: "Flat 201, Green Meadows, Gachibowli, Hyderabad - 500032",
+    emergencyContact: { name: "Venkat Iyer", relation: "Father", phone: "+91 65432 10980" },
+    documents: [],
+    onboardingTasks: [],
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
+    bio: "Insurance Underwriter.",
+    branch: "Mumbai Branch"
+  }
+];
 
 export function getInitialState(): AppState {
   return {
-    designations: [],
-    employees: [],
+    designations: initialDesignations,
+    employees: initialEmployees,
     attendance: [],
     leaves: [],
     holidays: [],
@@ -89,7 +182,8 @@ export function getInitialState(): AppState {
       breakStartTime: "13:00",
       breakEndTime: "14:00"
     },
-    attendanceBreaks: []
+    attendanceBreaks: [],
+    excelUploads: []
   };
 }
 
@@ -128,14 +222,19 @@ export function loadDatabase(): AppState {
         };
       });
 
+      let loadedEmployees = parsed.employees && parsed.employees.length > 0 ? parsed.employees : initialEmployees;
+      if (!loadedEmployees.find((e: any) => e.id === "EMP-1001")) {
+        loadedEmployees = [initialEmployees[0], ...loadedEmployees];
+      }
+
       cachedState = {
         ...getInitialState(),
         ...cachedState,
         ...parsed,
         attendance: reconstructedAttendance,
         attendanceBreaks: attendanceBreaks,
-        employees: parsed.employees || [],
-        designations: parsed.designations || [],
+        employees: loadedEmployees,
+        designations: (parsed.designations && parsed.designations.length > 0) ? parsed.designations : initialDesignations,
         holidays: parsed.holidays || [],
         policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
         timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings

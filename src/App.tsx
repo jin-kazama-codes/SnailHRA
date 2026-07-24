@@ -340,6 +340,39 @@ export default function App() {
     }
   };
 
+  // 1b. Bulk Onboard employees with upload history tracking
+  const handleBulkOnboardEmployee = async (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => {
+    try {
+      const employeesList = Array.isArray(payload) ? payload : payload.employees;
+      const filename = Array.isArray(payload) ? undefined : payload.filename;
+      const fileData = Array.isArray(payload) ? undefined : payload.fileData;
+
+      showToast(`Processing bulk upload of ${employeesList.length} employees...`, "info");
+      const res = await fetch("/api/employees/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employees: employeesList,
+          filename: filename || `Employees_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          fileData: fileData || "",
+          uploadedByName: currentEmployee?.fullName || "Admin User",
+          uploadedById: currentEmployee?.id || ""
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        await refreshDatabase();
+        showToast(`Successfully onboarded ${json.count || employeesList.length} employees and archived upload record!`, "success");
+      } else {
+        const errJson = await res.json();
+        showToast(`Bulk upload failed: ${errJson.error || "Server error"}`, "error");
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error uploading bulk employees: ${err?.message || err}`, "error");
+    }
+  };
+
   // 2. Toggle onboarding tasks
   const handleToggleOnboardingTask = async (empId: string, taskId: string, completed: boolean) => {
     try {
@@ -1314,6 +1347,7 @@ export default function App() {
               customDepartments={customDepartments}
               customBranches={customBranches}
               onOnboardEmployee={handleOnboardEmployee}
+              onBulkOnboardEmployee={handleBulkOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
                 showToast("Saving employee information...", "info");
                 try {

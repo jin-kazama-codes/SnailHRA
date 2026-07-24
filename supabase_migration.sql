@@ -863,5 +863,23 @@ ALTER TABLE attendance ALTER COLUMN total_break_duration TYPE TEXT;
 ALTER TABLE attendance ALTER COLUMN total_break_duration SET DEFAULT '00h 00m';
 
 -- ============================================================
+-- 20. EXCEL UPLOADS ARCHIVE TABLE
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.excel_uploads (
+  id                     TEXT PRIMARY KEY,
+  filename               TEXT NOT NULL,
+  uploaded_at            TIMESTAMPTZ DEFAULT NOW(),
+  uploaded_by_name       TEXT,
+  uploaded_by_id         TEXT,
+  record_count           INTEGER DEFAULT 0,
+  detected_custom_fields JSONB DEFAULT '[]'::jsonb,
+  status                 TEXT DEFAULT 'Success',
+  file_data              TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_excel_uploads_uploaded_at ON public.excel_uploads(uploaded_at DESC);
+
+-- ============================================================
 -- END OF MIGRATION
 -- ============================================================
+

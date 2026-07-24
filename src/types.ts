@@ -55,6 +55,7 @@ export interface Employee {
   bio?: string;
   branch?: string;
   password?: string;
+  customFields?: Record<string, string | number | boolean>;
 }
 
 export interface AttendanceBreak {
@@ -193,4 +194,17 @@ export interface TimingSettings {
   breakStartTime: string;
   breakEndTime: string;
 }
+
+export interface ExcelUploadRecord {
+  id: string;
+  filename: string;
+  uploadedAt: string; // ISO timestamp
+  uploadedByName: string;
+  uploadedById: string;
+  recordCount: number;
+  detectedCustomFields: string[];
+  status: "Success" | "Partial" | "Failed";
+  fileData?: string; // base64 or text content of uploaded file
+}
+
 

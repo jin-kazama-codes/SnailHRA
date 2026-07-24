@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
   Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
-  Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table
+  Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
+  ArrowLeft, History, Clock, User, Check
 } from "lucide-react";
-import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask } from "../types";
+import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord } from "../types";
 
 interface DirectoryViewProps {
   employees: Employee[];
@@ -17,6 +19,7 @@ interface DirectoryViewProps {
   customDepartments?: string[];
   customBranches?: string[];
   onOnboardEmployee: (empData: any) => void;
+  onBulkOnboardEmployee?: (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => Promise<void> | void;
   onUpdateEmployee: (id: string, updatedData: any) => Promise<void> | void;
   onAddDocument: (empId: string, docData: any) => void;
   onDeleteDocument: (empId: string, docId: string) => void;
@@ -31,6 +34,7 @@ export default function DirectoryView({
   customDepartments,
   customBranches,
   onOnboardEmployee,
+  onBulkOnboardEmployee,
   onUpdateEmployee,
   onAddDocument,
   onDeleteDocument,
@@ -52,6 +56,253 @@ export default function DirectoryView({
   const [docCategory, setDocCategory] = useState<any>("ID Proof");
   const [docFile, setDocFile] = useState<File | null>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
+
+  // View Mode: "roster" (default) or "bulk_upload" (full page hub)
+  const [viewMode, setViewMode] = useState<"roster" | "bulk_upload">("roster");
+
+  // Bulk Upload Excel State
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [rawFileData, setRawFileData] = useState<string>("");
+  const [parsedBulkData, setParsedBulkData] = useState<any[]>([]);
+  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
+  const [customFieldHeaders, setCustomFieldHeaders] = useState<string[]>([]);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload History Logs State (Date-wise, newest on top)
+  const [uploadHistory, setUploadHistory] = useState<ExcelUploadRecord[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+
+  const fetchUploadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch("/api/employees/bulk/history");
+      if (res.ok) {
+        const json = await res.json();
+        setUploadHistory(json.uploads || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch upload history log:", err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode === "bulk_upload") {
+      fetchUploadHistory();
+    }
+  }, [viewMode]);
+
+  // Generate & Download Shareable Dummy Sample Excel File
+  const downloadSampleTemplate = () => {
+    const headers = [
+      "Full Name", "Email", "Phone", "Role", "Department", "Branch",
+      "Designation", "Joining Date", "Status", "Basic Salary", "HRA",
+      "Allowances", "PF Deduction", "Bank Name", "Account Number",
+      "IFSC Code", "Address", "Emergency Contact Name", "Emergency Contact Relation",
+      "Emergency Contact Phone", "Password", "Blood Group", "PAN Number"
+    ];
+
+    const sampleRow1 = {
+      "Full Name": "Amit Kumar Sharma",
+      "Email": "amit.sharma@mgmfinanciers.com",
+      "Phone": "+91 98765 12345",
+      "Role": "employee",
+      "Department": "Loans",
+      "Branch": "Mumbai Branch",
+      "Designation": "Senior Loan Officer",
+      "Joining Date": "2026-07-01",
+      "Status": "Active",
+      "Basic Salary": 50000,
+      "HRA": 20000,
+      "Allowances": 12000,
+      "PF Deduction": 3600,
+      "Bank Name": "HDFC Bank",
+      "Account Number": "50100234567891",
+      "IFSC Code": "HDFC0001234",
+      "Address": "Flat 402, Sunshine Towers, Andheri East, Mumbai",
+      "Emergency Contact Name": "Sunita Sharma",
+      "Emergency Contact Relation": "Spouse",
+      "Emergency Contact Phone": "+91 98765 99999",
+      "Password": "MGM@1234",
+      "Blood Group": "B+",
+      "PAN Number": "ABCDE1234F"
+    };
+
+    const sampleRow2 = {
+      "Full Name": "Kavita Reddy",
+      "Email": "kavita.reddy@mgmfinanciers.com",
+      "Phone": "+91 91234 56789",
+      "Role": "employee",
+      "Department": "Risk",
+      "Branch": "Noida HQ",
+      "Designation": "Risk Analyst",
+      "Joining Date": "2026-07-15",
+      "Status": "Active",
+      "Basic Salary": 45000,
+      "HRA": 18000,
+      "Allowances": 9000,
+      "PF Deduction": 3200,
+      "Bank Name": "ICICI Bank",
+      "Account Number": "000401567890",
+      "IFSC Code": "ICIC0000004",
+      "Address": "Sector 62, Noida, UP",
+      "Emergency Contact Name": "Rajesh Reddy",
+      "Emergency Contact Relation": "Father",
+      "Emergency Contact Phone": "+91 91234 00000",
+      "Password": "MGM@1234",
+      "Blood Group": "O+",
+      "PAN Number": "XYZPK9876L"
+    };
+
+    const worksheet = XLSX.utils.json_to_sheet([sampleRow1, sampleRow2], { header: headers });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import Template");
+    XLSX.writeFile(workbook, "MGM_Employee_Import_Template.xlsx");
+  };
+
+  // Download Past Uploaded Excel File
+  const downloadUploadedFile = (record: ExcelUploadRecord) => {
+    if (!record.fileData) return;
+    try {
+      const link = document.createElement("a");
+      const dataUri = record.fileData.startsWith("data:")
+        ? record.fileData
+        : `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${record.fileData}`;
+      link.href = dataUri;
+      link.download = record.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Download error:", e);
+    }
+  };
+
+  // Parse Uploaded Excel File & Extract Standard + Dynamic Custom Fields
+  const handleBulkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkFile(file);
+    setBulkError(null);
+    setParsedBulkData([]);
+    setDetectedHeaders([]);
+    setCustomFieldHeaders([]);
+    setRawFileData("");
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Read file to base64 for archiving
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const b64 = ev.target?.result as string;
+        setRawFileData(b64 || "");
+      };
+      reader.readAsDataURL(file);
+
+      const workbook = XLSX.read(arrayBuffer, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+      if (!rawRows || rawRows.length === 0) {
+        setBulkError("The selected Excel file is empty or invalid.");
+        return;
+      }
+
+      // Collect raw column headers
+      const allHeaders = Object.keys(rawRows[0] || {});
+      setDetectedHeaders(allHeaders);
+
+      // Known standard field mappings (normalized key => internal property)
+      const standardMap: Record<string, string> = {
+        fullname: "fullName", name: "fullName", full_name: "fullName", employeename: "fullName", employee_name: "fullName",
+        email: "email", emailaddress: "email", email_address: "email",
+        phone: "phone", phonenumber: "phone", phone_number: "phone", mobile: "phone", contact: "phone",
+        role: "role", userrole: "role",
+        department: "department", dept: "department",
+        branch: "branch", office: "branch",
+        designation: "designationTitle", designationtitle: "designationTitle", title: "designationTitle",
+        joiningdate: "joiningDate", dateofjoining: "joiningDate", joining_date: "joiningDate", doj: "joiningDate",
+        status: "status", employeestatus: "status",
+        basicsalary: "salaryBasic", basic: "salaryBasic", salarybasic: "salaryBasic",
+        hra: "salaryHra", hraallowance: "salaryHra", salaryhra: "salaryHra",
+        allowances: "salaryAllowances", otherallowances: "salaryAllowances", salaryallowances: "salaryAllowances",
+        pfdeduction: "salaryPf", pf: "salaryPf", salarypf: "salaryPf",
+        bankname: "bankName", bank: "bankName",
+        accountnumber: "bankAccount", bankaccount: "bankAccount", bankaccountnumber: "bankAccount",
+        ifsc: "bankIfsc", ifsccode: "bankIfsc", bankifsc: "bankIfsc",
+        address: "address", residentialaddress: "address",
+        emergencycontactname: "emergencyName", emergencyname: "emergencyName", contactperson: "emergencyName",
+        emergencycontactrelation: "emergencyRelation", emergencyrelation: "emergencyRelation", relation: "emergencyRelation",
+        emergencycontactphone: "emergencyPhone", emergencyphone: "emergencyPhone",
+        password: "password"
+      };
+
+      const customHeaders: string[] = [];
+      allHeaders.forEach(h => {
+        const cleanKey = h.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!standardMap[cleanKey]) {
+          customHeaders.push(h);
+        }
+      });
+      setCustomFieldHeaders(customHeaders);
+
+      // Process each row
+      const processedEmployees = rawRows.map((row: any) => {
+        const emp: any = { customFields: {} };
+
+        Object.keys(row).forEach(header => {
+          const val = row[header];
+          const cleanKey = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+          const stdTarget = standardMap[cleanKey];
+
+          if (stdTarget) {
+            emp[stdTarget] = String(val).trim();
+          } else if (val !== "" && val !== null && val !== undefined) {
+            // Unmapped header -> store as dynamic custom field
+            emp.customFields[header] = typeof val === "number" ? val : String(val).trim();
+          }
+        });
+
+        return emp;
+      });
+
+      setParsedBulkData(processedEmployees);
+    } catch (err: any) {
+      console.error("Excel parse error:", err);
+      setBulkError("Failed to parse Excel file. Please ensure it is a valid .xlsx or .csv document.");
+    }
+  };
+
+  // Submit Bulk Upload
+  const handleExecuteBulkSubmit = async () => {
+    if (!parsedBulkData.length || isProcessingBulk) return;
+    setIsProcessingBulk(true);
+    try {
+      if (onBulkOnboardEmployee) {
+        await onBulkOnboardEmployee({
+          employees: parsedBulkData,
+          filename: bulkFile?.name || `Employee_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
+          fileData: rawFileData
+        });
+      }
+      setShowBulkModal(false);
+      setBulkFile(null);
+      setParsedBulkData([]);
+      setRawFileData("");
+      await fetchUploadHistory();
+    } catch (err) {
+      console.error("Bulk submit execution error:", err);
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
 
   // Edit employee state
   const [editFullName, setEditFullName] = useState("");
@@ -349,6 +600,326 @@ export default function DirectoryView({
     return profileImagePreview || "";
   };
 
+  if (viewMode === "bulk_upload") {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-200">
+        {/* Full Page Navigation & Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow">
+          <div className="flex items-center space-x-3.5">
+            <button
+              onClick={() => setViewMode("roster")}
+              className="p-2 bg-slate-50 dark:bg-[#1a1a1a] hover:bg-slate-100 dark:hover:bg-[#252525] text-slate-700 dark:text-gray-200 rounded-xl transition-all border border-slate-100 dark:border-[#222] cursor-pointer"
+              title="Back to Agent Roster"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <div className="flex items-center space-x-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
+                <h1 className="font-display font-extrabold text-slate-800 dark:text-white text-lg sm:text-xl">
+                  Excel Employee Import & Audit Center
+                </h1>
+              </div>
+              <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
+                Bulk onboard employees, auto-fill non-compulsory fields, detect dynamic columns, and manage date-wise upload history.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+            <button
+              onClick={downloadSampleTemplate}
+              className="bg-white dark:bg-[#151515] hover:bg-slate-50 dark:hover:bg-[#1e1e1e] text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download Sample Excel</span>
+            </button>
+            <button
+              onClick={() => setViewMode("roster")}
+              className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              <span>Back to Roster</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Section 1: Drag-and-Drop Excel Upload & Live Data Preview Workspace */}
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 sm:p-6 shadow-xs dark:neon-glow space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+            <div className="flex items-center space-x-2">
+              <Upload className="w-5 h-5 text-teal-500" />
+              <h2 className="font-display font-bold text-slate-800 dark:text-white text-base">
+                Upload New Excel / CSV Spreadsheet
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400 dark:text-gray-500">
+              Supported Formats: .xlsx, .xls, .csv
+            </span>
+          </div>
+
+          {/* Interactive Drag & Drop Area */}
+          <div
+            onClick={() => bulkFileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${bulkFile
+              ? "border-teal-500 bg-teal-50/20 dark:bg-teal-950/10"
+              : "border-slate-200 dark:border-[#222] hover:border-emerald-500 bg-slate-50/50 dark:bg-[#0a0a0a]"
+              }`}
+          >
+            <input
+              ref={bulkFileInputRef}
+              type="file"
+              accept=".xlsx, .xls, .csv"
+              onChange={handleBulkFileChange}
+              className="hidden"
+            />
+
+            <Upload className="w-10 h-10 mx-auto text-slate-400 dark:text-gray-500 mb-2 animate-bounce" />
+
+            {bulkFile ? (
+              <div>
+                <span className="font-bold text-slate-800 dark:text-white text-base block">
+                  {bulkFile.name}
+                </span>
+                <span className="text-xs text-slate-400 dark:text-gray-500 mt-1 block">
+                  {(bulkFile.size / 1024).toFixed(1)} KB • Click to choose a different file
+                </span>
+              </div>
+            ) : (
+              <div>
+                <span className="font-bold text-slate-700 dark:text-gray-300 text-sm block">
+                  Click or Drag & Drop Excel File Here
+                </span>
+                <span className="text-xs text-slate-400 dark:text-gray-500 mt-1 block">
+                  Supports standard fields + any new dynamic fields automatically
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Parsing Errors */}
+          {bulkError && (
+            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400 flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+
+          {/* Parsed Data Preview Table */}
+          {parsedBulkData.length > 0 && (
+            <div className="space-y-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-50 dark:bg-[#0a0a0a] p-3.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-slate-800 dark:text-white text-xs">
+                    Parsed {parsedBulkData.length} Employee Record{parsedBulkData.length > 1 ? "s" : ""}
+                  </span>
+                  <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    Ready to Onboard
+                  </span>
+                </div>
+
+                {customFieldHeaders.length > 0 && (
+                  <div className="flex items-center space-x-1.5 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 px-3 py-1 rounded-lg text-xs">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="font-semibold">
+                      New Dynamic Fields Detected: {customFieldHeaders.join(", ")}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Informational Banner */}
+              <div className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 text-xs text-slate-600 dark:text-gray-300">
+                💡 <strong>Smart Fallback Info:</strong> Non-compulsory missing fields (Joining Date, Salary Components, Bank Defaults, Emergency Contacts) will be automatically populated with smart defaults.
+              </div>
+
+              {/* Full Width Table */}
+              <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a]">
+                    <tr>
+                      <th className="p-3 font-bold">#</th>
+                      <th className="p-3 font-bold">Full Name</th>
+                      <th className="p-3 font-bold">Email</th>
+                      <th className="p-3 font-bold">Role / Dept</th>
+                      <th className="p-3 font-bold">Phone</th>
+                      <th className="p-3 font-bold">Branch</th>
+                      {customFieldHeaders.map(ch => (
+                        <th key={ch} className="p-3 font-bold text-teal-600 dark:text-teal-400">
+                          {ch} ⭐
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
+                    {parsedBulkData.map((emp, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
+                        <td className="p-3 font-mono text-[11px] text-slate-400">{idx + 1}</td>
+                        <td className="p-3 font-bold text-slate-800 dark:text-white">
+                          {emp.fullName || emp.name || `Employee ${idx + 1}`}
+                        </td>
+                        <td className="p-3 text-slate-500 dark:text-gray-400 font-mono text-[11px]">
+                          {emp.email || "(Auto-generated)"}
+                        </td>
+                        <td className="p-3">
+                          {emp.role || "employee"} • {emp.department || "Loans"}
+                        </td>
+                        <td className="p-3 font-mono text-[11px]">
+                          {emp.phone || "+91 99999 00000"}
+                        </td>
+                        <td className="p-3">
+                          {emp.branch || "Mumbai Branch"}
+                        </td>
+                        {customFieldHeaders.map(ch => (
+                          <td key={ch} className="p-3 font-mono text-teal-600 dark:text-teal-300 font-bold text-[11px]">
+                            {String(emp.customFields?.[ch] ?? "-")}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  disabled={!parsedBulkData.length || isProcessingBulk}
+                  onClick={handleExecuteBulkSubmit}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+                >
+                  {isProcessingBulk ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Processing & Saving Upload Log...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Onboard {parsedBulkData.length} Employees & Save XL Log</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Upload History & Audit Log Table (Date-wise, Newest on Top) */}
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 sm:p-6 shadow-xs dark:neon-glow space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+            <div className="flex items-center space-x-2.5">
+              <History className="w-5 h-5 text-emerald-500" />
+              <div>
+                <h2 className="font-display font-bold text-slate-800 dark:text-white text-base">
+                  Uploaded Excel Files Archive (Newest On Top)
+                </h2>
+                <p className="text-xs text-slate-400 dark:text-gray-500">
+                  Audit log of all uploaded spreadsheets, dates, uploader details, and imported counts.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={fetchUploadHistory}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer hover:underline"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Refresh Log</span>
+            </button>
+          </div>
+
+          {loadingHistory ? (
+            <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />
+              <span>Loading upload history logs...</span>
+            </div>
+          ) : uploadHistory.length === 0 ? (
+            <div className="py-10 text-center space-y-2">
+              <FileSpreadsheet className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto" />
+              <p className="text-xs text-slate-400 dark:text-gray-500">No Excel file uploads recorded yet in database.</p>
+            </div>
+          ) : (
+            <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a]">
+                  <tr>
+                    <th className="p-3 font-bold">Upload Date & Time</th>
+                    <th className="p-3 font-bold">Filename</th>
+                    <th className="p-3 font-bold">Uploaded By</th>
+                    <th className="p-3 font-bold">Agents Imported</th>
+                    <th className="p-3 font-bold">Dynamic Custom Fields</th>
+                    <th className="p-3 font-bold">Status</th>
+                    <th className="p-3 font-bold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
+                  {uploadHistory.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
+                      <td className="p-3 font-mono text-[11px] text-slate-500 dark:text-gray-400">
+                        <div className="flex items-center space-x-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{new Date(item.uploadedAt).toLocaleString()}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-bold text-slate-800 dark:text-white">
+                        <div className="flex items-center space-x-2">
+                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>{item.filename}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-600 dark:text-gray-300">
+                        <div className="flex items-center space-x-1.5">
+                          <User className="w-3.5 h-3.5 text-slate-400" />
+                          <span>{item.uploadedByName}</span>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full text-[11px]">
+                          +{item.recordCount} Agents
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {item.detectedCustomFields && item.detectedCustomFields.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {item.detectedCustomFields.map(f => (
+                              <span key={f} className="bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-semibold px-2 py-0.5 rounded-md text-[10px] border border-teal-100 dark:border-teal-900/30">
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">Standard Fields Only</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/40">
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        {item.fileData ? (
+                          <button
+                            onClick={() => downloadUploadedFile(item)}
+                            className="text-emerald-600 hover:text-emerald-700 font-semibold text-[11px] flex items-center space-x-1 ml-auto cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download XL</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">Saved</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Search Filter and Action Header */}
@@ -397,16 +968,18 @@ export default function DirectoryView({
         </div>
 
         {(role === "admin" || role === "hr") && (
-          <button
-            onClick={() => {
-              setShowOnboardForm(true);
-              setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"));
-            }}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs shadow-emerald-600/10 dark:shadow-emerald-500/20 shrink-0"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Onboard New Agent</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setShowOnboardForm(true);
+                setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"));
+              }}
+              className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Onboard New Agent</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -428,8 +1001,8 @@ export default function DirectoryView({
                   key={emp.id}
                   onClick={() => setActiveEmpId(emp.id)}
                   className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center space-x-3 ${isActive
-                      ? "bg-emerald-50/75 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs"
-                      : "bg-slate-50/50 dark:bg-[#0a0a0a]/50 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/80 border-slate-100/50 dark:border-[#1a1a1a]"
+                    ? "bg-emerald-50/75 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs"
+                    : "bg-slate-50/50 dark:bg-[#0a0a0a]/50 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/80 border-slate-100/50 dark:border-[#1a1a1a]"
                     }`}
                 >
                   <div className="relative">
@@ -481,8 +1054,8 @@ export default function DirectoryView({
                       <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white flex items-center space-x-2">
                         <span>{activeEmployee.fullName}</span>
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide ${activeEmployee.status === "Active"
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                          : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
                           }`}>{activeEmployee.status}</span>
                       </h2>
                       <p className="text-xs text-slate-500 dark:text-gray-400 font-medium mt-1">
@@ -568,6 +1141,25 @@ export default function DirectoryView({
                       </div>
                     </div>
                   </div>
+
+                  {/* Custom & Dynamic Attributes Section */}
+                  {activeEmployee.customFields && Object.keys(activeEmployee.customFields).length > 0 && (
+                    <div>
+                      <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
+                        <Sparkles className="w-4.5 h-4.5 text-teal-500 mr-2" /> Custom & Dynamic Attributes
+                      </h3>
+                      <div className="bg-teal-50/40 dark:bg-teal-950/20 rounded-xl p-3 space-y-2 border border-teal-100 dark:border-teal-900/30 text-xs">
+                        {Object.entries(activeEmployee.customFields).map(([key, value]) => (
+                          <div key={key} className="flex justify-between items-center py-1 border-b last:border-b-0 border-teal-100/50 dark:border-teal-900/20">
+                            <span className="text-slate-500 dark:text-gray-400 font-medium">{key}</span>
+                            <span className="font-bold text-slate-800 dark:text-teal-200 bg-white dark:bg-[#0f0f0f] px-2 py-0.5 rounded-md border border-teal-100 dark:border-teal-900/40 font-mono text-[11px]">
+                              {String(value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Onboarding Checklist Tracker */}
@@ -593,8 +1185,8 @@ export default function DirectoryView({
                           }
                         }}
                         className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${task.completed
-                            ? "bg-slate-50/50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a]/50 text-slate-500 dark:text-gray-400"
-                            : "bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/40 text-slate-700 dark:text-gray-300 cursor-pointer hover:bg-emerald-50/50"
+                          ? "bg-slate-50/50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a]/50 text-slate-500 dark:text-gray-400"
+                          : "bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/40 text-slate-700 dark:text-gray-300 cursor-pointer hover:bg-emerald-50/50"
                           }`}
                       >
                         <span className={`font-semibold ${task.completed ? "line-through text-slate-400 dark:text-gray-500" : ""}`}>{task.taskName}</span>
@@ -645,7 +1237,7 @@ export default function DirectoryView({
                       </div>
 
                       <div className="flex items-center space-x-2">
-                        <button 
+                        <button
                           type="button"
                           onClick={() => setPreviewDoc({
                             name: doc.name,
@@ -833,7 +1425,7 @@ export default function DirectoryView({
                         required
                       />
                     </div>
-                     <div>
+                    <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
                       <select
                         value={empRole}
@@ -1476,7 +2068,7 @@ export default function DirectoryView({
             <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center min-h-[420px] bg-slate-100/70 dark:bg-[#050505] custom-scrollbar">
               {previewDoc.url ? (
                 previewDoc.url.startsWith("data:image/") ||
-                /\.(jpg|jpeg|png|webp|svg|gif)(\?.*)?$/i.test(previewDoc.url) ? (
+                  /\.(jpg|jpeg|png|webp|svg|gif)(\?.*)?$/i.test(previewDoc.url) ? (
                   <img
                     src={previewDoc.url}
                     alt={previewDoc.name}
@@ -1734,6 +2326,225 @@ export default function DirectoryView({
                   </div>
                 )
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Bulk Upload Excel Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200 my-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-teal-50 dark:bg-teal-950/40 rounded-2xl flex items-center justify-center text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="font-display font-bold text-slate-800 dark:text-white text-base sm:text-lg">
+                    Bulk Onboard Employees
+                  </h2>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">
+                    Upload an Excel (.xlsx / .xls / .csv) file to add multiple agents at once.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowBulkModal(false);
+                  setBulkFile(null);
+                  setParsedBulkData([]);
+                  setBulkError(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Template Download Banner */}
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start space-x-3">
+                <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-800 dark:text-emerald-300 block mb-0.5">
+                    Need a template for employee data?
+                  </span>
+                  <span className="text-slate-500 dark:text-gray-400">
+                    Download our ready-to-use Excel template with sample records and all required/optional headers.
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={downloadSampleTemplate}
+                className="bg-white dark:bg-[#151515] hover:bg-slate-50 dark:hover:bg-[#1e1e1e] text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 transition-all shrink-0 cursor-pointer shadow-xs"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Sample Excel</span>
+              </button>
+            </div>
+
+            {/* File Upload Zone */}
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
+                Select or Drop Excel / CSV File:
+              </label>
+
+              <div
+                onClick={() => bulkFileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${bulkFile
+                  ? "border-teal-500 bg-teal-50/20 dark:bg-teal-950/10"
+                  : "border-slate-200 dark:border-[#222] hover:border-emerald-500 bg-slate-50/50 dark:bg-[#0a0a0a]"
+                  }`}
+              >
+                <input
+                  ref={bulkFileInputRef}
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  onChange={handleBulkFileChange}
+                  className="hidden"
+                />
+
+                <Upload className="w-8 h-8 mx-auto text-slate-400 dark:text-gray-500 mb-2" />
+
+                {bulkFile ? (
+                  <div>
+                    <span className="font-bold text-slate-800 dark:text-white text-sm block">
+                      {bulkFile.name}
+                    </span>
+                    <span className="text-xs text-slate-400 dark:text-gray-500">
+                      {(bulkFile.size / 1024).toFixed(1)} KB • Click to change file
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="font-semibold text-slate-700 dark:text-gray-300 text-xs block">
+                      Click to browse or drag & drop .xlsx / .csv file here
+                    </span>
+                    <span className="text-[11px] text-slate-400 dark:text-gray-500 mt-1 block">
+                      Supports standard columns + any new dynamic columns
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Parsing Errors */}
+            {bulkError && (
+              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{bulkError}</span>
+              </div>
+            )}
+
+            {/* Parsed Data Preview Section */}
+            {parsedBulkData.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-slate-800 dark:text-white text-xs">
+                      Parsed {parsedBulkData.length} Employee{parsedBulkData.length > 1 ? "s" : ""}
+                    </span>
+                    <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      Ready to Import
+                    </span>
+                  </div>
+
+                  {customFieldHeaders.length > 0 && (
+                    <div className="flex items-center space-x-1.5 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px]">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span className="font-semibold">
+                        New Dynamic Fields Detected: {customFieldHeaders.join(", ")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Information Callout */}
+                <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-2.5 text-[11px] text-slate-500 dark:text-gray-400 flex items-center justify-between">
+                  <span>
+                    💡 <strong>Smart Defaults:</strong> Missing optional fields (joining date, bank details, emergency contacts, salary structure) will be auto-populated automatically.
+                  </span>
+                </div>
+
+                {/* Preview Table */}
+                <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a] sticky top-0">
+                      <tr>
+                        <th className="p-2.5 font-bold">#</th>
+                        <th className="p-2.5 font-bold">Full Name</th>
+                        <th className="p-2.5 font-bold">Email</th>
+                        <th className="p-2.5 font-bold">Role / Dept</th>
+                        <th className="p-2.5 font-bold">Phone</th>
+                        {customFieldHeaders.map(ch => (
+                          <th key={ch} className="p-2.5 font-bold text-teal-600 dark:text-teal-400">
+                            {ch} ⭐
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
+                      {parsedBulkData.map((emp, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
+                          <td className="p-2.5 font-mono text-[11px] text-slate-400">{idx + 1}</td>
+                          <td className="p-2.5 font-bold text-slate-800 dark:text-white">
+                            {emp.fullName || emp.name || `Employee ${idx + 1}`}
+                          </td>
+                          <td className="p-2.5 text-slate-500 dark:text-gray-400 font-mono text-[11px]">
+                            {emp.email || "(Auto-generated)"}
+                          </td>
+                          <td className="p-2.5">
+                            {emp.role || "employee"} • {emp.department || "Loans"}
+                          </td>
+                          <td className="p-2.5 font-mono text-[11px]">
+                            {emp.phone || "+91 99999 00000"}
+                          </td>
+                          {customFieldHeaders.map(ch => (
+                            <td key={ch} className="p-2.5 font-mono text-teal-600 dark:text-teal-300 font-bold text-[11px]">
+                              {String(emp.customFields?.[ch] ?? "-")}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a]">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowBulkModal(false);
+                  setBulkFile(null);
+                  setParsedBulkData([]);
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-xl transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={!parsedBulkData.length || isProcessingBulk}
+                onClick={handleExecuteBulkSubmit}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all shadow-md cursor-pointer"
+              >
+                {isProcessingBulk ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Adding Employees...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    <span>Add {parsedBulkData.length || ""} Employees</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

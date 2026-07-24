@@ -249,7 +249,11 @@ export default function LeavesView({
               </div>
 
               <div className="space-y-3.5">
-                {leaves.filter(l => l.status === "Pending").map(leave => (
+                {leaves
+                  .filter(l => l.status === "Pending")
+                  .slice()
+                  .sort((a, b) => new Date(b.appliedDate || b.startDate || 0).getTime() - new Date(a.appliedDate || a.startDate || 0).getTime())
+                  .map(leave => (
                   <div key={leave.id} className="p-4 bg-slate-50/70 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs">
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center space-x-2">
@@ -343,9 +347,9 @@ export default function LeavesView({
                 .filter(l => (role === "employee" || ledgerFilter === "mine") ? l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase() : true)
                 .slice()
                 .sort((a, b) => {
-                  // Pending / newest leaves at the top
-                  if (a.status === "Pending" && b.status !== "Pending") return -1;
-                  if (a.status !== "Pending" && b.status === "Pending") return 1;
+                  const dateA = new Date(a.appliedDate || a.startDate || 0).getTime();
+                  const dateB = new Date(b.appliedDate || b.startDate || 0).getTime();
+                  if (dateB !== dateA) return dateB - dateA;
                   return (b.id || "").localeCompare(a.id || "");
                 })
                 .map(leave => {

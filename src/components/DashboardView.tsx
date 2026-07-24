@@ -561,8 +561,22 @@ export default function DashboardView({
                 : role === "hr"
                 ? leaves.filter(l => branchEmployees.some(e => e.id === l.employeeId))
                 : myLeaves
-              ).slice(0, 5).map(leave => {
-                const empName = leave.employeeName || employees.find(e => e.id === leave.employeeId)?.fullName || "Agent";
+              )
+              .slice()
+              .sort((a, b) => {
+                const dateA = new Date(a.appliedDate || a.startDate || 0).getTime();
+                const dateB = new Date(b.appliedDate || b.startDate || 0).getTime();
+                if (dateB !== dateA) return dateB - dateA;
+                return (b.id || "").localeCompare(a.id || "");
+              })
+              .slice(0, 5).map(leave => {
+                const matchedEmp = employees.find(e => e.id === leave.employeeId);
+                const empName = (matchedEmp && matchedEmp.fullName)
+                  ? matchedEmp.fullName
+                  : (leave.employeeName && !leave.employeeName.startsWith("Employee EMP-") && !leave.employeeName.startsWith("Employee "))
+                  ? leave.employeeName
+                  : (matchedEmp?.fullName || leave.employeeId || "Agent");
+
                 const statusVal = leave.status || "Pending";
                 return (
                   <tr key={leave.id || `lvr-${Math.random()}`} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
