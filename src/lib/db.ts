@@ -37,14 +37,14 @@ const initialPolicies: Policy[] = [
     id: "pol-1",
     title: "Code of Conduct & Ethics",
     category: "Conduct & Ethics",
-    content: "SnailHR and our NBFC parent organisation are committed to maintaining strict professional ethics, workplace integrity, and regulatory compliance. Employees must uphold confidentiality, prevent conflicts of interest, and treat clients and team members with respect.",
+    content: "MGM FINANCIERS PRIV LIMITED and our NBFC parent organisation are committed to maintaining strict professional ethics, workplace integrity, and regulatory compliance. Employees must uphold confidentiality, prevent conflicts of interest, and treat clients and team members with respect.",
     lastUpdated: "2026-01-15"
   },
   {
     id: "pol-2",
     title: "Annual Leave & Attendance Policy",
     category: "Employee Benefits",
-    content: "Every active employee receives annual leave allowances including Casual Leave, Medical Leave, and Earned Leave. Daily attendance punches must be logged via SnailHR. Leaves must be applied in advance and approved by HR or reporting managers.",
+    content: "Every active employee receives annual leave allowances including Casual Leave, Medical Leave, and Earned Leave. Daily attendance punches must be logged via MGM FINANCIERS PRIV LIMITED. Leaves must be applied in advance and approved by HR or reporting managers.",
     lastUpdated: "2026-02-01"
   },
   {

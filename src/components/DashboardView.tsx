@@ -120,7 +120,7 @@ export default function DashboardView({
             <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full w-fit">
               <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
               <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100">
-                {role === "admin" ? "SnailHR System Administrator Portal" : role === "hr" ? `SnailHR Branch Management Desk (${userBranch})` : "SnailHR Employee Workspace"}
+                {role === "admin" ? "MGM FINANCIERS PRIV LIMITED System Administrator Portal" : role === "hr" ? `MGM FINANCIERS PRIV LIMITED Branch Management Desk (${userBranch})` : "MGM FINANCIERS PRIV LIMITED Employee Workspace"}
               </span>
             </div>
             

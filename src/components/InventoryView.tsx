@@ -245,7 +245,7 @@ export default function InventoryView({
                       type="text"
                       value={serialNumber}
                       onChange={(e) => setSerialNumber(e.target.value)}
-                      placeholder="e.g. SNAIL-LP-8849"
+                      placeholder="e.g. MGM-LP-8849"
                       className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       required
                     />

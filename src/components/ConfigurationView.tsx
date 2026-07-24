@@ -480,9 +480,9 @@ ON CONFLICT (key) DO NOTHING;`;
             </div>
 
             <div className="bg-emerald-50/40 dark:bg-emerald-950/10 p-3.5 rounded-xl border border-emerald-100/50 dark:border-emerald-900/30 text-[11px] text-emerald-800 dark:text-emerald-400 leading-normal">
-              <span className="font-bold">How SnailHR Sync Works</span>
+              <span className="font-bold">How MGM FINANCIERS PRIV LIMITED Sync Works</span>
               <p className="mt-1 text-emerald-700/80 dark:text-emerald-400/80">
-                SnailHR utilizes an ultra-fast, robust cloud sync pipeline. The entire organizational state is automatically read and synchronized in an atomic key-value configuration. If your database table is pending, the app automatically fails-safe to the local JSON filesystem, so operations never halt!
+                MGM FINANCIERS PRIV LIMITED utilizes an ultra-fast, robust cloud sync pipeline. The entire organizational state is automatically read and synchronized in an atomic key-value configuration. If your database table is pending, the app automatically fails-safe to the local JSON filesystem, so operations never halt!
               </p>
             </div>
           </div>
@@ -524,7 +524,7 @@ ON CONFLICT (key) DO NOTHING;`;
                   <li>Log in to your <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">Supabase Dashboard</a> and open your project.</li>
                   <li>Click on the <b>SQL Editor</b> icon in the left-hand navigation sidebar.</li>
                   <li>Click <b>New Query</b>, paste the SQL code snippet above into the console.</li>
-                  <li>Click the <b>Run</b> button. The table will be provisioned in milliseconds, and SnailHR will instantly sync live!</li>
+                  <li>Click the <b>Run</b> button. The table will be provisioned in milliseconds, and MGM FINANCIERS PRIV LIMITED will instantly sync live!</li>
                 </ol>
               </div>
             </div>

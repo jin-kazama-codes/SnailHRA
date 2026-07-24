@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const onLeaveToday = dbState.leaves.filter(l => l.status === "Approved" && l.startDate <= todayStr && l.endDate >= todayStr).length;
 
     const statsContext = `
-Live SnailHR Database Summary:
+Live MGM FINANCIERS PRIV LIMITED Database Summary:
 - Total Employees Registered: ${dbState.employees.length} (${activeEmpCount} Active)
 - Attendance Today (${todayStr}): ${presentToday} Present, ${onLeaveToday} Approved On Leave
 - Total Active Policies: ${dbState.policies.length}
@@ -127,12 +127,12 @@ Logged-in Employee Context:
     }).join("\n");
 
     const systemInstruction = `
-You are SnailHR AI Assistant, a helpful and highly professional human resources companion built for SnailHR (a modern NBFC HR tech platform).
+You are MGM FINANCIERS PRIV LIMITED AI Assistant, a helpful and highly professional human resources companion built for MGM FINANCIERS PRIV LIMITED (a modern NBFC HR tech platform).
 Your primary job is to assist HR managers, Admins, and Employees with their queries in a concise, warm, objective, and extremely polite tone.
 
 Context Guidelines:
-- Today's date is strictly ${formattedToday} (${todayStr}). SnailHR is based in India.
-- You have live access to the SnailHR database. Use the database context below to answer queries exactly.
+- Today's date is strictly ${formattedToday} (${todayStr}). MGM FINANCIERS PRIV LIMITED is based in India.
+- You have live access to the MGM FINANCIERS PRIV LIMITED database. Use the database context below to answer queries exactly.
 - Keep answers structured with simple bullet points where applicable.
 - Data Privacy Constraint:
   * Logged-in user's role is "${userRole}".
@@ -297,11 +297,11 @@ function getSmartRuleResponse(message: string, dbState: any, employee: any): str
     }
 
     const allPolicies = (dbState.policies || []).map((p: any) => `• **${p.title}** (${p.category})`).join("\n");
-    return `### 📖 Company Policies Overview\n\n${allPolicies || "Standard SnailHR compliance rules apply."}`;
+    return `### 📖 Company Policies Overview\n\n${allPolicies || "Standard MGM FINANCIERS PRIV LIMITED compliance rules apply."}`;
   }
 
   // 6. General query fallback
-  return `Hello! I am your SnailHR AI Assistant.\n\n` +
+  return `Hello! I am your MGM FINANCIERS PRIV LIMITED AI Assistant.\n\n` +
     `Live status summary:\n` +
     `• **Active Employees**: ${(dbState.employees || []).length}\n` +
     `• **Upcoming Holidays**: ${(dbState.holidays || []).length} scheduled\n` +

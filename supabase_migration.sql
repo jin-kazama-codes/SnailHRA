@@ -1,5 +1,5 @@
 -- ============================================================
---  SnailHRA - Complete Database Migration Script
+--  MGM FINANCIERS PRIV LIMITED - Complete Database Migration Script
 --  Generated from: db_snailhr.json
 --  Target: Supabase (PostgreSQL)
 -- ============================================================
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS employees (
   role                    TEXT NOT NULL,        -- "admin" | "hr" | "employee"
   designation_id          TEXT REFERENCES designations(id) ON DELETE SET NULL,
   department              TEXT,
-  branch                  TEXT DEFAULT 'Snail Mumbai HQ',
+  branch                  TEXT DEFAULT 'MGM Mumbai HQ',
   joining_date            DATE,
   status                  TEXT DEFAULT 'Active', -- "Active" | "Inactive"
   address                 TEXT,
@@ -745,7 +745,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 9. POLICIES
 INSERT INTO policies (id, title, category, content, last_updated) VALUES
   ('pol-1','Code of Conduct & Ethics','Conduct & Ethics',
-   'SnailHR and our NBFC parent are committed to the highest standards of professional integrity. Employees must ensure that all loan interest calculations and insurance loading charges are explicitly disclosed to customers. Misrepresentation of terms, processing fees, or tie-up commissions is strictly prohibited.',
+   'MGM FINANCIERS PRIV LIMITED and our NBFC parent are committed to the highest standards of professional integrity. Employees must ensure that all loan interest calculations and insurance loading charges are explicitly disclosed to customers. Misrepresentation of terms, processing fees, or tie-up commissions is strictly prohibited.',
    '2026-01-10'),
   ('pol-2','Annual Leave & Attendance Policy','Employee Benefits',
    'Every active employee receives 18 Casual Leaves and 12 Medical Leaves per year. Attendance punches should be recorded between 09:00 AM and 06:30 PM. Clocking in after 09:30 AM is considered Late. Consecutive late-comings of more than 3 days per month will attract an automatic system fine of Rs. 500.',

@@ -152,7 +152,7 @@ export default function FinesView({
                   <option value="Late Coming">Late Coming (Attendance policy breach)</option>
                   <option value="Compliance Violation">Compliance Violation (Secure CRM breach)</option>
                   <option value="Unprofessional Conduct">Unprofessional Conduct</option>
-                  <option value="Lost Asset">Lost / Damaged SnailHR Assets</option>
+                  <option value="Lost Asset">Lost / Damaged MGM FINANCIERS PRIV LIMITED Assets</option>
                 </select>
               </div>
 

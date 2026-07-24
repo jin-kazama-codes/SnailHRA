@@ -97,7 +97,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
     {
       id: "msg-init",
       sender: "bot",
-      text: `Hello! I am your SnailHR AI Assistant. How can I help you today?`,
+      text: `Hello! I am your MGM FINANCIERS PRIV LIMITED AI Assistant. How can I help you today?`,
       timestamp: new Date()
     }
   ]);
@@ -173,7 +173,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
       const errorMsg: Message = {
         id: `msg-err-${Date.now()}`,
         sender: "bot",
-        text: "I encountered an issue connecting to the AI SnailHR Core. Please ensure your GEMINI_API_KEY is configured in Settings > Secrets.",
+        text: "I encountered an issue connecting to the AI MGM FINANCIERS PRIV LIMITED Core. Please ensure your GEMINI_API_KEY is configured in Settings > Secrets.",
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -210,7 +210,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 z-50 bg-emerald-600 hover:bg-emerald-500 text-white p-3.5 rounded-full shadow-lg hover:shadow-emerald-950/20 hover:scale-105 transition-all flex items-center justify-center cursor-pointer border border-emerald-500/20"
-        title="Chat with SnailHR AI"
+        title="Chat with MGM FINANCIERS PRIV LIMITED AI"
       >
         {isOpen ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5 fill-white" />}
       </button>
@@ -226,7 +226,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
                 <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
               </div>
               <div>
-                <h3 className="font-display font-semibold text-xs text-white">SnailHR Assistant</h3>
+                <h3 className="font-display font-semibold text-xs text-white">MGM FINANCIERS PRIV LIMITED Assistant</h3>
                 <span className="text-[10px] text-emerald-200">Gemini 3.5 AI Core • Live</span>
               </div>
             </div>

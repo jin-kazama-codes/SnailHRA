@@ -59,14 +59,14 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
 
         {/* Branding & Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-xl tracking-tighter shadow-md shadow-emerald-600/20 mb-3 animate-pulse">
-            S
+          <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 rounded-2xl flex items-center justify-center text-white font-black text-base tracking-tight shadow-lg shadow-emerald-600/20 mb-3.5">
+            MGM
           </div>
-          <h2 className="font-display font-extrabold text-2xl tracking-tight text-slate-800 dark:text-white">
-            Snail<span className="text-emerald-500">HR</span>
+          <h2 className="font-display font-extrabold text-xl tracking-tight text-slate-800 dark:text-white text-center">
+            MGM <span className="text-emerald-500">FINANCIERS</span>
           </h2>
-          <p className="text-xs text-slate-400 dark:text-gray-500 font-semibold tracking-wider uppercase mt-1">
-            Enterprise Workforce Suite
+          <p className="text-[10px] text-slate-400 dark:text-gray-500 font-bold tracking-widest uppercase mt-0.5">
+            PRIV LIMITED • ENTERPRISE HRMS
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. amit.sharma@snailhr.com"
+                placeholder="e.g. amit.sharma@mgmfinanciers.com"
                 className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-11 pr-4 py-3 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium transition-colors"
                 required
                 disabled={loading}
@@ -141,7 +141,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       </div>
 
       <div className="mt-8 text-center text-[10px] text-slate-400 dark:text-gray-500">
-        <p className="font-bold">SnailHR Platform Suite</p>
+        <p className="font-bold">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
         <p className="mt-0.5">Licensed NBFC Workforce Technology • v2.4</p>
       </div>
     </div>

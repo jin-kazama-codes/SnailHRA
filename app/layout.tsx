@@ -3,7 +3,7 @@ import "@/src/index.css";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "SnailHR - NBFC Workforce & HR Tech Platform",
+  title: "MGM FINANCIERS PRIV LIMITED - NBFC Workforce & HR Tech Platform",
   description: "Next-gen enterprise HR platform for attendance, payroll, leaves, expenses, and AI automation.",
 };
 

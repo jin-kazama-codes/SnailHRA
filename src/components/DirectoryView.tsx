@@ -807,7 +807,7 @@ export default function DirectoryView({
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="e.g. vikram@snailhr.com"
+                        placeholder="e.g. vikram@mgmfinanciers.com"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                         required
                       />
@@ -1619,10 +1619,10 @@ export default function DirectoryView({
                     <div className="border-b-2 border-slate-800 pb-4 mb-6 flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-emerald-700 text-white rounded-lg flex items-center justify-center font-bold text-lg">
-                          S
+                          M
                         </div>
                         <div>
-                          <h2 className="font-bold text-slate-900 text-base tracking-wide uppercase">SnailHR Financial Services Ltd.</h2>
+                          <h2 className="font-bold text-slate-900 text-base tracking-wide uppercase">MGM FINANCIERS PRIV LIMITED</h2>
                           <p className="text-[10px] text-slate-500 font-medium">Compliance & Verification Vault • Official Document Record</p>
                         </div>
                       </div>
@@ -1679,7 +1679,7 @@ export default function DirectoryView({
 
                             <div>
                               <span className="text-[10px] text-slate-400 block uppercase font-bold">Registered Branch</span>
-                              <span className="text-slate-700 font-medium text-[11px]">{activeEmployee?.branch || "Snail Mumbai HQ"}</span>
+                              <span className="text-slate-700 font-medium text-[11px]">{activeEmployee?.branch || "MGM Mumbai HQ"}</span>
                             </div>
                           </div>
                         </div>
@@ -1697,13 +1697,13 @@ export default function DirectoryView({
                     ) : (
                       <div className="space-y-5 text-xs text-slate-700 leading-relaxed">
                         <p className="font-serif italic text-slate-600">
-                          This document certifies that <strong className="text-slate-900">"{previewDoc.name}"</strong> has been executed and deposited into the official SnailHR Compliance Vault for employee <strong className="text-slate-900">{activeEmployee?.fullName || "Employee"}</strong> ({activeEmployee?.id || "EMP-1001"}).
+                          This document certifies that <strong className="text-slate-900">"{previewDoc.name}"</strong> has been executed and deposited into the official MGM FINANCIERS PRIV LIMITED Compliance Vault for employee <strong className="text-slate-900">{activeEmployee?.fullName || "Employee"}</strong> ({activeEmployee?.id || "EMP-1001"}).
                         </p>
 
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
                           <div className="flex justify-between border-b border-slate-200 pb-1.5">
                             <span className="text-slate-500">Executing Entity:</span>
-                            <span className="font-semibold text-slate-900">SnailHR Financial Services Ltd.</span>
+                            <span className="font-semibold text-slate-900">MGM FINANCIERS PRIV LIMITED</span>
                           </div>
                           <div className="flex justify-between border-b border-slate-200 pb-1.5">
                             <span className="text-slate-500">Assigned Employee:</span>
@@ -1722,7 +1722,7 @@ export default function DirectoryView({
                         <div className="pt-4 flex items-center justify-between border-t border-slate-200">
                           <div>
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Digital Signature</p>
-                            <p className="font-serif italic text-emerald-800 text-sm font-semibold mt-1">SnailHR Operations Bot</p>
+                            <p className="font-serif italic text-emerald-800 text-sm font-semibold mt-1">MGM FINANCIERS PRIV LIMITED Operations Bot</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Date of Archive</p>

@@ -162,7 +162,7 @@ export default function App() {
   const refreshDatabase = async () => {
     try {
       const res = await fetch("/api/data");
-      if (!res.ok) throw new Error("Failed to fetch SnailHR database.");
+      if (!res.ok) throw new Error("Failed to fetch MGM FINANCIERS PRIV LIMITED database.");
       const data = await res.json();
 
       const fetchedEmployees = (data.employees || []).sort((a: any, b: any) => {
@@ -265,7 +265,7 @@ export default function App() {
       setError(null);
     } catch (err: any) {
       console.error("refreshDatabase error:", err);
-      setError("Could not establish a connection to the SnailHR full-stack service.");
+      setError("Could not establish a connection to the MGM FINANCIERS PRIV LIMITED full-stack service.");
     } finally {
       setLoading(false);
     }
@@ -1059,7 +1059,7 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100">
         <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
-        <p className="text-xs font-semibold mt-4 tracking-widest uppercase text-slate-400 dark:text-gray-500">Booting SnailHR Cloud Core...</p>
+        <p className="text-xs font-semibold mt-4 tracking-widest uppercase text-slate-400 dark:text-gray-500">Booting MGM FINANCIERS PRIV LIMITED Cloud Core...</p>
       </div>
     );
   }
@@ -1117,11 +1117,18 @@ export default function App() {
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
-          <div className="flex items-center space-x-2">
-            <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-black text-sm tracking-tighter">
-              S
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl flex items-center justify-center text-white font-black text-[11px] tracking-tight shadow-md shadow-emerald-600/20">
+              MGM
             </div>
-            <span className="font-display font-extrabold text-base sm:text-lg text-slate-800 dark:text-white tracking-tight">Snail<span className="text-emerald-500">HR</span></span>
+            <div className="flex flex-col">
+              <span className="font-display font-extrabold text-sm sm:text-base text-slate-800 dark:text-white tracking-tight leading-none">
+                MGM <span className="text-emerald-500">FINANCIERS</span>
+              </span>
+              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
+                PRIV LIMITED
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1208,7 +1215,7 @@ export default function App() {
           </nav>
 
           <div className="pt-6 border-t border-slate-50 dark:border-[#1a1a1a]/80 text-[10px] text-slate-400 dark:text-gray-500">
-            <p className="font-bold font-display text-slate-800 dark:text-white">SnailHR Platform Suite</p>
+            <p className="font-bold font-display text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
             <p className="mt-1">NBFC Licensed Broker Edition v2.4</p>
             <p className="font-mono mt-2">UTC: {new Date().toISOString().split('T')[0]}</p>
           </div>
@@ -1220,7 +1227,7 @@ export default function App() {
             <div className="bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a] w-64 p-4 flex flex-col justify-between h-full animate-in slide-in-from-left duration-200">
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-                  <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">SnailHR Menu</span>
+                  <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">MGM FINANCIERS Menu</span>
                   <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-slate-400">
                     <X className="w-5 h-5" />
                   </button>
@@ -1269,7 +1276,7 @@ export default function App() {
               </div>
 
               <div className="text-[10px] text-slate-400 dark:text-gray-500 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
-                <p className="font-bold text-slate-800 dark:text-white">SnailHR Platform Suite</p>
+                <p className="font-bold text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
                 <p className="font-mono mt-1">v2.4 - Mobile Secured</p>
               </div>
             </div>

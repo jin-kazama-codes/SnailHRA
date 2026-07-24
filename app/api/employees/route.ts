@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       onboardingTasks: body.onboardingTasks || [
         { id: `tsk-auto-${empId}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: body.joiningDate || "2026-07-25" },
         { id: `tsk-auto-${empId}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: body.joiningDate || "2026-07-27" },
-        { id: `tsk-auto-${empId}-3`, taskName: "Allocate SnailHR Credentials & Assets", completed: false, dueDate: body.joiningDate || "2026-07-28" }
+        { id: `tsk-auto-${empId}-3`, taskName: "Allocate MGM FINANCIERS PRIV LIMITED Credentials & Assets", completed: false, dueDate: body.joiningDate || "2026-07-28" }
       ],
       avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       bio: body.bio || "",

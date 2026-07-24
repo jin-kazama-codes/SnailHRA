@@ -497,7 +497,7 @@ export default function PayrollView({
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-emerald-300" />
                 <div>
-                  <h3 className="font-display font-bold text-md leading-none">SnailHR Compensation Audit</h3>
+                  <h3 className="font-display font-bold text-md leading-none">MGM FINANCIERS PRIV LIMITED Compensation Audit</h3>
                   <p className="text-[10px] text-emerald-100 mt-1 font-mono">ID: {activeSlip.id}</p>
                 </div>
               </div>
@@ -523,7 +523,7 @@ export default function PayrollView({
               {/* Employer Info */}
               <div className="flex justify-between items-start border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
                 <div>
-                  <h2 className="text-sm font-bold text-slate-800 dark:text-white">SNAIL HR SOLUTIONS & FINANCE</h2>
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED</h2>
                   <p className="text-slate-400 mt-0.5">Corporate Headquarters, Bandra-Kurla Complex</p>
                   <p className="text-slate-400">Mumbai, MH - 400051</p>
                 </div>
@@ -617,7 +617,7 @@ export default function PayrollView({
               </div>
 
               <p className="text-[10px] text-slate-400 dark:text-gray-500 text-center leading-normal pt-2">
-                This is a computer-generated salary slip in SnailHR. No physical seal or handwritten signatures are required. Legal inquiries may be routed to priya.patel@snailhr.com.
+                This is a computer-generated salary slip in MGM FINANCIERS PRIV LIMITED. No physical seal or handwritten signatures are required. Legal inquiries may be routed to priya.patel@mgmfinanciers.com.
               </p>
             </div>
           </div>
