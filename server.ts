@@ -10,8 +10,9 @@ import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings 
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord 
 } from "./src/types";
+import { generateGuaranteedUniqueEmployeeId } from "./src/lib/idGenerator";
 
 // Setup __dirname and __filename in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +42,7 @@ interface AppState {
   customDepartments: string[];
   customBranches: string[];
   timingSettings: TimingSettings;
+  excelUploads?: ExcelUploadRecord[];
 }
 
 const initialDesignations: Designation[] = [];
@@ -191,6 +193,54 @@ async function fetchLeavesFromSupabase(): Promise<LeaveRequest[] | null> {
     }
   }
   return null;
+}
+
+async function syncExcelUploadToSupabase(record: ExcelUploadRecord) {
+  if (supabase) {
+    try {
+      const payload = {
+        id: record.id,
+        filename: record.filename,
+        uploaded_at: record.uploadedAt,
+        uploaded_by_name: record.uploadedByName,
+        uploaded_by_id: record.uploadedById,
+        record_count: record.recordCount,
+        detected_custom_fields: record.detectedCustomFields,
+        status: record.status,
+        file_data: record.fileData
+      };
+      await supabase.from("excel_uploads").upsert(payload, { onConflict: "id" });
+    } catch (err) {
+      console.warn("Supabase excel_uploads upsert warning:", err);
+    }
+  }
+}
+
+async function fetchExcelUploadsFromSupabase(): Promise<ExcelUploadRecord[]> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from("excel_uploads").select("*").order("uploaded_at", { ascending: false });
+      if (!error && data) {
+        db.excelUploads = data.map((row: any) => ({
+          id: row.id,
+          filename: row.filename,
+          uploadedAt: row.uploaded_at || row.uploadedAt,
+          uploadedByName: row.uploaded_by_name || row.uploadedByName || "Admin User",
+          uploadedById: row.uploaded_by_id || row.uploadedById || "",
+          recordCount: Number(row.record_count ?? row.recordCount ?? 0),
+          detectedCustomFields: typeof row.detected_custom_fields === "string" 
+            ? JSON.parse(row.detected_custom_fields) 
+            : (row.detected_custom_fields || []),
+          status: row.status || "Success",
+          fileData: row.file_data || row.fileData || ""
+        }));
+        return db.excelUploads;
+      }
+    } catch (err) {
+      console.warn("Error fetching excel_uploads from Supabase:", err);
+    }
+  }
+  return db.excelUploads || [];
 }
 
 async function fetchAllFromSupabase(): Promise<AppState> {
@@ -546,7 +596,7 @@ async function startServer() {
       return res.status(400).json({ error: "Full Name and Email are required" });
     }
     
-    const newEmpId = "EMP-" + (1000 + db.employees.length + 1);
+    const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
     
     // Hash password
     const rawPassword = empData.password || "Nawaz123#";
@@ -609,6 +659,160 @@ async function startServer() {
     await syncEmployeeToSupabase(newEmp);
 
     res.status(201).json(newEmp);
+  });
+
+  // 4b. Bulk Onboard Employees via Excel Spreadsheet Upload
+  app.post("/api/employees/bulk", async (req, res) => {
+    try {
+      const { employees: incomingEmployees, filename, fileData, uploadedByName, uploadedById } = req.body;
+
+      if (!Array.isArray(incomingEmployees) || incomingEmployees.length === 0) {
+        return res.status(400).json({ error: "No employee records provided in bulk request" });
+      }
+
+      if (!db.excelUploads) {
+        db.excelUploads = [];
+      }
+
+      const createdEmployees: Employee[] = [];
+      const customFieldsSet = new Set<string>();
+
+      const salt = bcrypt.genSaltSync(10);
+      const defaultHashedPassword = bcrypt.hashSync("MGM@1234", salt);
+
+      for (let i = 0; i < incomingEmployees.length; i++) {
+        const empData = incomingEmployees[i];
+        const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
+
+        // Find designation match if title is provided
+        let desigId = "des-4";
+        if (empData.designationTitle) {
+          const match = db.designations.find(d =>
+            d.title.toLowerCase().trim() === String(empData.designationTitle).toLowerCase().trim()
+          );
+          if (match) desigId = match.id;
+        }
+
+        // Hash custom password if provided, else use default
+        let empPassword = defaultHashedPassword;
+        if (empData.password) {
+          empPassword = bcrypt.hashSync(String(empData.password), salt);
+        }
+
+        // Collect custom fields
+        if (empData.customFields && typeof empData.customFields === "object") {
+          Object.keys(empData.customFields).forEach(k => customFieldsSet.add(k));
+        }
+
+        const newEmp: Employee = {
+          id: newEmpId,
+          fullName: empData.fullName || `Agent ${newEmpId}`,
+          email: empData.email || `agent.${newEmpId.toLowerCase()}@mgmfinanciers.com`,
+          phone: empData.phone || "+91 98765 00000",
+          role: (empData.role?.toLowerCase() === "admin" || empData.role?.toLowerCase() === "hr") ? empData.role.toLowerCase() : "employee",
+          designationId: desigId,
+          department: empData.department || "Loans",
+          branch: empData.branch || "Mumbai Branch",
+          joiningDate: empData.joiningDate || new Date().toISOString().split("T")[0],
+          status: (empData.status === "Active" || empData.status === "Probation" || empData.status === "Suspended") ? empData.status : "Active",
+          salary: {
+            basic: Number(empData.salaryBasic) || 45000,
+            hra: Number(empData.salaryHra) || 18000,
+            allowances: Number(empData.salaryAllowances) || 10000,
+            pfDeduction: Number(empData.salaryPf) || 3200
+          },
+          bankDetails: {
+            accountNumber: empData.bankAccount || "50100234567891",
+            bankName: empData.bankName || "HDFC Bank",
+            ifsc: empData.bankIfsc || "HDFC0001234"
+          },
+          address: empData.address || "Main Branch Office Desk",
+          emergencyContact: {
+            name: empData.emergencyName || "Family Contact",
+            relation: empData.emergencyRelation || "Spouse",
+            phone: empData.emergencyPhone || "+91 98765 99999"
+          },
+          documents: [],
+          onboardingTasks: [
+            { id: `task-auto-${Date.now()}-${i}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: "2026-07-28" },
+            { id: `task-auto-${Date.now()}-${i}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: "2026-07-30" },
+            { id: `task-auto-${Date.now()}-${i}-3`, taskName: "Allocate SnailHR Credentials & Assets", completed: false, dueDate: "2026-08-01" }
+          ],
+          avatarUrl: empData.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+          bio: empData.bio || "NBFC operations agent onboarded via Excel import.",
+          password: empPassword,
+          customFields: empData.customFields || {}
+        };
+
+        db.employees.push(newEmp);
+        createdEmployees.push(newEmp);
+      }
+
+      // Log Excel Upload Record
+      const uploadRecord: ExcelUploadRecord = {
+        id: "xl-upload-" + Date.now(),
+        filename: filename || `Employee_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        uploadedAt: new Date().toISOString(),
+        uploadedByName: uploadedByName || "Admin User",
+        uploadedById: uploadedById || "",
+        recordCount: createdEmployees.length,
+        detectedCustomFields: Array.from(customFieldsSet),
+        status: "Success",
+        fileData: fileData || ""
+      };
+
+      db.excelUploads.unshift(uploadRecord);
+      writeDatabase(db);
+
+      // Sync upload record to Supabase
+      await syncExcelUploadToSupabase(uploadRecord);
+
+      // Sync all employees to Supabase Database
+      await syncAllEmployeesToSupabase(db.employees);
+
+      res.status(201).json({
+        success: true,
+        count: createdEmployees.length,
+        uploadRecord,
+        employees: createdEmployees
+      });
+    } catch (err: any) {
+      console.error("Error executing bulk employee upload:", err);
+      res.status(500).json({ error: err.message || "Failed to process bulk upload" });
+    }
+  });
+
+  // 4c. Get Bulk Excel Upload History Logs (Direct from Supabase or memory)
+  app.get("/api/employees/bulk/history", async (req, res) => {
+    const uploads = await fetchExcelUploadsFromSupabase();
+    res.json({ uploads });
+  });
+
+  // 4d. Delete single Excel Upload History Log
+  app.delete("/api/employees/bulk/history/:id", async (req, res) => {
+    const { id } = req.params;
+    db.excelUploads = (db.excelUploads || []).filter(u => u.id !== id);
+    if (supabase) {
+      try {
+        await supabase.from("excel_uploads").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Supabase delete excel_upload record error:", err);
+      }
+    }
+    res.json({ success: true, message: "Upload log record deleted" });
+  });
+
+  // 4e. Clear All Excel Upload History Logs
+  app.delete("/api/employees/bulk/history", async (req, res) => {
+    db.excelUploads = [];
+    if (supabase) {
+      try {
+        await supabase.from("excel_uploads").delete().neq("id", "0");
+      } catch (err) {
+        console.warn("Supabase clear excel_uploads error:", err);
+      }
+    }
+    res.json({ success: true, message: "All upload log records cleared" });
   });
 
   // 5. Update Employee Status / Bio

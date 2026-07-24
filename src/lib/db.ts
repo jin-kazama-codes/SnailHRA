@@ -237,7 +237,8 @@ export function loadDatabase(): AppState {
         designations: (parsed.designations && parsed.designations.length > 0) ? parsed.designations : initialDesignations,
         holidays: parsed.holidays || [],
         policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
-        timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings
+        timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings,
+        excelUploads: parsed.excelUploads || cachedState.excelUploads || []
       };
       return cachedState;
     }

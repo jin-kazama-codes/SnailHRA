@@ -198,6 +198,7 @@ export default function App() {
         return Array.from(leaveMap.values());
       });
       setHolidays(data.holidays || []);
+      setPolicies(data.policies || []);
       setExpenses(prev => {
         const expMap = new Map();
         (data.expenses || []).forEach((e: any) => { if (e.id) expMap.set(e.id, e); });

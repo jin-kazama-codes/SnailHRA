@@ -90,75 +90,122 @@ export default function DirectoryView({
     }
   };
 
+  const deleteSingleUploadHistoryLog = async (id: string) => {
+    try {
+      const res = await fetch(`/api/employees/bulk/history/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setUploadHistory(prev => prev.filter(item => item.id !== id));
+      }
+    } catch (e) {
+      console.error("Failed to delete upload log:", e);
+    }
+  };
+
+  const clearAllUploadHistoryLogs = async () => {
+    if (!window.confirm("Are you sure you want to clear all upload logs?")) return;
+    try {
+      const res = await fetch("/api/employees/bulk/history", { method: "DELETE" });
+      if (res.ok) {
+        setUploadHistory([]);
+      }
+    } catch (e) {
+      console.error("Failed to clear upload logs:", e);
+    }
+  };
+
   useEffect(() => {
     if (viewMode === "bulk_upload") {
       fetchUploadHistory();
     }
   }, [viewMode]);
 
-  // Generate & Download Shareable Dummy Sample Excel File
+  // Generate & Download Shareable Dummy Sample Excel File with Custom & Unique Headers
+  // Generate & Download Clean Dummy Excel File with fresh distinct employee records
   const downloadSampleTemplate = () => {
     const headers = [
       "Full Name", "Email", "Phone", "Role", "Department", "Branch",
       "Designation", "Joining Date", "Status", "Basic Salary", "HRA",
       "Allowances", "PF Deduction", "Bank Name", "Account Number",
       "IFSC Code", "Address", "Emergency Contact Name", "Emergency Contact Relation",
-      "Emergency Contact Phone", "Password", "Blood Group", "PAN Number"
+      "Emergency Contact Phone", "Password", "Bio"
     ];
 
     const sampleRow1 = {
-      "Full Name": "Amit Kumar Sharma",
-      "Email": "amit.sharma@mgmfinanciers.com",
-      "Phone": "+91 98765 12345",
+      "Full Name": "Vikramaditya Rao",
+      "Email": "vikramaditya.rao@mgmfinanciers.com",
+      "Phone": "+91 98111 22334",
       "Role": "employee",
       "Department": "Loans",
       "Branch": "Mumbai Branch",
       "Designation": "Senior Loan Officer",
-      "Joining Date": "2026-07-01",
+      "Joining Date": "2026-08-01",
       "Status": "Active",
-      "Basic Salary": 50000,
-      "HRA": 20000,
-      "Allowances": 12000,
-      "PF Deduction": 3600,
-      "Bank Name": "HDFC Bank",
-      "Account Number": "50100234567891",
-      "IFSC Code": "HDFC0001234",
-      "Address": "Flat 402, Sunshine Towers, Andheri East, Mumbai",
-      "Emergency Contact Name": "Sunita Sharma",
+      "Basic Salary": 58000,
+      "HRA": 23200,
+      "Allowances": 14000,
+      "PF Deduction": 4200,
+      "Bank Name": "Kotak Mahindra Bank",
+      "Account Number": "881900223411",
+      "IFSC Code": "KKBK0000123",
+      "Address": "A-45, Vaishali Nagar, Mumbai, Maharashtra",
+      "Emergency Contact Name": "Pooja Rao",
       "Emergency Contact Relation": "Spouse",
-      "Emergency Contact Phone": "+91 98765 99999",
-      "Password": "MGM@1234",
-      "Blood Group": "B+",
-      "PAN Number": "ABCDE1234F"
+      "Emergency Contact Phone": "+91 98111 99999",
+      "Password": "MGM@2026",
+      "Bio": "Senior Credit & Loan Evaluation Specialist."
     };
 
     const sampleRow2 = {
-      "Full Name": "Kavita Reddy",
-      "Email": "kavita.reddy@mgmfinanciers.com",
-      "Phone": "+91 91234 56789",
+      "Full Name": "Neha Saxena",
+      "Email": "neha.saxena@mgmfinanciers.com",
+      "Phone": "+91 97222 33445",
       "Role": "employee",
       "Department": "Risk",
       "Branch": "Noida HQ",
       "Designation": "Risk Analyst",
-      "Joining Date": "2026-07-15",
+      "Joining Date": "2026-08-05",
       "Status": "Active",
-      "Basic Salary": 45000,
-      "HRA": 18000,
-      "Allowances": 9000,
-      "PF Deduction": 3200,
-      "Bank Name": "ICICI Bank",
-      "Account Number": "000401567890",
-      "IFSC Code": "ICIC0000004",
-      "Address": "Sector 62, Noida, UP",
-      "Emergency Contact Name": "Rajesh Reddy",
-      "Emergency Contact Relation": "Father",
-      "Emergency Contact Phone": "+91 91234 00000",
-      "Password": "MGM@1234",
-      "Blood Group": "O+",
-      "PAN Number": "XYZPK9876L"
+      "Basic Salary": 49000,
+      "HRA": 19600,
+      "Allowances": 11000,
+      "PF Deduction": 3500,
+      "Bank Name": "Axis Bank",
+      "Account Number": "91201004567890",
+      "IFSC Code": "UTIB0000567",
+      "Address": "Block B, Sector 62, Noida, UP",
+      "Emergency Contact Name": "Rohan Saxena",
+      "Emergency Contact Relation": "Brother",
+      "Emergency Contact Phone": "+91 97222 88888",
+      "Password": "MGM@2026",
+      "Bio": "Fraud Risk & Portfolio Compliance Officer."
     };
 
-    const worksheet = XLSX.utils.json_to_sheet([sampleRow1, sampleRow2], { header: headers });
+    const sampleRow3 = {
+      "Full Name": "Tarun Deshmukh",
+      "Email": "tarun.deshmukh@mgmfinanciers.com",
+      "Phone": "+91 96333 44556",
+      "Role": "employee",
+      "Department": "Operations",
+      "Branch": "Pune Digital Office",
+      "Designation": "Collections Specialist",
+      "Joining Date": "2026-08-10",
+      "Status": "Active",
+      "Basic Salary": 62000,
+      "HRA": 24800,
+      "Allowances": 15000,
+      "PF Deduction": 4800,
+      "Bank Name": "ICICI Bank",
+      "Account Number": "000401987654",
+      "IFSC Code": "ICIC0000004",
+      "Address": "Plot 12, Baner Road, Pune, Maharashtra",
+      "Emergency Contact Name": "Meenal Deshmukh",
+      "Emergency Contact Relation": "Spouse",
+      "Emergency Contact Phone": "+91 96333 77777",
+      "Password": "MGM@2026",
+      "Bio": "Field Operations & Collections Management Lead."
+    };
+
+    const worksheet = XLSX.utils.json_to_sheet([sampleRow1, sampleRow2, sampleRow3], { header: headers });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import Template");
     XLSX.writeFile(workbook, "MGM_Employee_Import_Template.xlsx");
@@ -227,13 +274,13 @@ export default function DirectoryView({
         role: "role", userrole: "role",
         department: "department", dept: "department",
         branch: "branch", office: "branch",
-        designation: "designationTitle", designationtitle: "designationTitle", title: "designationTitle",
+        designation: "designationTitle", designationtitle: "designationTitle", title: "designationTitle", designationid: "designationTitle",
         joiningdate: "joiningDate", dateofjoining: "joiningDate", joining_date: "joiningDate", doj: "joiningDate",
         status: "status", employeestatus: "status",
         basicsalary: "salaryBasic", basic: "salaryBasic", salarybasic: "salaryBasic",
         hra: "salaryHra", hraallowance: "salaryHra", salaryhra: "salaryHra",
         allowances: "salaryAllowances", otherallowances: "salaryAllowances", salaryallowances: "salaryAllowances",
-        pfdeduction: "salaryPf", pf: "salaryPf", salarypf: "salaryPf",
+        pfdeduction: "salaryPf", pf: "salaryPf", salarypf: "salaryPf", salarypfdeduction: "salaryPf",
         bankname: "bankName", bank: "bankName",
         accountnumber: "bankAccount", bankaccount: "bankAccount", bankaccountnumber: "bankAccount",
         ifsc: "bankIfsc", ifsccode: "bankIfsc", bankifsc: "bankIfsc",
@@ -241,7 +288,7 @@ export default function DirectoryView({
         emergencycontactname: "emergencyName", emergencyname: "emergencyName", contactperson: "emergencyName",
         emergencycontactrelation: "emergencyRelation", emergencyrelation: "emergencyRelation", relation: "emergencyRelation",
         emergencycontactphone: "emergencyPhone", emergencyphone: "emergencyPhone",
-        password: "password"
+        password: "password", avatarurl: "avatarUrl"
       };
 
       const customHeaders: string[] = [];
@@ -630,9 +677,10 @@ export default function DirectoryView({
             <button
               onClick={downloadSampleTemplate}
               className="bg-white dark:bg-[#151515] hover:bg-slate-50 dark:hover:bg-[#1e1e1e] text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
+              title="Download dummy Excel file with sample employee records"
             >
-              <Download className="w-4 h-4" />
-              <span>Download Sample Excel</span>
+              <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Download Dummy Excel File</span>
             </button>
             <button
               onClick={() => setViewMode("roster")}
@@ -692,6 +740,15 @@ export default function DirectoryView({
                 <span className="text-xs text-slate-400 dark:text-gray-500 mt-1 block">
                   Supports standard fields + any new dynamic fields automatically
                 </span>
+                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-[#222] inline-block" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={downloadSampleTemplate}
+                    className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-4 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs mx-auto"
+                  >
+                    <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Download Dummy Excel File</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -819,13 +876,24 @@ export default function DirectoryView({
               </div>
             </div>
 
-            <button
-              onClick={fetchUploadHistory}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer hover:underline"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Refresh Log</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              {uploadHistory.length > 0 && (
+                <button
+                  onClick={clearAllUploadHistoryLogs}
+                  className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xs flex items-center gap-1 cursor-pointer hover:underline"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear History</span>
+                </button>
+              )}
+              <button
+                onClick={fetchUploadHistory}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer hover:underline"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh Log</span>
+              </button>
+            </div>
           </div>
 
           {loadingHistory ? (
@@ -897,17 +965,24 @@ export default function DirectoryView({
                         </span>
                       </td>
                       <td className="p-3 text-right">
-                        {item.fileData ? (
+                        <div className="flex items-center justify-end space-x-2">
+                          {item.fileData && (
+                            <button
+                              onClick={() => downloadUploadedFile(item)}
+                              className="text-emerald-600 hover:text-emerald-700 font-semibold text-[11px] flex items-center space-x-1 cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Download XL</span>
+                            </button>
+                          )}
                           <button
-                            onClick={() => downloadUploadedFile(item)}
-                            className="text-emerald-600 hover:text-emerald-700 font-semibold text-[11px] flex items-center space-x-1 ml-auto cursor-pointer"
+                            onClick={() => deleteSingleUploadHistoryLog(item.id)}
+                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md transition-colors cursor-pointer"
+                            title="Delete Log Record"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download XL</span>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">Saved</span>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -969,6 +1044,14 @@ export default function DirectoryView({
 
         {(role === "admin" || role === "hr") && (
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setViewMode("bulk_upload")}
+              className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+              title="Bulk upload employees via Excel spreadsheet"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Upload Excel / Bulk Import</span>
+            </button>
             <button
               onClick={() => {
                 setShowOnboardForm(true);
@@ -2362,27 +2445,7 @@ export default function DirectoryView({
               </button>
             </div>
 
-            {/* Template Download Banner */}
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div className="flex items-start space-x-3">
-                <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <span className="font-bold text-slate-800 dark:text-emerald-300 block mb-0.5">
-                    Need a template for employee data?
-                  </span>
-                  <span className="text-slate-500 dark:text-gray-400">
-                    Download our ready-to-use Excel template with sample records and all required/optional headers.
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={downloadSampleTemplate}
-                className="bg-white dark:bg-[#151515] hover:bg-slate-50 dark:hover:bg-[#1e1e1e] text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 transition-all shrink-0 cursor-pointer shadow-xs"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Sample Excel</span>
-              </button>
-            </div>
+
 
             {/* File Upload Zone */}
             <div className="space-y-3">

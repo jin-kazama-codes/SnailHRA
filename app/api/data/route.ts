@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
 export async function GET() {
   const db = loadDatabase();
 
-  if (supabase) {
+  // Prefer admin client (bypasses RLS) for server-side reads; fall back to anon client
+  const dbClient = supabaseAdmin || supabase;
+
+  if (dbClient) {
     try {
       const safeQuery = async (query: any) => {
         try {
@@ -33,23 +37,23 @@ export async function GET() {
         payslipsRes, designationsRes
       ] = await Promise.race([
         Promise.all([
-          safeQuery(supabase.from("leaves").select("*")),
-          safeQuery(supabase.from("attendance").select("*")),
-          safeQuery(supabase.from("employees").select("*")),
-          safeQuery(supabase.from("holidays").select("*")),
-          safeQuery(supabase.from("expenses").select("*")),
-          safeQuery(supabase.from("inventory").select("*")),
-          safeQuery(supabase.from("inventory_requests").select("*").order("created_at", { ascending: false })),
-          safeQuery(supabase.from("policies").select("*")),
-          safeQuery(supabase.from("fines").select("*").order("created_at", { ascending: false })),
-          safeQuery(supabase.from("custom_departments").select("*")),
-          safeQuery(supabase.from("custom_branches").select("*")),
-          safeQuery(supabase.from("custom_leave_types").select("*")),
-          safeQuery(supabase.from("custom_leaves").select("*")),
-          safeQuery(supabase.from("attendance_breaks").select("*")),
-          safeQuery(supabase.from("employee_documents").select("*")),
-          safeQuery(supabase.from("payslips").select("*")),
-          safeQuery(supabase.from("designations").select("*"))
+          safeQuery(dbClient.from("leaves").select("*")),
+          safeQuery(dbClient.from("attendance").select("*")),
+          safeQuery(dbClient.from("employees").select("*")),
+          safeQuery(dbClient.from("holidays").select("*")),
+          safeQuery(dbClient.from("expenses").select("*")),
+          safeQuery(dbClient.from("inventory").select("*")),
+          safeQuery(dbClient.from("inventory_requests").select("*").order("created_at", { ascending: false })),
+          safeQuery(dbClient.from("policies").select("*")),
+          safeQuery(dbClient.from("fines").select("*").order("created_at", { ascending: false })),
+          safeQuery(dbClient.from("custom_departments").select("*")),
+          safeQuery(dbClient.from("custom_branches").select("*")),
+          safeQuery(dbClient.from("custom_leave_types").select("*")),
+          safeQuery(dbClient.from("custom_leaves").select("*")),
+          safeQuery(dbClient.from("attendance_breaks").select("*")),
+          safeQuery(dbClient.from("employee_documents").select("*")),
+          safeQuery(dbClient.from("payslips").select("*")),
+          safeQuery(dbClient.from("designations").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -323,7 +327,7 @@ export async function GET() {
       }
 
       try {
-        const { data: settingsData } = await supabase.from("timing_settings").select("*").eq("id", "default").maybeSingle();
+        const { data: settingsData } = await dbClient.from("timing_settings").select("*").eq("id", "default").maybeSingle();
         if (settingsData) {
           db.timingSettings = {
             clockInTime: settingsData.clock_in_time || "09:00",
