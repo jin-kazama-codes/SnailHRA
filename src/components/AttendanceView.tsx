@@ -1167,10 +1167,10 @@ export default function AttendanceView({
           </div>
 
           {/* Interactive Weekly Attendance Calendar Matrix */}
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-50 dark:border-[#1a1a1a]">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-3 sm:p-5 shadow-xs dark:neon-glow space-y-3 sm:space-y-4">
+            <div className="flex flex-col gap-2 pb-2 border-b border-slate-50 dark:border-[#1a1a1a] sm:flex-row sm:justify-between sm:items-center">
               <div>
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm sm:text-md">
                   Weekly Attendance Matrix Calendar ({selectedMonth})
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -1179,20 +1179,20 @@ export default function AttendanceView({
                     : "Click any day cell to inspect and edit employee attendance details"}
                 </p>
               </div>
-              <div className="flex gap-4 text-xs font-semibold">
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></span> Present</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-blue-500 rounded-sm"></span> WFH</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-amber-500 rounded-sm"></span> Half Day</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-sm"></span> Leave</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 bg-rose-500 rounded-sm"></span> Absent</span>
+              <div className="flex flex-wrap gap-2 sm:gap-4 text-[10px] sm:text-xs font-semibold">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-500 rounded-sm"></span> Present</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-500 rounded-sm"></span> WFH</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-amber-500 rounded-sm"></span> Half Day</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-indigo-500 rounded-sm"></span> Leave</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-rose-500 rounded-sm"></span> Absent</span>
               </div>
             </div>
 
             {/* Calendar Days Matrix Grid */}
-            <div className="grid grid-cols-7 gap-3 text-center">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-3 text-center">
               {/* Day Labels */}
               {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label, idx) => (
-                <div key={idx} className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1 border-b border-slate-100 dark:border-[#1a1a1a]">{label}</div>
+                <div key={idx} className="text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wide py-1 border-b border-slate-100 dark:border-[#1a1a1a]">{label}</div>
               ))}
 
               {/* Generate Calendar Days */}
@@ -1205,7 +1205,7 @@ export default function AttendanceView({
 
                 const spacerCells = [];
                 for (let i = 0; i < startDay; i++) {
-                  spacerCells.push(<div key={`spacer-${i}`} className="bg-slate-50/20 dark:bg-transparent rounded-xl border border-dashed border-slate-100 dark:border-transparent p-4 min-h-[95px]"></div>);
+                  spacerCells.push(<div key={`spacer-${i}`} className="bg-slate-50/20 dark:bg-transparent rounded-lg sm:rounded-xl border border-dashed border-slate-100 dark:border-transparent p-1 sm:p-4 min-h-[60px] sm:min-h-[95px]"></div>);
                 }
 
                 const dayCells = days.map((day, idx) => {
@@ -1257,36 +1257,36 @@ export default function AttendanceView({
                     <div 
                       key={idx} 
                       onClick={() => openDayDetailsModal(dStr, selectedEmployeeId)}
-                      className={`rounded-2xl border ${cellBorder} ${cellBg} p-3 min-h-[105px] flex flex-col justify-between transition-all cursor-pointer hover:shadow-xs group`}
+                      className={`rounded-lg sm:rounded-2xl border ${cellBorder} ${cellBg} p-1 sm:p-3 min-h-[64px] sm:min-h-[105px] flex flex-col justify-between transition-all cursor-pointer hover:shadow-xs group`}
                     >
                       {/* Day Header */}
-                      <div className="flex justify-between items-start">
-                        <span className="font-mono font-bold text-xs text-slate-600 dark:text-gray-300 group-hover:text-emerald-600">{day.getDate()}</span>
+                      <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-start gap-0.5">
+                        <span className="font-mono font-bold text-[10px] sm:text-xs text-slate-600 dark:text-gray-300 group-hover:text-emerald-600">{day.getDate()}</span>
                         
                         {/* Day indicator badge */}
                         {dayType === "punch" && (
-                          <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                          <span className={`text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase ${
                             punch?.status === "Present" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400" :
                             punch?.status === "Late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400" :
                             "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-400"
                           }`}>{punch?.status}</span>
                         )}
                         {dayType === "leave" && (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-400">LEAVE</span>
+                          <span className="text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-400">LEAVE</span>
                         )}
                         {dayType === "holiday" && (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-400" title={holiday?.name}>HOLIDAY</span>
+                          <span className="text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-400" title={holiday?.name}>HOL</span>
                         )}
                         {dayType === "weekend" && (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-slate-200/50 text-slate-600 dark:bg-slate-800 dark:text-slate-400">REST</span>
+                          <span className="text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase bg-slate-200/50 text-slate-600 dark:bg-slate-800 dark:text-slate-400">REST</span>
                         )}
                         {dayType === "absent" && (
-                          <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400">ABSENT</span>
+                          <span className="text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400">ABS</span>
                         )}
                       </div>
 
-                      {/* Day Specific Content */}
-                      <div className="my-1 text-center">
+                      {/* Day Specific Content — hidden on mobile, shown on sm+ */}
+                      <div className="hidden sm:block my-1 text-center">
                         {punch ? (
                           <div className="space-y-1">
                             <p className="text-[9px] font-mono text-slate-400 dark:text-gray-500">
@@ -1319,8 +1319,24 @@ export default function AttendanceView({
                         )}
                       </div>
 
-                      {/* WFH Badge */}
-                      <div className="mt-1 pt-1 border-t border-slate-100/50 dark:border-slate-800/40 flex justify-center items-center">
+                      {/* Mobile-only status dot */}
+                      <div className="sm:hidden flex justify-center items-center py-0.5">
+                        {punch ? (
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            punch.status === "Present" ? "bg-emerald-500" :
+                            punch.status === "Late" ? "bg-amber-500" : "bg-yellow-400"
+                          }`} />
+                        ) : approvedLeave ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                        ) : isWeekend ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                        ) : dayType === "absent" ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                        ) : null}
+                      </div>
+
+                      {/* WFH Badge — desktop only */}
+                      <div className="hidden sm:flex mt-1 pt-1 border-t border-slate-100/50 dark:border-slate-800/40 justify-center items-center">
                         {punch?.workFromHome ? (
                           <span className="text-[8px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-0.5">
                             <Home className="w-2.5 h-2.5" /> WFH

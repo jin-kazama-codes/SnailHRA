@@ -5,7 +5,7 @@ import * as XLSX from "xlsx";
 import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
-  Eye, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
+  Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
   ArrowLeft, History, Clock, User, Check
 } from "lucide-react";
@@ -387,6 +387,7 @@ export default function DirectoryView({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [empRole, setEmpRole] = useState<UserRole>("employee");
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
   const [department, setDepartment] = useState("Loans");
@@ -1499,14 +1500,24 @@ export default function DirectoryView({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Password *</label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Set login password"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                        required
-                      />
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Set login password"
+                          className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 pr-9 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-500 transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
@@ -1514,11 +1525,17 @@ export default function DirectoryView({
                         value={empRole}
                         onChange={(e) => setEmpRole(e.target.value as any)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        disabled={role === "hr"}
                       >
                         <option value="employee">Employee / Agent</option>
-                        <option value="hr">HR Manager</option>
-                        <option value="admin">Administrator</option>
+                        {role === "admin" && <option value="hr">HR Manager</option>}
+                        {role === "admin" && <option value="admin">Administrator</option>}
                       </select>
+                      {role === "hr" && (
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
+                          HR Managers can only onboard Employee / Agent roles.
+                        </p>
+                      )}
                     </div>
 
                     <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
@@ -1838,11 +1855,17 @@ export default function DirectoryView({
                         value={editRole}
                         onChange={(e) => setEditRole(e.target.value as any)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        disabled={role === "hr"}
                       >
                         <option value="employee">Employee / Agent</option>
-                        <option value="hr">HR Manager</option>
-                        <option value="admin">Administrator</option>
+                        {role === "admin" && <option value="hr">HR Manager</option>}
+                        {role === "admin" && <option value="admin">Administrator</option>}
                       </select>
+                      {role === "hr" && (
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
+                          HR Managers can only assign Employee / Agent roles.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Status</label>
