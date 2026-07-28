@@ -20,6 +20,8 @@ interface PayrollViewProps {
   onRemoveDesignation: (id: string) => void;
   onGeneratePayslip: (employeeId: string, month: string) => Promise<void> | void;
   onPayAllPayslips: (month: string) => void;
+  onResetPayslip?: (employeeId: string, month: string) => Promise<void> | void;
+  companyName?: string;
 }
 
 export default function PayrollView({
@@ -33,7 +35,9 @@ export default function PayrollView({
   onAddDesignation,
   onRemoveDesignation,
   onGeneratePayslip,
-  onPayAllPayslips
+  onPayAllPayslips,
+  onResetPayslip,
+  companyName = "Your Company"
 }: PayrollViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"payslips" | "designations" | "emailLogs">("payslips");
   const [selectedMonth, setSelectedMonth] = useState("July 2026");
@@ -264,7 +268,7 @@ export default function PayrollView({
                         const grossEarnings = emp.salary.basic + emp.salary.hra + emp.salary.allowances;
                         const pfDeduction = emp.salary.pfDeduction || Math.round(emp.salary.basic * 0.08);
                         const empPendingFines = (fines || [])
-                          .filter(f => f.employeeId === emp.id && f.status === "Pending")
+                          .filter(f => f.employeeId === emp.id && f.status === "Deducted From Payroll")
                           .reduce((sum, f) => sum + f.amount, 0);
                         const defaultTaxes = typeof emp.salary.tdsDeduction === "number"
                           ? emp.salary.tdsDeduction
@@ -303,12 +307,27 @@ export default function PayrollView({
                             </td>
                             <td className="py-3 px-3 text-right whitespace-nowrap">
                               {hasSlip ? (
-                                <button
-                                  onClick={() => setActiveSlip(hasSlip)}
-                                  className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold inline-flex items-center space-x-1 cursor-pointer"
-                                >
-                                  <span>Review Slip</span>
-                                </button>
+                                <div className="flex items-center justify-end space-x-2">
+                                  <button
+                                    onClick={() => setActiveSlip(hasSlip)}
+                                    className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold inline-flex items-center space-x-1 cursor-pointer"
+                                  >
+                                    <span>Review Slip</span>
+                                  </button>
+                                  {(role === "admin" || role === "hr") && onResetPayslip && (
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Reset and delete the generated payslip for ${emp.fullName} for ${selectedMonth}? This will release the fine deductions back to payroll.`)) {
+                                          onResetPayslip(emp.id, selectedMonth);
+                                        }
+                                      }}
+                                      className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-2"
+                                      title="Reset compiled slip to regenerate"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
                                 <button
                                   onClick={() => handleCompileSlip(emp.id)}
@@ -499,7 +518,7 @@ export default function PayrollView({
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-emerald-300" />
                 <div>
-                  <h3 className="font-display font-bold text-md leading-none">MGM FINANCIERS PRIV LIMITED Compensation Audit</h3>
+                  <h3 className="font-display font-bold text-md leading-none">{companyName} Compensation Audit</h3>
                   <p className="text-[10px] text-emerald-100 mt-1 font-mono">ID: {activeSlip.id}</p>
                 </div>
               </div>
@@ -525,7 +544,7 @@ export default function PayrollView({
               {/* Employer Info */}
               <div className="flex justify-between items-start border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
                 <div>
-                  <h2 className="text-sm font-bold text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED</h2>
+                  <h2 className="text-sm font-bold text-slate-800 dark:text-white">{companyName}</h2>
                   <p className="text-slate-400 mt-0.5">Corporate Headquarters, Bandra-Kurla Complex</p>
                   <p className="text-slate-400">Mumbai, MH - 400051</p>
                 </div>
@@ -619,7 +638,7 @@ export default function PayrollView({
               </div>
 
               <p className="text-[10px] text-slate-400 dark:text-gray-500 text-center leading-normal pt-2">
-                This is a computer-generated salary slip in MGM FINANCIERS PRIV LIMITED. No physical seal or handwritten signatures are required. Legal inquiries may be routed to priya.patel@mgmfinanciers.com.
+                This is a computer-generated salary slip issued by {companyName}. No physical seal or handwritten signatures are required.
               </p>
             </div>
           </div>

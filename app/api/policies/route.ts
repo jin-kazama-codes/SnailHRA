@@ -57,7 +57,8 @@ export async function POST(request: Request) {
           title: policy.title,
           category: policy.category,
           content: policy.content,
-          last_updated: policy.lastUpdated
+          last_updated: policy.lastUpdated,
+          company_id: (policy as any).companyId || (policy as any).company_id || null
         });
         if (sbErr) {
           console.warn("Failed to sync policy to Supabase:", sbErr.message);

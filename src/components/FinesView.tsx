@@ -13,6 +13,7 @@ interface FinesViewProps {
   currentEmployeeId: string;
   onAddFine: (fineData: any) => void;
   onUpdateFineStatus: (id: string, status: "Paid" | "Deducted From Payroll") => void;
+  companyName?: string;
 }
 
 export default function FinesView({
@@ -21,7 +22,8 @@ export default function FinesView({
   role,
   currentEmployeeId,
   onAddFine,
-  onUpdateFineStatus
+  onUpdateFineStatus,
+  companyName = "Your Company"
 }: FinesViewProps) {
   const [showFineForm, setShowFineForm] = useState(false);
 
@@ -152,7 +154,7 @@ export default function FinesView({
                   <option value="Late Coming">Late Coming (Attendance policy breach)</option>
                   <option value="Compliance Violation">Compliance Violation (Secure CRM breach)</option>
                   <option value="Unprofessional Conduct">Unprofessional Conduct</option>
-                  <option value="Lost Asset">Lost / Damaged MGM FINANCIERS PRIV LIMITED Assets</option>
+                  <option value="Lost Asset">Lost / Damaged {companyName} Assets</option>
                 </select>
               </div>
 

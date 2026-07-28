@@ -19,6 +19,7 @@ interface DashboardViewProps {
   inventory?: InventoryItem[];
   fines?: Fine[];
   role: "admin" | "hr" | "employee";
+  companyName?: string;
   onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
   setCurrentView?: (view: string) => void;
 }
@@ -34,6 +35,7 @@ export default function DashboardView({
   inventory = [],
   fines = [],
   role,
+  companyName = "Your Company",
   onPunchAction,
   setCurrentView
 }: DashboardViewProps) {
@@ -120,7 +122,7 @@ export default function DashboardView({
             <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full w-fit">
               <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
               <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100">
-                {role === "admin" ? "MGM FINANCIERS PRIV LIMITED System Administrator Portal" : role === "hr" ? `MGM FINANCIERS PRIV LIMITED Branch Management Desk (${userBranch})` : "MGM FINANCIERS PRIV LIMITED Employee Workspace"}
+                {role === "admin" ? `${companyName} System Administrator Portal` : role === "hr" ? `${companyName} Branch Management Desk (${userBranch})` : `${companyName} Employee Workspace`}
               </span>
             </div>
             

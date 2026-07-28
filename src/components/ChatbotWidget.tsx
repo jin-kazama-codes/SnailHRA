@@ -13,6 +13,8 @@ interface Message {
 interface ChatbotWidgetProps {
   currentEmployeeId: string;
   role: "admin" | "hr" | "employee";
+  companyId?: string;
+  companyName?: string;
 }
 
 function parseInlineMarkdown(text: string): React.ReactNode[] {
@@ -91,13 +93,13 @@ function FormattedMessage({ text }: { text: string }) {
   );
 }
 
-export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidgetProps) {
+export default function ChatbotWidget({ currentEmployeeId, role, companyId = "", companyName = "Your Company" }: ChatbotWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "msg-init",
       sender: "bot",
-      text: `Hello! I am your MGM FINANCIERS PRIV LIMITED AI Assistant. How can I help you today?`,
+      text: `Hello! I am your ${companyName} HR Assistant. How can I help you today?`,
       timestamp: new Date()
     }
   ]);
@@ -150,7 +152,9 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
         body: JSON.stringify({
           message: textToSend,
           employeeId: currentEmployeeId,
-          chatHistory
+          chatHistory,
+          companyId,
+          companyName
         })
       });
 
@@ -173,7 +177,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
       const errorMsg: Message = {
         id: `msg-err-${Date.now()}`,
         sender: "bot",
-        text: "I encountered an issue connecting to the AI MGM FINANCIERS PRIV LIMITED Core. Please ensure your GROQ_API_KEY is configured in .env.local.",
+        text: `I encountered an issue connecting to the ${companyName} AI Core. Please ensure your GROQ_API_KEY is configured in .env.local.`,
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -210,7 +214,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="fixed bottom-6 right-6 z-50 bg-emerald-600 hover:bg-emerald-500 text-white p-3.5 rounded-full shadow-lg hover:shadow-emerald-950/20 hover:scale-105 transition-all flex items-center justify-center cursor-pointer border border-emerald-500/20"
-        title="Chat with MGM FINANCIERS PRIV LIMITED AI"
+        title={`Chat with ${companyName} AI`}
       >
         {isOpen ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5 fill-white" />}
       </button>
@@ -226,7 +230,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
                 <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
               </div>
               <div>
-                <h3 className="font-display font-semibold text-xs text-white">MGM FINANCIERS PRIV LIMITED Assistant</h3>
+                <h3 className="font-display font-semibold text-xs text-white">{companyName} Assistant</h3>
                 <span className="text-[10px] text-emerald-200">Groq Llama 3.3 Core • Live</span>
               </div>
             </div>

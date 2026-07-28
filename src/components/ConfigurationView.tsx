@@ -17,6 +17,7 @@ interface ConfigurationViewProps {
     synced: boolean;
     error?: string;
   };
+  subscriptionModel?: number;
   onAddDesignation: (title: string, department: string) => void;
   onRemoveDesignation: (id: string) => void;
   onUpdateCollection: (
@@ -33,6 +34,7 @@ export default function ConfigurationView({
   customDepartments,
   customBranches,
   supabaseStatus,
+  subscriptionModel = 4,
   onAddDesignation,
   onRemoveDesignation,
   onUpdateCollection
@@ -152,7 +154,20 @@ ON CONFLICT (key) DO NOTHING;`;
       {/* Header and Sub Tabs */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
         <div>
-          <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
+            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
+              subscriptionModel === 4 ? "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900/50" :
+              subscriptionModel === 3 ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50" :
+              subscriptionModel === 2 ? "bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/50" :
+              "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+            }`}>
+              {subscriptionModel === 4 ? "Full Suite Plan" : 
+               subscriptionModel === 3 ? "Chatbot Only Plan" : 
+               subscriptionModel === 2 ? "WhatsApp Only Plan" : 
+               "Basic Plan"}
+            </span>
+          </div>
           <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, leave policies, and Cloud storage states</p>
         </div>
 

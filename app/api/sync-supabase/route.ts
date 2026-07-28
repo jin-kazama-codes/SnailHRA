@@ -9,6 +9,17 @@ export async function POST() {
 
   try {
     const db = loadDatabase();
+    
+    // Create employeeId -> companyId lookup map
+    const employeeCompanyMap = new Map<string, string>();
+    const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
+    if (db.employees && db.employees.length > 0) {
+      db.employees.forEach((emp: any) => {
+        if (emp.id) {
+          employeeCompanyMap.set(emp.id, emp.companyId || emp.company_id || MGM_COMPANY_ID);
+        }
+      });
+    }
 
     // 1. Sync custom lists first (departments, branches, leave types)
     if (db.customDepartments && db.customDepartments.length > 0) {
@@ -16,7 +27,7 @@ export async function POST() {
         if (!name) continue;
         const { data: existing } = await supabase.from("custom_departments").select("id").ilike("name", name);
         if (!existing || existing.length === 0) {
-          await supabase.from("custom_departments").insert([{ name }]);
+          await supabase.from("custom_departments").insert([{ name, company_id: MGM_COMPANY_ID }]);
         }
       }
     }
@@ -26,7 +37,7 @@ export async function POST() {
         if (!name) continue;
         const { data: existing } = await supabase.from("custom_branches").select("id").ilike("name", name);
         if (!existing || existing.length === 0) {
-          await supabase.from("custom_branches").insert([{ name }]);
+          await supabase.from("custom_branches").insert([{ name, company_id: MGM_COMPANY_ID }]);
         }
       }
     }
@@ -36,7 +47,7 @@ export async function POST() {
         if (!name) continue;
         const { data: existing } = await supabase.from("custom_leave_types").select("id").ilike("name", name);
         if (!existing || existing.length === 0) {
-          await supabase.from("custom_leave_types").insert([{ name }]);
+          await supabase.from("custom_leave_types").insert([{ name, company_id: MGM_COMPANY_ID }]);
         }
       }
     }
@@ -46,7 +57,8 @@ export async function POST() {
       const designationRecords = db.designations.map(d => ({
         id: d.id,
         title: d.title,
-        department: d.department
+        department: d.department,
+        company_id: (d as any).companyId || (d as any).company_id || MGM_COMPANY_ID
       }));
       const { error } = await supabase.from("designations").upsert(designationRecords, { onConflict: "id" });
       if (error) {
@@ -58,6 +70,7 @@ export async function POST() {
     if (db.employees && db.employees.length > 0) {
       const employeeRecords = db.employees.map(emp => ({
         id: emp.id,
+        company_id: emp.companyId || (emp as any).company_id || MGM_COMPANY_ID,
         full_name: emp.fullName,
         email: emp.email,
         phone: emp.phone,
@@ -94,6 +107,7 @@ export async function POST() {
       const leaveRecords = db.leaves.map(l => ({
         id: l.id,
         employee_id: l.employeeId,
+        company_id: employeeCompanyMap.get(l.employeeId) || MGM_COMPANY_ID,
         employee_name: l.employeeName,
         leave_type: l.leaveType,
         start_date: l.startDate,
@@ -110,21 +124,26 @@ export async function POST() {
 
     // 5. Sync attendance and breaks
     if (db.attendance && db.attendance.length > 0) {
-      const attendanceRecords = db.attendance.map(a => ({
-        id: a.id,
-        employee_id: a.employeeId,
-        date: a.date,
-        clock_in: a.clockIn || null,
-        clock_out: a.clockOut || null,
-        status: a.status || "Present",
-        total_break_duration: a.totalBreakDuration || "00h 00m"
-      }));
+      const attendanceRecords = db.attendance.map(a => {
+        const compId = employeeCompanyMap.get(a.employeeId) || MGM_COMPANY_ID;
+        return {
+          id: a.id,
+          employee_id: a.employeeId,
+          company_id: compId,
+          date: a.date,
+          clock_in: a.clockIn || null,
+          clock_out: a.clockOut || null,
+          status: a.status || "Present",
+          total_break_duration: a.totalBreakDuration || "00h 00m"
+        };
+      });
       let { error } = await supabase.from("attendance").upsert(attendanceRecords, { onConflict: "id" });
       if (error) {
         console.warn("Sync: bulk upsert with total_break_duration failed. Attempting fallback bulk upsert without it...", error.message);
         const fallbackRecords = db.attendance.map(a => ({
           id: a.id,
           employee_id: a.employeeId,
+          company_id: employeeCompanyMap.get(a.employeeId) || MGM_COMPANY_ID,
           date: a.date,
           clock_in: a.clockIn || null,
           clock_out: a.clockOut || null,
@@ -142,12 +161,14 @@ export async function POST() {
       db.attendance.forEach(a => {
         if (a.id) {
           attendanceIdsToClear.push(a.id);
+          const compId = employeeCompanyMap.get(a.employeeId) || MGM_COMPANY_ID;
           if (a.breaks && a.breaks.length > 0) {
             a.breaks.forEach(b => {
               breakRecords.push({
                 attendance_id: a.id,
                 break_start: b.start,
-                break_end: b.end || null
+                break_end: b.end || null,
+                company_id: compId
               });
             });
           }
@@ -172,6 +193,7 @@ export async function POST() {
       const expenseRecords = db.expenses.map(e => ({
         id: e.id,
         employee_id: e.employeeId,
+        company_id: employeeCompanyMap.get(e.employeeId) || MGM_COMPANY_ID,
         employee_name: e.employeeName,
         category: e.category,
         amount: Number(e.amount) || 0,
@@ -194,7 +216,8 @@ export async function POST() {
         category: i.category,
         status: i.status,
         assigned_to_employee_id: i.assignedToEmployeeId || null,
-        assigned_date: i.assignedDate || null
+        assigned_date: i.assignedDate || null,
+        company_id: (i as any).companyId || (i as any).company_id || (i.assignedToEmployeeId ? employeeCompanyMap.get(i.assignedToEmployeeId) : null) || MGM_COMPANY_ID
       }));
       const { error } = await supabase.from("inventory").upsert(inventoryRecords, { onConflict: "id" });
       if (error) {
@@ -207,6 +230,7 @@ export async function POST() {
       const reqRecords = db.inventoryRequests.map(r => ({
         id: r.id,
         employee_id: r.employeeId,
+        company_id: employeeCompanyMap.get(r.employeeId) || MGM_COMPANY_ID,
         employee_name: r.employeeName,
         item_name: r.itemName,
         category: r.category,
@@ -225,6 +249,7 @@ export async function POST() {
       const fineRecords = db.fines.map(f => ({
         id: f.id,
         employee_id: f.employeeId,
+        company_id: employeeCompanyMap.get(f.employeeId) || MGM_COMPANY_ID,
         employee_name: f.employeeName,
         reason: f.reason,
         amount: Number(f.amount) || 0,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { AttendancePunch } from "@/src/types";
-import { supabase, syncPunchToSupabase } from "@/src/lib/supabase";
+import { supabase, syncPunchToSupabase, getCompanyIdForEmployee } from "@/src/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -37,19 +37,29 @@ export async function POST(request: Request) {
       };
       punch = db.attendance[existingIndex];
     } else {
+      const companyId = await getCompanyIdForEmployee(employeeId);
       let defaultClockIn = "09:00";
       let defaultClockOut = "18:00";
       if (supabase) {
         try {
-          const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("id", "default").maybeSingle();
-          if (data) {
-            defaultClockIn = data.clock_in_time || "09:00";
-            defaultClockOut = data.clock_out_time || "18:00";
+          let settingsData = null;
+          if (companyId) {
+            const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("company_id", companyId).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData) {
+            const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("id", "default").maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (settingsData) {
+            defaultClockIn = settingsData.clock_in_time || "09:00";
+            defaultClockOut = settingsData.clock_out_time || "18:00";
           }
         } catch (e) {}
-      } else if (db.timingSettings) {
-        defaultClockIn = db.timingSettings.clockInTime || "09:00";
-        defaultClockOut = db.timingSettings.clockOutTime || "18:00";
+      } else {
+        const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
+        defaultClockIn = compSettings?.clockInTime || db.timingSettings?.clockInTime || "09:00";
+        defaultClockOut = compSettings?.clockOutTime || db.timingSettings?.clockOutTime || "18:00";
       }
       punch = {
         id: id || `pun-${Date.now()}`,

@@ -4,13 +4,28 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { supabase } from "./src/lib/supabase.js";
+import { 
+  supabase, 
+  syncPunchToSupabase, 
+  deletePunchFromSupabase,
+  syncExpenseToSupabase,
+  syncInventoryToSupabase,
+  deleteInventoryFromSupabase,
+  syncInventoryRequestToSupabase,
+  deleteInventoryRequestFromSupabase,
+  syncFineToSupabase,
+  syncPayslipToSupabase,
+  getCompanyIdForEmployee
+} from "./src/lib/supabase.js";
 import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord 
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company
 } from "./src/types";
+
+// Default MGM Financiers company ID (matches migration script)
+const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
 import { generateGuaranteedUniqueEmployeeId } from "./src/lib/idGenerator";
 
 // Setup __dirname and __filename in ESM
@@ -41,7 +56,11 @@ interface AppState {
   customDepartments: string[];
   customBranches: string[];
   timingSettings: TimingSettings;
+  companyTimingSettings?: Record<string, TimingSettings>;
   excelUploads?: ExcelUploadRecord[];
+
+  // Multi-tenant companies
+  companies: Company[];
 }
 
 const initialDesignations: Designation[] = [];
@@ -81,7 +100,17 @@ const initialData: AppState = {
     lateThreshold: "09:30",
     breakStartTime: "13:00",
     breakEndTime: "14:00"
-  }
+  },
+  companies: [
+    {
+      id: MGM_COMPANY_ID,
+      name: "MGM Financiers Priv Limited",
+      slug: "mgm-financiers",
+      subscriptionModel: 4,
+      createdAt: new Date().toISOString(),
+      isActive: true
+    }
+  ]
 };
 
 // Database loader/saver with local-first file and background Supabase sync
@@ -96,6 +125,7 @@ function readDatabaseLocal(): AppState {
       if (!state.customBranches) state.customBranches = initialData.customBranches;
       if (!state.employees) state.employees = [];
       if (!state.timingSettings) state.timingSettings = initialData.timingSettings;
+      if (!state.companies) state.companies = initialData.companies;
       return state;
     }
   } catch (err) {
@@ -117,13 +147,16 @@ async function syncLeaveToSupabase(leave: LeaveRequest) {
   if (supabase) {
     try {
       const leaveId = leave.id || "lv-" + Date.now();
-      const employeeName = leave.employeeName || db.employees.find(e => e.id === leave.employeeId)?.fullName || "Employee " + leave.employeeId;
+      const emp = db.employees.find(e => e.id === leave.employeeId);
+      const compId = emp?.companyId || MGM_COMPANY_ID;
+      const employeeName = leave.employeeName || emp?.fullName || "Employee " + leave.employeeId;
       const status = leave.status || "Pending";
       const appliedDate = leave.appliedDate || new Date().toISOString().split('T')[0];
 
       const payload = {
         id: leaveId,
         employee_id: leave.employeeId,
+        company_id: compId,
         employee_name: employeeName,
         leave_type: leave.leaveType,
         start_date: leave.startDate,
@@ -147,17 +180,22 @@ async function syncLeaveToSupabase(leave: LeaveRequest) {
 async function syncAllLeavesToSupabase(leaves: LeaveRequest[]) {
   if (supabase && leaves.length > 0) {
     try {
-      const payload = leaves.map(leave => ({
-        id: leave.id || "lv-" + Math.floor(Math.random() * 1000000),
-        employee_id: leave.employeeId,
-        employee_name: leave.employeeName || db.employees.find(e => e.id === leave.employeeId)?.fullName || "Employee " + leave.employeeId,
-        leave_type: leave.leaveType || "Casual Leave",
-        start_date: leave.startDate,
-        end_date: leave.endDate,
-        reason: leave.reason,
-        status: leave.status || "Pending",
-        applied_date: leave.appliedDate || new Date().toISOString().split('T')[0]
-      }));
+      const payload = leaves.map(leave => {
+        const emp = db.employees.find(e => e.id === leave.employeeId);
+        const compId = emp?.companyId || MGM_COMPANY_ID;
+        return {
+          id: leave.id || "lv-" + Math.floor(Math.random() * 1000000),
+          employee_id: leave.employeeId,
+          company_id: compId,
+          employee_name: leave.employeeName || emp?.fullName || "Employee " + leave.employeeId,
+          leave_type: leave.leaveType || "Casual Leave",
+          start_date: leave.startDate,
+          end_date: leave.endDate,
+          reason: leave.reason,
+          status: leave.status || "Pending",
+          applied_date: leave.appliedDate || new Date().toISOString().split('T')[0]
+        };
+      });
       const { error } = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
       if (error) {
         console.warn("Supabase bulk leaves upsert warning:", error.message);
@@ -418,14 +456,19 @@ function writeDatabase(state: AppState) {
       try {
         await supabase.from("snailhr_state").upsert({ key: "app_state", value: state });
         if (state.attendance && state.attendance.length > 0) {
-          const payload = state.attendance.map(a => ({
-            id: a.id,
-            employee_id: a.employeeId,
-            date: a.date,
-            clock_in: a.clockIn || null,
-            clock_out: a.clockOut || null,
-            status: a.status || "Present"
-          }));
+          const payload = state.attendance.map(a => {
+            const emp = state.employees.find(e => e.id === a.employeeId);
+            const compId = emp?.companyId || MGM_COMPANY_ID;
+            return {
+              id: a.id,
+              employee_id: a.employeeId,
+              date: a.date,
+              clock_in: a.clockIn || null,
+              clock_out: a.clockOut || null,
+              status: a.status || "Present",
+              company_id: compId
+            };
+          });
           const { error } = await supabase.from("attendance").upsert(payload, { onConflict: "id" });
           if (error) {
             console.warn("Supabase attendance bulk upsert error:", error.message);
@@ -447,6 +490,7 @@ async function syncEmployeeToSupabase(emp: Employee) {
     try {
       const payload = {
         id: emp.id,
+        company_id: emp.companyId || MGM_COMPANY_ID,
         full_name: emp.fullName,
         email: emp.email,
         phone: emp.phone,
@@ -489,15 +533,39 @@ async function startServer() {
   
   // 1. Get entire app state directly from Supabase tables
   app.get("/api/data", async (req, res) => {
+    const reqCompanyId = req.query.companyId as string || MGM_COMPANY_ID;
     try {
       const currentData = await fetchAllFromSupabase();
-      if (!currentData.employees || currentData.employees.length === 0) {
-        currentData.employees = initialEmployees;
-      }
-      res.json(currentData);
+      
+      // Filter the data specifically for this company
+      const companyEmployees = (currentData.employees || []).filter(e => (e.companyId || MGM_COMPANY_ID) === reqCompanyId);
+      const employeeIds = new Set(companyEmployees.map(e => e.id));
+
+      const filteredData = {
+        ...currentData,
+        employees: companyEmployees,
+        attendance: (currentData.attendance || []).filter(a => employeeIds.has(a.employeeId)),
+        leaves: (currentData.leaves || []).filter(l => employeeIds.has(l.employeeId)),
+        expenses: (currentData.expenses || []).filter(e => employeeIds.has(e.employeeId)),
+        fines: (currentData.fines || []).filter(f => employeeIds.has(f.employeeId)),
+        reimbursements: (currentData.reimbursements || []).filter(r => employeeIds.has(r.employeeId)),
+        payslips: (currentData.payslips || []).filter(p => employeeIds.has(p.employeeId)),
+        inventory: (currentData.inventory || []).filter(i => !i.assignedToEmployeeId || employeeIds.has(i.assignedToEmployeeId)),
+        inventoryRequests: (currentData.inventoryRequests || []).filter(ir => employeeIds.has(ir.employeeId)),
+      };
+
+      res.json(filteredData);
     } catch (err) {
       console.warn("GET /api/data fallback to initialData:", err);
-      res.json(initialData);
+      // Filter initialData fallback
+      const fallbackEmployees = (initialData.employees || []).filter(e => (e.companyId || MGM_COMPANY_ID) === reqCompanyId);
+      const fallbackIds = new Set(fallbackEmployees.map(e => e.id));
+      res.json({
+        ...initialData,
+        employees: fallbackEmployees,
+        attendance: (initialData.attendance || []).filter(a => fallbackIds.has(a.employeeId)),
+        leaves: (initialData.leaves || []).filter(l => fallbackIds.has(l.employeeId)),
+      });
     }
   });
 
@@ -568,22 +636,374 @@ async function startServer() {
     }
 
     const { password: _, ...userWithoutPassword } = employee;
-    res.json({ success: true, employee: userWithoutPassword });
+
+    // Resolve company info for this employee
+    const empCompanyId = employee.companyId || MGM_COMPANY_ID;
+    let subscriptionModel: 1 | 2 | 3 | 4 = 4; // default Full Suite
+    let companyName = "MGM Financiers Priv Limited";
+    if (supabase) {
+      try {
+        const { data: compData } = await supabase
+          .from("companies")
+          .select("id, name, subscription_model")
+          .eq("id", empCompanyId)
+          .maybeSingle();
+        if (compData) {
+          subscriptionModel = compData.subscription_model as 1 | 2 | 3 | 4;
+          companyName = compData.name;
+        }
+      } catch (e) { /* fallback to default */ }
+    } else {
+      const localCompany = db.companies?.find(c => c.id === empCompanyId);
+      if (localCompany) {
+        subscriptionModel = localCompany.subscriptionModel;
+        companyName = localCompany.name;
+      }
+    }
+
+    res.json({
+      success: true,
+      employee: { ...userWithoutPassword, companyId: empCompanyId },
+      companyId: empCompanyId,
+      companyName,
+      subscriptionModel
+    });
+  });
+
+  // ============================================================
+  // SUPER ADMIN ROUTES
+  // ============================================================
+
+  // SA-1. Super Admin Login
+  app.post("/api/superadmin/login", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password required" });
+    }
+
+    const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL || "superadmin@snailhr.com";
+    const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD || "SuperAdmin@123";
+
+    // Try Supabase first
+    if (supabase) {
+      try {
+        const { data: saData } = await supabase
+          .from("super_admins")
+          .select("*")
+          .ilike("email", email)
+          .maybeSingle();
+
+        if (saData) {
+          const isMatch = bcrypt.compareSync(password, saData.password);
+          if (!isMatch) {
+            return res.status(401).json({ error: "Invalid super admin credentials" });
+          }
+          return res.json({
+            success: true,
+            superAdmin: { id: saData.id, email: saData.email, fullName: saData.full_name, createdAt: saData.created_at }
+          });
+        }
+      } catch (e) { /* fallback to env credentials */ }
+    }
+
+    // Fallback: env-based credentials
+    if (email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return res.status(401).json({ error: "Invalid super admin credentials" });
+    }
+    const isEnvMatch = (password === SUPER_ADMIN_PASSWORD) || bcrypt.compareSync(password, bcrypt.hashSync(SUPER_ADMIN_PASSWORD, 10));
+    if (password !== SUPER_ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Invalid super admin credentials" });
+    }
+    return res.json({
+      success: true,
+      superAdmin: { id: "sa-local-001", email: SUPER_ADMIN_EMAIL, fullName: "SnailHR Super Admin", createdAt: new Date().toISOString() }
+    });
+  });
+
+  // SA-2. Get all companies with user stats
+  app.get("/api/superadmin/companies", async (req, res) => {
+    try {
+      let companies: Company[] = [];
+      if (supabase) {
+        const { data: compData } = await supabase
+          .from("companies")
+          .select("*")
+          .order("created_at", { ascending: true });
+        if (compData) {
+          // Get employee counts per company
+          const { data: empData } = await supabase
+            .from("employees")
+            .select("company_id, role");
+
+          companies = compData.map((c: any) => {
+            const compEmps = (empData || []).filter((e: any) => e.company_id === c.id);
+            return {
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              subscriptionModel: c.subscription_model as 1 | 2 | 3 | 4,
+              createdAt: c.created_at,
+              isActive: c.is_active,
+              totalEmployees: compEmps.filter((e: any) => e.role === "employee").length,
+              totalAdmins: compEmps.filter((e: any) => e.role === "admin").length,
+              totalHR: compEmps.filter((e: any) => e.role === "hr").length
+            };
+          });
+        }
+      } else {
+        companies = db.companies || [];
+      }
+      res.json({ success: true, companies });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || "Failed to fetch companies" });
+    }
+  });
+
+  // SA-3. Create a new company
+  app.post("/api/superadmin/companies", async (req, res) => {
+    const { name, slug, subscriptionModel } = req.body;
+    if (!name || !slug) {
+      return res.status(400).json({ error: "Company name and slug are required" });
+    }
+    const model = Number(subscriptionModel) || 1;
+    if (![1,2,3,4].includes(model)) {
+      return res.status(400).json({ error: "subscriptionModel must be 1, 2, 3, or 4" });
+    }
+
+    const newCompany: Company = {
+      id: `comp-${Date.now()}`,
+      name,
+      slug: slug.toLowerCase().replace(/\s+/g, "-"),
+      subscriptionModel: model as 1 | 2 | 3 | 4,
+      createdAt: new Date().toISOString(),
+      isActive: true
+    };
+
+    if (supabase) {
+      try {
+        const { error } = await supabase.from("companies").insert({
+          id: newCompany.id,
+          name: newCompany.name,
+          slug: newCompany.slug,
+          subscription_model: newCompany.subscriptionModel,
+          created_at: newCompany.createdAt,
+          is_active: true
+        });
+        if (error) {
+          if (error.code === "23505") return res.status(400).json({ error: "Company slug already exists" });
+          return res.status(400).json({ error: error.message });
+        }
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    if (!db.companies) db.companies = [];
+    db.companies.push(newCompany);
+    res.status(201).json({ success: true, company: newCompany });
+  });
+
+  // SA-4. Update company (name, model, active status)
+  app.put("/api/superadmin/companies/:id", async (req, res) => {
+    const { id } = req.params;
+    const { name, subscriptionModel, isActive } = req.body;
+
+    if (supabase) {
+      try {
+        const updates: any = {};
+        if (name) updates.name = name;
+        if (subscriptionModel !== undefined) updates.subscription_model = Number(subscriptionModel);
+        if (isActive !== undefined) updates.is_active = isActive;
+        const { error } = await supabase.from("companies").update(updates).eq("id", id);
+        if (error) return res.status(400).json({ error: error.message });
+      } catch (e: any) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    const idx = (db.companies || []).findIndex(c => c.id === id);
+    if (idx !== -1) {
+      if (name) db.companies[idx].name = name;
+      if (subscriptionModel !== undefined) db.companies[idx].subscriptionModel = Number(subscriptionModel) as 1|2|3|4;
+      if (isActive !== undefined) db.companies[idx].isActive = isActive;
+    }
+
+    res.json({ success: true, message: "Company updated" });
+  });
+
+  // SA-5. Create admin user for a specific company
+  app.post("/api/superadmin/companies/:companyId/admin", async (req, res) => {
+    const { companyId } = req.params;
+    const empData = req.body;
+
+    if (!empData.fullName || !empData.email || !empData.password) {
+      return res.status(400).json({ error: "fullName, email, and password are required" });
+    }
+
+    // Verify company exists
+    let companyExists = false;
+    if (supabase) {
+      const { data } = await supabase.from("companies").select("id").eq("id", companyId).maybeSingle();
+      companyExists = !!data;
+    } else {
+      companyExists = (db.companies || []).some(c => c.id === companyId);
+    }
+    if (!companyExists) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+
+    const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(empData.password, salt);
+
+    const newAdmin: Employee = {
+      id: newEmpId,
+      companyId,
+      fullName: empData.fullName,
+      email: empData.email,
+      phone: empData.phone || "+91 99999 00000",
+      role: "admin",
+      designationId: "des-1",
+      department: empData.department || "Executive",
+      joiningDate: new Date().toISOString().split("T")[0],
+      status: "Active",
+      salary: { basic: 0, hra: 0, allowances: 0, pfDeduction: 0 },
+      bankDetails: { accountNumber: "", bankName: "", ifsc: "" },
+      address: empData.address || "",
+      emergencyContact: { name: "", relation: "", phone: "" },
+      documents: [],
+      onboardingTasks: [],
+      password: hashedPassword
+    };
+
+    db.employees.push(newAdmin);
+
+    if (supabase) {
+      try {
+        await supabase.from("employees").upsert({
+          id: newAdmin.id,
+          company_id: companyId,
+          full_name: newAdmin.fullName,
+          email: newAdmin.email,
+          phone: newAdmin.phone,
+          role: "admin",
+          designation_id: newAdmin.designationId,
+          department: newAdmin.department,
+          joining_date: newAdmin.joiningDate,
+          status: newAdmin.status,
+          salary_basic: 0,
+          salary_hra: 0,
+          salary_allowances: 0,
+          salary_pf_deduction: 0,
+          address: newAdmin.address || "",
+          password: hashedPassword
+        }, { onConflict: "id" });
+      } catch (e) {
+        console.warn("Supabase admin user sync error:", e);
+      }
+    }
+
+    const { password: _, ...adminWithoutPwd } = newAdmin;
+    res.status(201).json({ success: true, admin: adminWithoutPwd });
+  });
+
+  // SA-6. Get all users for a specific company
+  app.get("/api/superadmin/companies/:companyId/users", async (req, res) => {
+    const { companyId } = req.params;
+    try {
+      let users: any[] = [];
+      if (supabase) {
+        const { data } = await supabase
+          .from("employees")
+          .select("id, full_name, email, phone, role, department, status, joining_date, company_id")
+          .eq("company_id", companyId)
+          .order("role");
+        if (data) {
+          users = data.map((e: any) => ({
+            id: e.id,
+            fullName: e.full_name,
+            email: e.email,
+            phone: e.phone,
+            role: e.role,
+            department: e.department,
+            status: e.status,
+            joiningDate: e.joining_date
+          }));
+        }
+      } else {
+        users = db.employees
+          .filter(e => e.companyId === companyId)
+          .map(e => ({ id: e.id, fullName: e.fullName, email: e.email, role: e.role, department: e.department, status: e.status }));
+      }
+      res.json({ success: true, users });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // SA-7. Get company subscription model (used by frontend for feature gating)
+  app.get("/api/company/model", async (req, res) => {
+    const companyId = req.query.companyId as string || MGM_COMPANY_ID;
+    try {
+      if (supabase) {
+        const { data } = await supabase
+          .from("companies")
+          .select("subscription_model, name, is_active")
+          .eq("id", companyId)
+          .maybeSingle();
+        if (data) {
+          return res.json({
+            subscriptionModel: data.subscription_model,
+            companyName: data.name,
+            isActive: data.is_active,
+            features: {
+              whatsapp: [2, 4].includes(data.subscription_model),
+              chatbot: [3, 4].includes(data.subscription_model)
+            }
+          });
+        }
+      }
+      // fallback to in-memory
+      const comp = (db.companies || []).find(c => c.id === companyId);
+      const model = comp?.subscriptionModel || 4;
+      res.json({
+        subscriptionModel: model,
+        companyName: comp?.name || "MGM Financiers Priv Limited",
+        isActive: comp?.isActive ?? true,
+        features: { whatsapp: [2,4].includes(model), chatbot: [3,4].includes(model) }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // 2. Add designation
   app.post("/api/designations", (req, res) => {
-    const { title, department } = req.body;
+    const { title, department, companyId } = req.body;
     if (!title || !department) {
       return res.status(400).json({ error: "Title and Department are required" });
     }
-    const newDes: Designation = {
+    const newDes: Designation & { companyId?: string } = {
       id: "des-" + Date.now(),
       title,
-      department
+      department,
+      companyId: companyId || null
     };
     db.designations.push(newDes);
     writeDatabase(db);
+
+    // Sync directly to Supabase PostgreSQL table
+    if (supabase) {
+      supabase.from("designations").upsert({
+        id: newDes.id,
+        title: newDes.title,
+        department: newDes.department,
+        company_id: companyId || null
+      }).then(({ error }) => {
+        if (error) console.error("Failed to sync designation to Supabase:", error);
+      });
+    }
+
     res.status(201).json(newDes);
   });
 
@@ -611,6 +1031,7 @@ async function startServer() {
 
     const newEmp: Employee = {
       id: newEmpId,
+      companyId: empData.companyId || MGM_COMPANY_ID,
       fullName: empData.fullName,
       email: empData.email,
       phone: empData.phone || "+91 99999 88888",
@@ -713,6 +1134,7 @@ async function startServer() {
 
         const newEmp: Employee = {
           id: newEmpId,
+          companyId: req.body.companyId || empData.companyId || empData.company_id || MGM_COMPANY_ID,
           fullName: empData.fullName || `Agent ${newEmpId}`,
           email: empData.email || `agent.${newEmpId.toLowerCase()}@mgmfinanciers.com`,
           phone: empData.phone || "+91 98765 00000",
@@ -934,15 +1356,25 @@ async function startServer() {
       const now = new Date();
       let status: "Present" | "Late" = "Present";
       let lateTime = "09:30";
+      const companyId = await getCompanyIdForEmployee(employeeId);
       if (supabase) {
         try {
-          const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
-          if (data && data.late_threshold) {
-            lateTime = data.late_threshold;
+          let settingsData = null;
+          if (companyId) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (settingsData && settingsData.late_threshold) {
+            lateTime = settingsData.late_threshold;
           }
         } catch (e) {}
-      } else if (db.timingSettings) {
-        lateTime = db.timingSettings.lateThreshold || "09:30";
+      } else {
+        const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
+        lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
       }
       const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
       if (now.getHours() > lateHours || (now.getHours() === lateHours && now.getMinutes() > lateMinutes)) {
@@ -960,6 +1392,9 @@ async function startServer() {
       };
       db.attendance.push(newPunch);
       writeDatabase(db);
+      if (supabase) {
+        await syncPunchToSupabase(newPunch);
+      }
       return res.status(201).json(newPunch);
     }
 
@@ -990,6 +1425,9 @@ async function startServer() {
     }
 
     writeDatabase(db);
+    if (supabase) {
+      await syncPunchToSupabase(activePunch);
+    }
     res.json(activePunch);
   });
 
@@ -1056,19 +1494,29 @@ async function startServer() {
       return res.json(db.attendance[existingIndex]);
     } else {
       // Create new punch record
+      const companyId = await getCompanyIdForEmployee(employeeId);
       let defaultClockIn = "09:00";
       let defaultClockOut = "18:00";
       if (supabase) {
         try {
-          const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("id", "default").maybeSingle();
-          if (data) {
-            defaultClockIn = data.clock_in_time || "09:00";
-            defaultClockOut = data.clock_out_time || "18:00";
+          let settingsData = null;
+          if (companyId) {
+            const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("company_id", companyId).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData) {
+            const { data } = await supabase.from("timing_settings").select("clock_in_time, clock_out_time").eq("id", "default").maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (settingsData) {
+            defaultClockIn = settingsData.clock_in_time || "09:00";
+            defaultClockOut = settingsData.clock_out_time || "18:00";
           }
         } catch (e) {}
-      } else if (db.timingSettings) {
-        defaultClockIn = db.timingSettings.clockInTime || "09:00";
-        defaultClockOut = db.timingSettings.clockOutTime || "18:00";
+      } else {
+        const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
+        defaultClockIn = compSettings?.clockInTime || db.timingSettings?.clockInTime || "09:00";
+        defaultClockOut = compSettings?.clockOutTime || db.timingSettings?.clockOutTime || "18:00";
       }
       const newPunch: AttendancePunch = {
         id: "pun-" + Date.now(),
@@ -1097,16 +1545,29 @@ async function startServer() {
       breakStartTime: settings.breakStartTime || "13:00",
       breakEndTime: settings.breakEndTime || "14:00"
     };
+    const companyId = settings.companyId || "";
+    const recordId = companyId || "default";
+
+    if (companyId) {
+      if (!db.companyTimingSettings) {
+        db.companyTimingSettings = {};
+      }
+      db.companyTimingSettings[companyId] = timingSettings;
+    }
     db.timingSettings = timingSettings;
+    writeDatabase(db);
+
     if (supabase) {
       try {
         await supabase.from("timing_settings").upsert({
-          id: "default",
+          id: recordId,
+          company_id: companyId || null,
           clock_in_time: timingSettings.clockInTime,
           clock_out_time: timingSettings.clockOutTime,
           late_threshold: timingSettings.lateThreshold,
           break_start_time: timingSettings.breakStartTime,
-          break_end_time: timingSettings.breakEndTime
+          break_end_time: timingSettings.breakEndTime,
+          changed_by: settings.changedBy || "System"
         }, { onConflict: "id" });
       } catch (e) {
         console.warn("Supabase settings sync error:", e);
@@ -1271,23 +1732,30 @@ async function startServer() {
 
   // 16. Create/Register Inventory Asset
   app.post("/api/inventory", (req, res) => {
-    const { name, serialNumber, category } = req.body;
+    const { id, name, serialNumber, category, status, assignedToEmployeeId, assignedDate, companyId, company_id } = req.body;
     if (!name || !serialNumber || !category) {
       return res.status(400).json({ error: "All asset fields are required" });
     }
 
     const newAsset: InventoryItem = {
-      id: "inv-" + Date.now(),
+      id: id || "inv-" + Date.now(),
       name,
       serialNumber,
       category,
-      status: "Available",
-      assignedToEmployeeId: null,
-      assignedDate: null
+      status: status || "Available",
+      assignedToEmployeeId: assignedToEmployeeId || null,
+      assignedDate: assignedDate || null,
+      companyId: companyId || company_id || undefined
     };
 
+    if (!db.inventory) db.inventory = [];
     db.inventory.push(newAsset);
     writeDatabase(db);
+
+    if (supabase) {
+      syncInventoryToSupabase(newAsset);
+    }
+
     res.status(201).json(newAsset);
   });
 
@@ -1535,10 +2003,34 @@ async function startServer() {
 
   // 26. AI Chatbot assistant with Gemini Core grounding
   app.post("/api/chat", async (req, res) => {
-    const { message, employeeId, chatHistory } = req.body;
+    const { message, employeeId, chatHistory, companyId } = req.body;
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
+
+    // --- Subscription Model Gate: Chatbot only for Model 3 and 4 ---
+    const chatCompanyId = companyId || MGM_COMPANY_ID;
+    try {
+      let chatbotAllowed = true;
+      if (supabase) {
+        const { data: compData } = await supabase
+          .from("companies")
+          .select("subscription_model")
+          .eq("id", chatCompanyId)
+          .maybeSingle();
+        if (compData) {
+          chatbotAllowed = [3, 4].includes(compData.subscription_model);
+        }
+      } else {
+        const comp = (db.companies || []).find(c => c.id === chatCompanyId);
+        if (comp) chatbotAllowed = [3, 4].includes(comp.subscriptionModel);
+      }
+      if (!chatbotAllowed) {
+        return res.status(403).json({
+          error: "Chatbot is not available in your current subscription plan. Please upgrade to Chatbot Only (Model 3) or Full Suite (Model 4)."
+        });
+      }
+    } catch (e) { /* allow if check fails */ }
 
     try {
       if (supabase) {

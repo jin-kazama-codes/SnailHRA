@@ -25,6 +25,7 @@ export interface AppState {
   customDepartments: string[];
   customBranches: string[];
   timingSettings: TimingSettings;
+  companyTimingSettings?: Record<string, TimingSettings>;
   attendanceBreaks?: AttendanceBreak[];
   excelUploads?: ExcelUploadRecord[];
 }

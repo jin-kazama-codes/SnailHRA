@@ -8,7 +8,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const { type, updatedList, addedItem, removedItem } = await request.json();
+    const { type, updatedList, addedItem, removedItem, companyId } = await request.json();
     if (!type || !Array.isArray(updatedList)) {
       return NextResponse.json({ error: "Type and updatedList array are required." }, { status: 400 });
     }
@@ -40,14 +40,14 @@ export async function POST(request: Request) {
 
     // Sync changes to Supabase database tables asynchronously
     if (type === "departments") {
-      if (added) await syncDepartmentToSupabase(added);
-      if (removed) await deleteDepartmentFromSupabase(removed);
+      if (added) await syncDepartmentToSupabase(added, companyId);
+      if (removed) await deleteDepartmentFromSupabase(removed, companyId);
     } else if (type === "branches") {
-      if (added) await syncBranchToSupabase(added);
-      if (removed) await deleteBranchFromSupabase(removed);
+      if (added) await syncBranchToSupabase(added, companyId);
+      if (removed) await deleteBranchFromSupabase(removed, companyId);
     } else if (type === "leaveTypes") {
-      if (added) await syncLeaveTypeToSupabase(added);
-      if (removed) await deleteLeaveTypeFromSupabase(removed);
+      if (added) await syncLeaveTypeToSupabase(added, companyId);
+      if (removed) await deleteLeaveTypeFromSupabase(removed, companyId);
     }
 
     return NextResponse.json({ 

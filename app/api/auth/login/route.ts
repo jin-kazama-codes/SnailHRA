@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import bcrypt from "bcryptjs";
 import { Employee } from "@/src/types";
 
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
 
           employee = {
             id: data.id,
+            companyId: data.company_id || "",
             fullName: data.full_name || data.fullName || "",
             email: data.email || "",
             phone: data.phone || "",
@@ -103,7 +105,42 @@ export async function POST(request: Request) {
 
     // Success: Return user details without password for safety
     const { password: _, ...userWithoutPassword } = employee;
-    return NextResponse.json({ success: true, employee: userWithoutPassword });
+
+    const resolvedCompanyId = employee.companyId || (employee as any).company_id || "a1b2c3d4-0001-0001-0001-000000000001";
+    let resolvedCompanyName = "";
+    let resolvedSubscriptionModel = 4;
+
+    // Use supabaseAdmin to bypass RLS and reliably fetch the company name
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient && resolvedCompanyId) {
+      try {
+        const { data: compData, error: compErr } = await dbClient
+          .from("companies")
+          .select("name, subscription_model")
+          .eq("id", resolvedCompanyId)
+          .maybeSingle();
+        if (compErr) {
+          console.warn("Company lookup error:", compErr.message);
+        }
+        if (compData) {
+          resolvedCompanyName = compData.name || "";
+          resolvedSubscriptionModel = compData.subscription_model ?? 4;
+        }
+      } catch (err) {
+        console.warn("Error fetching company details:", err);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      employee: {
+        ...userWithoutPassword,
+        companyId: resolvedCompanyId
+      },
+      companyId: resolvedCompanyId,
+      companyName: resolvedCompanyName,
+      subscriptionModel: resolvedSubscriptionModel
+    });
   } catch (error) {
     console.error("Login route error:", error);
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });

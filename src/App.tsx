@@ -26,6 +26,8 @@ import FinesView from "./components/FinesView";
 import ConfigurationView from "./components/ConfigurationView";
 import ChatbotWidget from "./components/ChatbotWidget";
 import LoginView from "./components/LoginView";
+import SuperAdminLoginView from "./components/SuperAdminLoginView";
+import SuperAdminDashboard from "./components/SuperAdminDashboard";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -49,9 +51,9 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Active RBAC Persona Simulation (Persisted across refreshes)
-  const [activeRole, setActiveRole] = useState<UserRole>(() => {
+  const [activeRole, setActiveRole] = useState<"admin" | "hr" | "employee">(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("snailhr_activeRole") as UserRole) || "admin";
+      return (localStorage.getItem("snailhr_activeRole") as "admin" | "hr" | "employee") || "admin";
     }
     return "admin";
   });
@@ -69,6 +71,41 @@ export default function App() {
     return false;
   });
 
+  const [isSuperAdminMode, setIsSuperAdminMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.location.pathname === "/superadmin" || localStorage.getItem("snailhr_superadmin_mode") === "true";
+    }
+    return false;
+  });
+
+  const [isSuperAdminLoggedIn, setIsSuperAdminLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_sa_isLoggedIn") === "true";
+    }
+    return false;
+  });
+
+  const [companyId, setCompanyId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_companyId") || "";
+    }
+    return "";
+  });
+
+  const [companyName, setCompanyName] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_companyName") || "";
+    }
+    return "";
+  });
+
+  const [subscriptionModel, setSubscriptionModel] = useState<1 | 2 | 3 | 4>(() => {
+    if (typeof window !== "undefined") {
+      return (Number(localStorage.getItem("snailhr_subscriptionModel")) as 1 | 2 | 3 | 4) || 4; // Default Full Suite
+    }
+    return 4;
+  });
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       if (isLoggedIn) {
@@ -78,9 +115,34 @@ export default function App() {
         localStorage.removeItem("snailhr_currentEmployeeId");
         localStorage.removeItem("snailhr_activeRole");
         localStorage.removeItem("snailhr_currentView");
+        localStorage.removeItem("snailhr_companyId");
+        localStorage.removeItem("snailhr_companyName");
+        localStorage.removeItem("snailhr_subscriptionModel");
       }
     }
   }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (isSuperAdminLoggedIn) {
+        localStorage.setItem("snailhr_sa_isLoggedIn", "true");
+      } else {
+        localStorage.removeItem("snailhr_sa_isLoggedIn");
+      }
+    }
+  }, [isSuperAdminLoggedIn]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("snailhr_superadmin_mode", String(isSuperAdminMode));
+      // update path in browser dynamically without router if possible
+      if (isSuperAdminMode) {
+        window.history.pushState(null, "", "/superadmin");
+      } else {
+        window.history.pushState(null, "", "/");
+      }
+    }
+  }, [isSuperAdminMode]);
 
   // App Database State
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -161,8 +223,9 @@ export default function App() {
   // Fetch all database records from backend
   const refreshDatabase = async () => {
     try {
-      const res = await fetch("/api/data");
-      if (!res.ok) throw new Error("Failed to fetch MGM FINANCIERS PRIV LIMITED database.");
+      const activeCompanyId = localStorage.getItem("snailhr_companyId") || "";
+      const res = await fetch(`/api/data?companyId=${activeCompanyId}`);
+      if (!res.ok) throw new Error("Failed to fetch SnailHR tenant database.");
       const data = await res.json();
 
       const fetchedEmployees = (data.employees || []).sort((a: any, b: any) => {
@@ -248,9 +311,9 @@ export default function App() {
       setPayslips(data.payslips || []);
       setEmails(data.simulatedEmails || []);
 
-      setCustomLeaveTypes(prev => Array.from(new Set([...(prev || []), ...(data.customLeaveTypes || [])])));
-      setCustomDepartments(prev => Array.from(new Set([...(prev || []), ...(data.customDepartments || [])])));
-      setCustomBranches(prev => Array.from(new Set([...(prev || []), ...(data.customBranches || [])])));
+      setCustomLeaveTypes(data.customLeaveTypes || []);
+      setCustomDepartments(data.customDepartments || []);
+      setCustomBranches(data.customBranches || []);
 
       // Check Supabase Synchronization Status
       try {
@@ -266,7 +329,7 @@ export default function App() {
       setError(null);
     } catch (err: any) {
       console.error("refreshDatabase error:", err);
-      setError("Could not establish a connection to the MGM FINANCIERS PRIV LIMITED full-stack service.");
+      setError(`Could not establish a connection to the ${companyName} full-stack service.`);
     } finally {
       setLoading(false);
     }
@@ -278,7 +341,9 @@ export default function App() {
 
   // Sync role switch with defaults
   const handleRoleChange = (role: UserRole) => {
-    setActiveRole(role);
+    if (role !== "super_admin") {
+      setActiveRole(role);
+    }
     if (role === "employee" && currentView === "directory") {
       setCurrentView("dashboard");
     }
@@ -293,7 +358,7 @@ export default function App() {
   const handleEmployeeIdChange = (id: string) => {
     setCurrentEmployeeId(id);
     const emp = employees.find(e => e.id === id);
-    if (emp) {
+    if (emp && emp.role !== "super_admin") {
       setActiveRole(emp.role);
     }
   };
@@ -301,8 +366,19 @@ export default function App() {
   const handleLoginSuccess = (employee: Employee) => {
     setIsLoggedIn(true);
     setCurrentEmployeeId(employee.id);
-    setActiveRole(employee.role);
+    if (employee.role !== "super_admin") {
+      setActiveRole(employee.role);
+    }
     setCurrentView("dashboard");
+    // Sync freshly-written localStorage tenant values into React state
+    if (typeof window !== "undefined") {
+      const newCompanyName = localStorage.getItem("snailhr_companyName") || "";
+      const newCompanyId = localStorage.getItem("snailhr_companyId") || "";
+      const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "4") as 1|2|3|4;
+      setCompanyName(newCompanyName);
+      setCompanyId(newCompanyId);
+      setSubscriptionModel(newSubModel);
+    }
   };
 
   const handleLogout = () => {
@@ -310,6 +386,27 @@ export default function App() {
     setCurrentEmployeeId("");
     setActiveRole("employee");
     setCurrentView("dashboard");
+    setCompanyName("");
+    setCompanyId("");
+
+    // Clear all tenant-scoped database states to prevent data leakage
+    setEmployees([]);
+    setDesignations([]);
+    setAttendance([]);
+    setLeaves([]);
+    setHolidays([]);
+    setPolicies([]);
+    setExpenses([]);
+    setInventory([]);
+    setInventoryRequests([]);
+    setFines([]);
+    setReimbursements([]);
+    setPayslips([]);
+    setEmails([]);
+    setCustomLeaveTypes([]);
+    setCustomDepartments([]);
+    setCustomBranches([]);
+
     if (typeof window !== "undefined") {
       localStorage.removeItem("snailhr_isLoggedIn");
       localStorage.removeItem("snailhr_currentEmployeeId");
@@ -326,6 +423,7 @@ export default function App() {
 
   // 1. Onboard employee
   const handleOnboardEmployee = async (empData: any) => {
+    showToast("Onboarding new agent, please wait...", "info");
     try {
       const res = await fetch("/api/employees", {
         method: "POST",
@@ -335,9 +433,13 @@ export default function App() {
       if (res.ok) {
         await refreshDatabase();
         showToast("Employee onboarded successfully! Credential campaign sent.", "success");
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`Failed to onboard agent: ${errData.error || "Server error"}`, "error");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast(`Error onboarding agent: ${err?.message || err}`, "error");
     }
   };
 
@@ -357,7 +459,8 @@ export default function App() {
           filename: filename || `Employees_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
           fileData: fileData || "",
           uploadedByName: currentEmployee?.fullName || "Admin User",
-          uploadedById: currentEmployee?.id || ""
+          uploadedById: currentEmployee?.id || "",
+          companyId
         })
       });
       if (res.ok) {
@@ -460,7 +563,7 @@ export default function App() {
       const res = await fetch("/api/holidays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newHoliday)
+        body: JSON.stringify({ ...newHoliday, companyId })
       });
       const data = await res.json();
       if (res.ok && data.holiday) {
@@ -504,7 +607,7 @@ export default function App() {
       const res = await fetch("/api/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(policyObj)
+        body: JSON.stringify({ ...policyObj, companyId })
       });
       const data = await res.json();
       if (res.ok && data.policy) {
@@ -796,7 +899,8 @@ export default function App() {
         status: assetData.status || "Available",
         assignedToEmployeeId: assetData.assignedToEmployeeId || null,
         assignedDate: assetData.assignedDate || null,
-        branch: assetData.branch
+        branch: assetData.branch,
+        companyId: companyId
       };
 
       // Optimistically add to state instantly so it appears on screen without refresh!
@@ -959,7 +1063,7 @@ export default function App() {
       const res = await fetch("/api/designations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, department })
+        body: JSON.stringify({ title, department, companyId })
       });
       if (res.ok) {
         await refreshDatabase();
@@ -1004,6 +1108,26 @@ export default function App() {
     }
   };
 
+  const handleResetPayslip = async (employeeId: string, month: string) => {
+    try {
+      const res = await fetch("/api/payroll/generate", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, month })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Payslip has been reset successfully.", "success");
+      } else {
+        showToast(data.error || "Failed to reset payslip", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error resetting payslip", "error");
+    }
+  };
+
   // 19. Disburse payslips
   const handlePayAllPayslips = async (month: string) => {
     try {
@@ -1041,7 +1165,8 @@ export default function App() {
           type, 
           updatedList,
           addedItem: action === "add" ? item : undefined,
-          removedItem: action === "remove" ? item : undefined
+          removedItem: action === "remove" ? item : undefined,
+          companyId
         })
       });
 
@@ -1070,7 +1195,7 @@ export default function App() {
       const res = await fetch("/api/attendance/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settings, changedBy })
+        body: JSON.stringify({ ...settings, changedBy, companyId })
       });
       if (res.ok) {
         const data = await res.json();
@@ -1089,12 +1214,51 @@ export default function App() {
     }
   };
 
+  // Super Admin view routing
+  if (isSuperAdminMode) {
+    if (!isSuperAdminLoggedIn) {
+      return (
+        <SuperAdminLoginView 
+          onLoginSuccess={(sa) => {
+            setIsSuperAdminLoggedIn(true);
+          }} 
+          onBackToEmployeeLogin={() => {
+            setIsSuperAdminMode(false);
+          }}
+        />
+      );
+    }
+    return (
+      <SuperAdminDashboard 
+        onLogout={() => {
+          setIsSuperAdminLoggedIn(false);
+        }}
+      />
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100">
         <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
-        <p className="text-xs font-semibold mt-4 tracking-widest uppercase text-slate-400 dark:text-gray-500">Booting MGM FINANCIERS PRIV LIMITED Cloud Core...</p>
+        <p className="text-xs font-semibold mt-4 tracking-widest uppercase text-slate-400 dark:text-gray-500">Booting SnailHR Cloud Core...</p>
       </div>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <LoginView 
+        onLoginSuccess={(emp) => {
+          handleLoginSuccess(emp);
+          setLoading(true);
+          // reload DB so it gets company-scoped data
+          refreshDatabase();
+        }} 
+        onSuperAdminLink={() => {
+          setIsSuperAdminMode(true);
+        }}
+      />
     );
   }
 
@@ -1105,7 +1269,10 @@ export default function App() {
         <h2 className="text-xl font-bold font-display">Database Sync Timeout</h2>
         <p className="text-xs text-slate-400 mt-2 max-w-sm">{error || "Could not load employee catalog roster."}</p>
         <button
-          onClick={refreshDatabase}
+          onClick={() => {
+            setLoading(true);
+            refreshDatabase();
+          }}
           className="mt-6 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl flex items-center space-x-1 cursor-pointer"
         >
           <RefreshCw className="w-4 h-4" />
@@ -1113,10 +1280,6 @@ export default function App() {
         </button>
       </div>
     );
-  }
-
-  if (!isLoggedIn) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
   // Navigation Links definition
@@ -1153,14 +1316,11 @@ export default function App() {
 
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl flex items-center justify-center text-white font-black text-[11px] tracking-tight shadow-md shadow-emerald-600/20">
-              MGM
+              {companyName ? companyName.substring(0, 3).toUpperCase() : "HR"}
             </div>
             <div className="flex flex-col">
               <span className="font-display font-extrabold text-sm sm:text-base text-slate-800 dark:text-white tracking-tight leading-none">
-                MGM <span className="text-emerald-500">FINANCIERS</span>
-              </span>
-              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
-                PRIV LIMITED
+                <span className="text-emerald-500">{companyName || "SnailHR"}</span>
               </span>
             </div>
           </div>
@@ -1249,8 +1409,8 @@ export default function App() {
           </nav>
 
           <div className="pt-6 border-t border-slate-50 dark:border-[#1a1a1a]/80 text-[10px] text-slate-400 dark:text-gray-500">
-            <p className="font-bold font-display text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
-            <p className="mt-1">NBFC Licensed Broker Edition v2.4</p>
+            <p className="font-bold font-display text-slate-800 dark:text-white">{companyName} Platform Suite</p>
+            <p className="mt-1">HR Management Suite v2.4</p>
             <p className="font-mono mt-2">UTC: {new Date().toISOString().split('T')[0]}</p>
           </div>
         </aside>
@@ -1261,7 +1421,7 @@ export default function App() {
             <div className="bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a] w-64 p-4 flex flex-col justify-between h-full animate-in slide-in-from-left duration-200">
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-                  <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">MGM FINANCIERS Menu</span>
+                  <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">{companyName} Menu</span>
                   <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-slate-400">
                     <X className="w-5 h-5" />
                   </button>
@@ -1310,7 +1470,7 @@ export default function App() {
               </div>
 
               <div className="text-[10px] text-slate-400 dark:text-gray-500 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
-                <p className="font-bold text-slate-800 dark:text-white">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
+                <p className="font-bold text-slate-800 dark:text-white">{companyName} Platform Suite</p>
                 <p className="font-mono mt-1">v2.4 - Mobile Secured</p>
               </div>
             </div>
@@ -1334,6 +1494,7 @@ export default function App() {
               inventory={inventory}
               fines={fines}
               role={activeRole}
+              companyName={companyName}
               onPunchAction={handlePunchAction}
               setCurrentView={setCurrentView}
             />
@@ -1347,6 +1508,8 @@ export default function App() {
               currentUserId={currentEmployeeId}
               customDepartments={customDepartments}
               customBranches={customBranches}
+              companyId={companyId}
+              subscriptionModel={subscriptionModel}
               onOnboardEmployee={handleOnboardEmployee}
               onBulkOnboardEmployee={handleBulkOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
@@ -1371,6 +1534,7 @@ export default function App() {
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
               onToggleOnboardingTask={handleToggleOnboardingTask}
+              onUpdateCollection={handleUpdateCollection}
             />
           )}
 
@@ -1383,6 +1547,7 @@ export default function App() {
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               timingSettings={timingSettings}
+              companyName={companyName}
               onPunchAction={handlePunchAction}
               onUpdatePunch={handleUpdatePunch}
               onDeletePunch={handleDeletePunch}
@@ -1416,10 +1581,12 @@ export default function App() {
               fines={fines}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
+              companyName={companyName}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onGeneratePayslip={handleGeneratePayslip}
               onPayAllPayslips={handlePayAllPayslips}
+              onResetPayslip={handleResetPayslip}
             />
           )}
 
@@ -1463,6 +1630,7 @@ export default function App() {
               employees={employees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
+              companyName={companyName}
               onAddFine={handleAddFine}
               onUpdateFineStatus={handleUpdateFineStatus}
             />
@@ -1475,6 +1643,7 @@ export default function App() {
               customDepartments={customDepartments}
               customBranches={customBranches}
               supabaseStatus={supabaseStatus}
+              subscriptionModel={subscriptionModel}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onUpdateCollection={handleUpdateCollection}
@@ -1485,7 +1654,9 @@ export default function App() {
       </div>
 
       {/* Floating Dynamic AI Chatbot Assistant */}
-      <ChatbotWidget currentEmployeeId={currentEmployeeId} role={activeRole} />
+      {[3, 4].includes(subscriptionModel) && (
+        <ChatbotWidget currentEmployeeId={currentEmployeeId} role={activeRole} companyId={companyId} companyName={companyName} />
+      )}
 
       {/* Floating Global Toast Notification */}
       {toast && (

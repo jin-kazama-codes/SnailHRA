@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { AttendancePunch } from "@/src/types";
-import { supabase, syncPunchToSupabase } from "@/src/lib/supabase";
+import { supabase, syncPunchToSupabase, getCompanyIdForEmployee } from "@/src/lib/supabase";
 
 export async function POST(request: Request) {
   try {
@@ -98,16 +98,26 @@ export async function POST(request: Request) {
         const hours = now.getHours();
         const minutes = now.getMinutes();
         
+        const companyId = await getCompanyIdForEmployee(employeeId);
         let lateTime = "09:30";
         if (supabase) {
           try {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
-            if (data && data.late_threshold) {
-              lateTime = data.late_threshold;
+            let settingsData = null;
+            if (companyId) {
+              const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
+              if (data) settingsData = data;
+            }
+            if (!settingsData) {
+              const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
+              if (data) settingsData = data;
+            }
+            if (settingsData && settingsData.late_threshold) {
+              lateTime = settingsData.late_threshold;
             }
           } catch (e) {}
-        } else if (db.timingSettings) {
-          lateTime = db.timingSettings.lateThreshold || "09:30";
+        } else {
+          const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
+          lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
         }
         
         const [lateHours, lateMinutes] = lateTime.split(":").map(Number);

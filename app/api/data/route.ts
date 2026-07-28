@@ -3,7 +3,9 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const companyId = searchParams.get("companyId") || "";
   const db = loadDatabase();
 
   // Prefer admin client (bypasses RLS) for server-side reads; fall back to anon client
@@ -37,23 +39,67 @@ export async function GET() {
         payslipsRes, designationsRes
       ] = await Promise.race([
         Promise.all([
-          safeQuery(dbClient.from("leaves").select("*")),
-          safeQuery(dbClient.from("attendance").select("*")),
-          safeQuery(dbClient.from("employees").select("*")),
-          safeQuery(dbClient.from("holidays").select("*")),
-          safeQuery(dbClient.from("expenses").select("*")),
-          safeQuery(dbClient.from("inventory").select("*")),
-          safeQuery(dbClient.from("inventory_requests").select("*").order("created_at", { ascending: false })),
-          safeQuery(dbClient.from("policies").select("*")),
-          safeQuery(dbClient.from("fines").select("*").order("created_at", { ascending: false })),
-          safeQuery(dbClient.from("custom_departments").select("*")),
-          safeQuery(dbClient.from("custom_branches").select("*")),
-          safeQuery(dbClient.from("custom_leave_types").select("*")),
-          safeQuery(dbClient.from("custom_leaves").select("*")),
-          safeQuery(dbClient.from("attendance_breaks").select("*")),
-          safeQuery(dbClient.from("employee_documents").select("*")),
-          safeQuery(dbClient.from("payslips").select("*")),
-          safeQuery(dbClient.from("designations").select("*"))
+          // Transactional tables: Filter strictly by companyId if provided
+          companyId
+            ? safeQuery(dbClient.from("leaves").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("leaves").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("attendance").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("attendance").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("employees").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("employees").select("*")),
+          
+          // Shared/Configuration tables: Filter by companyId OR companyId is NULL
+          companyId
+            ? safeQuery(dbClient.from("holidays").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
+            : safeQuery(dbClient.from("holidays").select("*")),
+          
+          companyId
+            ? safeQuery(dbClient.from("expenses").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("expenses").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("inventory").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("inventory").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("inventory_requests").select("*").eq("company_id", companyId).order("created_at", { ascending: false }))
+            : safeQuery(dbClient.from("inventory_requests").select("*").order("created_at", { ascending: false })),
+          
+          companyId
+            ? safeQuery(dbClient.from("policies").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("policies").select("*")),
+          
+          companyId
+            ? safeQuery(dbClient.from("fines").select("*").eq("company_id", companyId).order("created_at", { ascending: false }))
+            : safeQuery(dbClient.from("fines").select("*").order("created_at", { ascending: false })),
+          
+          companyId
+            ? safeQuery(dbClient.from("custom_departments").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("custom_departments").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("custom_branches").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("custom_branches").select("*")),
+          
+          companyId
+            ? safeQuery(dbClient.from("custom_leave_types").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("custom_leave_types").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("custom_leaves").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("custom_leaves").select("*")),
+          
+          companyId
+            ? safeQuery(dbClient.from("attendance_breaks").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("attendance_breaks").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("employee_documents").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("employee_documents").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("payslips").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("payslips").select("*")),
+          
+          companyId
+            ? safeQuery(dbClient.from("designations").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
+            : safeQuery(dbClient.from("designations").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -103,18 +149,15 @@ export async function GET() {
         db.fines = Array.from(fineMap.values());
       }
 
-      if (policiesRes.data && policiesRes.data.length > 0) {
-        const sbPolicies = policiesRes.data.map((row: any) => ({
+      if (policiesRes.data) {
+        db.policies = policiesRes.data.map((row: any) => ({
           id: row.id,
           title: row.title || "",
           category: row.category || "Conduct & Ethics",
           content: row.content || "",
-          lastUpdated: row.last_updated || row.lastUpdated || new Date().toISOString().split("T")[0]
+          lastUpdated: row.last_updated || row.lastUpdated || new Date().toISOString().split("T")[0],
+          companyId: row.company_id || row.companyId || undefined
         }));
-        const polMap = new Map();
-        (db.policies || []).forEach((p: any) => { if (p.id) polMap.set(p.id, p); });
-        sbPolicies.forEach((p: any) => { polMap.set(p.id, p); });
-        db.policies = Array.from(polMap.values());
       }
 
       if (inventoryRequestsRes.data && inventoryRequestsRes.data.length > 0) {
@@ -134,7 +177,7 @@ export async function GET() {
         db.inventoryRequests = Array.from(reqMap.values());
       }
 
-      if (inventoryRes.data && inventoryRes.data.length > 0) {
+      if (inventoryRes.data) {
         db.inventory = inventoryRes.data.map((row: any) => ({
           id: row.id,
           name: row.name || "",
@@ -143,7 +186,8 @@ export async function GET() {
           status: row.status || "Available",
           assignedToEmployeeId: row.assigned_to_employee_id || row.assignedToEmployeeId || null,
           assignedDate: row.assigned_date || row.assignedDate || null,
-          branch: undefined
+          branch: undefined,
+          companyId: row.company_id || row.companyId || undefined
         }));
       }
 
@@ -239,7 +283,7 @@ export async function GET() {
       }
 
       if (employeesRes.data && employeesRes.data.length > 0) {
-        const sbEmployees = employeesRes.data.map((row: any) => {
+          const sbEmployees = employeesRes.data.map((row: any) => {
           const bankDetailsFromRow = typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : row.bank_details;
           const salaryFromRow = typeof row.salary === "string" ? JSON.parse(row.salary) : row.salary;
           const emergencyFromRow = typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : row.emergency_contact;
@@ -265,6 +309,7 @@ export async function GET() {
 
           return {
             id: row.id,
+            companyId: row.company_id || row.companyId || fallbackEmp?.companyId || "",
             fullName: row.full_name || row.fullName || fallbackEmp?.fullName || "",
             email: row.email || fallbackEmp?.email || "",
             phone: row.phone || fallbackEmp?.phone || "",
@@ -300,35 +345,55 @@ export async function GET() {
           };
         });
         const empMap = new Map();
-        (db.employees || []).forEach((e: any) => { if (e.id) empMap.set(e.id, e); });
-        sbEmployees.forEach((e: any) => { empMap.set(e.id, e); });
+        sbEmployees.forEach((e: any) => { if (e.id) empMap.set(e.id, e); });
         db.employees = Array.from(empMap.values()).sort((a: any, b: any) => {
           const numA = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
           const numB = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
           return numA - numB;
         });
+
+        // Filter all employee-linked data to only company's employees
+        const companyEmpIds = new Set(db.employees.map((e: any) => e.id));
+        db.leaves = (db.leaves || []).filter((l: any) => companyEmpIds.has(l.employeeId));
+        db.attendance = (db.attendance || []).filter((a: any) => companyEmpIds.has(a.employeeId));
+        db.expenses = (db.expenses || []).filter((e: any) => companyEmpIds.has(e.employeeId));
+        db.fines = (db.fines || []).filter((f: any) => companyEmpIds.has(f.employeeId));
+        db.payslips = (db.payslips || []).filter((p: any) => companyEmpIds.has(p.employeeId));
+        db.inventoryRequests = (db.inventoryRequests || []).filter((ir: any) => companyEmpIds.has(ir.employeeId));
+        if (companyId) {
+          db.inventory = (db.inventory || []).filter((i: any) => i.companyId === companyId || (i as any).company_id === companyId);
+          db.policies = (db.policies || []).filter((p: any) => p.companyId === companyId || (p as any).company_id === companyId);
+        } else {
+          db.inventory = (db.inventory || []).filter((i: any) => !i.assignedToEmployeeId || companyEmpIds.has(i.assignedToEmployeeId));
+        }
       }
 
-      if (deptsRes.data && deptsRes.data.length > 0) {
-        const deptNames = deptsRes.data.map((d: any) => d.name).filter(Boolean);
-        db.customDepartments = Array.from(new Set([...(db.customDepartments || []), ...deptNames]));
+      if (deptsRes.data) {
+        db.customDepartments = deptsRes.data.map((d: any) => d.name).filter(Boolean);
       }
 
-      if (branchesRes.data && branchesRes.data.length > 0) {
-        const branchNames = branchesRes.data.map((b: any) => b.name).filter(Boolean);
-        db.customBranches = Array.from(new Set([...(db.customBranches || []), ...branchNames]));
+      if (branchesRes.data) {
+        db.customBranches = branchesRes.data.map((b: any) => b.name).filter(Boolean);
       }
 
-      const rawLeaveTypes = (leaveTypesRes.data && leaveTypesRes.data.length > 0) 
-        ? leaveTypesRes.data 
-        : (customLeavesRes.data || []);
-      if (rawLeaveTypes && rawLeaveTypes.length > 0) {
-        const leaveNames = rawLeaveTypes.map((l: any) => l.name).filter(Boolean);
-        db.customLeaveTypes = Array.from(new Set([...(db.customLeaveTypes || []), ...leaveNames]));
+      const rawLeaveTypes = leaveTypesRes.data || customLeavesRes.data || [];
+      db.customLeaveTypes = rawLeaveTypes.map((l: any) => l.name).filter(Boolean);
+
+      // Load local tenant specific timing setting if available
+      if (companyId && db.companyTimingSettings?.[companyId]) {
+        db.timingSettings = db.companyTimingSettings[companyId];
       }
 
       try {
-        const { data: settingsData } = await dbClient.from("timing_settings").select("*").eq("id", "default").maybeSingle();
+        let settingsData = null;
+        if (companyId) {
+          const { data } = await dbClient.from("timing_settings").select("*").eq("company_id", companyId).maybeSingle();
+          if (data) settingsData = data;
+        }
+        if (!settingsData) {
+          const { data } = await dbClient.from("timing_settings").select("*").eq("id", "default").maybeSingle();
+          if (data) settingsData = data;
+        }
         if (settingsData) {
           db.timingSettings = {
             clockInTime: settingsData.clock_in_time || "09:00",

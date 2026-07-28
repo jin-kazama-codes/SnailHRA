@@ -5,6 +5,8 @@ import { loadDatabase } from "./db";
 
 import { initWhatsappScheduler } from "./whatsappScheduler";
 
+export const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
+
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config();
 
@@ -33,9 +35,16 @@ export async function syncPunchToSupabase(punch: any) {
   if (!supabase) return;
   try {
     await ensureEmployeeSynced(punch.employeeId);
+    
+    // Find the employee's company_id from local DB state
+    const db = loadDatabase();
+    const emp = db.employees?.find((e: any) => e.id === punch.employeeId);
+    const compId = emp?.companyId || MGM_COMPANY_ID;
+
     const record = {
       id: punch.id,
       employee_id: punch.employeeId,
+      company_id: compId,
       date: punch.date,
       clock_in: punch.clockIn || null,
       clock_out: punch.clockOut || null,
@@ -48,6 +57,7 @@ export async function syncPunchToSupabase(punch: any) {
       const fallbackRecord = {
         id: punch.id,
         employee_id: punch.employeeId,
+        company_id: compId,
         date: punch.date,
         clock_in: punch.clockIn || null,
         clock_out: punch.clockOut || null,
@@ -65,7 +75,8 @@ export async function syncPunchToSupabase(punch: any) {
       const breakRecords = punch.breaks.map((b: any) => ({
         attendance_id: punch.id,
         break_start: b.start,
-        break_end: b.end || null
+        break_end: b.end || null,
+        company_id: compId
       }));
       // First delete existing breaks for this punch to avoid duplicates
       await supabase.from("attendance_breaks").delete().eq("attendance_id", punch.id);
@@ -92,6 +103,21 @@ export async function deletePunchFromSupabase(punchId: string) {
   }
 }
 
+export async function getCompanyIdForEmployee(employeeId: string): Promise<string | null> {
+  try {
+    const db = loadDatabase();
+    const emp = db.employees?.find((e: any) => e.id === employeeId);
+    if (emp?.companyId || (emp as any)?.company_id) {
+      return emp.companyId || (emp as any).company_id;
+    }
+    if (supabase) {
+      const { data } = await supabase.from("employees").select("company_id").eq("id", employeeId).maybeSingle();
+      if (data?.company_id) return data.company_id;
+    }
+  } catch (err) {}
+  return "a1b2c3d4-0001-0001-0001-000000000001"; // Fallback to MGM
+}
+
 export async function syncHolidayToSupabase(holiday: any) {
   if (!supabase) return;
   try {
@@ -99,7 +125,8 @@ export async function syncHolidayToSupabase(holiday: any) {
       id: holiday.id,
       name: holiday.name,
       date: holiday.date,
-      type: holiday.type || "National"
+      type: holiday.type || "National",
+      company_id: holiday.companyId || holiday.company_id || null
     };
     const { error } = await supabase.from("holidays").upsert(record, { onConflict: "id" });
     if (error) {
@@ -123,9 +150,11 @@ export async function syncExpenseToSupabase(expense: any) {
   if (!supabase) return;
   try {
     await ensureEmployeeSynced(expense.employeeId);
+    const companyId = await getCompanyIdForEmployee(expense.employeeId);
     const record = {
       id: expense.id,
       employee_id: expense.employeeId,
+      company_id: companyId,
       employee_name: expense.employeeName || null,
       category: expense.category || "Others",
       amount: Number(expense.amount) || 0,
@@ -145,6 +174,7 @@ export async function syncExpenseToSupabase(expense: any) {
 export async function syncInventoryToSupabase(item: any) {
   if (!supabase) return;
   try {
+    const companyId = item.companyId || item.company_id || null;
     const record = {
       id: item.id,
       name: item.name,
@@ -152,7 +182,8 @@ export async function syncInventoryToSupabase(item: any) {
       category: item.category || "Laptop",
       status: item.status || "Available",
       assigned_to_employee_id: item.assignedToEmployeeId || item.assigned_to_employee_id || null,
-      assigned_date: item.assignedDate || item.assigned_date || null
+      assigned_date: item.assignedDate || item.assigned_date || null,
+      company_id: companyId
     };
     const { error } = await supabase.from("inventory").upsert(record, { onConflict: "id" });
     if (error) {
@@ -178,9 +209,11 @@ export async function syncInventoryRequestToSupabase(req: any) {
   if (!supabase) return;
   try {
     await ensureEmployeeSynced(req.employeeId);
+    const companyId = await getCompanyIdForEmployee(req.employeeId);
     const record = {
       id: req.id,
       employee_id: req.employeeId,
+      company_id: companyId,
       employee_name: req.employeeName || null,
       item_name: req.itemName || req.item_name || "",
       category: req.category || "Laptop",
@@ -215,9 +248,11 @@ export async function syncFineToSupabase(fine: any) {
     if (employeeId) {
       await ensureEmployeeSynced(employeeId);
     }
+    const companyId = employeeId ? await getCompanyIdForEmployee(employeeId) : null;
     const record = {
       id: fine.id,
       employee_id: employeeId,
+      company_id: companyId,
       employee_name: fine.employeeName || fine.employee_name || null,
       reason: fine.reason || "",
       amount: Number(fine.amount) || 0,
@@ -262,15 +297,20 @@ export async function deleteFineFromSupabase(fineId: string) {
 // Dynamic Configuration Sync Functions (Departments, Branches, Leave Types)
 // -------------------------------------------------------------
 
-export async function syncDepartmentToSupabase(name: string) {
+export async function syncDepartmentToSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    const { data: existing } = await supabase.from("custom_departments").select("id").ilike("name", name);
+    // Check by name AND company_id so different companies can have same dept name
+    let query = supabase.from("custom_departments").select("id").ilike("name", name);
+    if (companyId) query = query.eq("company_id", companyId);
+    const { data: existing } = await query;
     if (existing && existing.length > 0) {
-      console.log(`Department "${name}" already exists in Supabase 'custom_departments'.`);
+      console.log(`Department "${name}" already exists for this company.`);
       return;
     }
-    const { error } = await supabase.from("custom_departments").insert([{ name }]);
+    const payload: any = { name };
+    if (companyId) payload.company_id = companyId;
+    const { error } = await supabase.from("custom_departments").insert([payload]);
     if (error) {
       console.warn("Supabase custom_departments insert warning:", error.message);
     } else {
@@ -281,10 +321,12 @@ export async function syncDepartmentToSupabase(name: string) {
   }
 }
 
-export async function deleteDepartmentFromSupabase(name: string) {
+export async function deleteDepartmentFromSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    const { error } = await supabase.from("custom_departments").delete().ilike("name", name);
+    let query = supabase.from("custom_departments").delete().ilike("name", name);
+    if (companyId) query = (query as any).eq("company_id", companyId);
+    const { error } = await query;
     if (error) {
       console.warn("Supabase custom_departments delete warning:", error.message);
     } else {
@@ -295,15 +337,19 @@ export async function deleteDepartmentFromSupabase(name: string) {
   }
 }
 
-export async function syncBranchToSupabase(name: string) {
+export async function syncBranchToSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    const { data: existing } = await supabase.from("custom_branches").select("id").ilike("name", name);
+    let query = supabase.from("custom_branches").select("id").ilike("name", name);
+    if (companyId) query = query.eq("company_id", companyId);
+    const { data: existing } = await query;
     if (existing && existing.length > 0) {
-      console.log(`Branch "${name}" already exists in Supabase 'custom_branches'.`);
+      console.log(`Branch "${name}" already exists for this company.`);
       return;
     }
-    const { error } = await supabase.from("custom_branches").insert([{ name }]);
+    const payload: any = { name };
+    if (companyId) payload.company_id = companyId;
+    const { error } = await supabase.from("custom_branches").insert([payload]);
     if (error) {
       console.warn("Supabase custom_branches insert warning:", error.message);
     } else {
@@ -314,10 +360,12 @@ export async function syncBranchToSupabase(name: string) {
   }
 }
 
-export async function deleteBranchFromSupabase(name: string) {
+export async function deleteBranchFromSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    const { error } = await supabase.from("custom_branches").delete().ilike("name", name);
+    let query = supabase.from("custom_branches").delete().ilike("name", name);
+    if (companyId) query = (query as any).eq("company_id", companyId);
+    const { error } = await query;
     if (error) {
       console.warn("Supabase custom_branches delete warning:", error.message);
     } else {
@@ -328,21 +376,29 @@ export async function deleteBranchFromSupabase(name: string) {
   }
 }
 
-export async function syncLeaveTypeToSupabase(name: string) {
+export async function syncLeaveTypeToSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    const { data: existing } = await supabase.from("custom_leave_types").select("id").ilike("name", name);
+    let query = supabase.from("custom_leave_types").select("id").ilike("name", name);
+    if (companyId) {
+      query = query.eq("company_id", companyId);
+    }
+    const { data: existing } = await query;
     if (existing && existing.length > 0) {
-      console.log(`Leave type "${name}" already exists in Supabase 'custom_leave_types'.`);
+      console.log(`Leave type "${name}" already exists in Supabase 'custom_leave_types' for company ${companyId}.`);
       return;
     }
-    const { error } = await supabase.from("custom_leave_types").insert([{ name }]);
+    const { error } = await supabase.from("custom_leave_types").insert([{ name, company_id: companyId || null }]);
     if (error) {
       console.warn("Supabase custom_leave_types insert warning:", error.message);
       // Fallback attempt to custom_leaves
-      const { data: existingLeaves } = await supabase.from("custom_leaves").select("id").ilike("name", name);
+      let fallbackQuery = supabase.from("custom_leaves").select("id").ilike("name", name);
+      if (companyId) {
+        fallbackQuery = fallbackQuery.eq("company_id", companyId);
+      }
+      const { data: existingLeaves } = await fallbackQuery;
       if (!existingLeaves || existingLeaves.length === 0) {
-        await supabase.from("custom_leaves").insert([{ name }]);
+        await supabase.from("custom_leaves").insert([{ name, company_id: companyId || null }]);
       }
     } else {
       console.log(`Successfully synced leave type "${name}" to Supabase 'custom_leave_types' table.`);
@@ -352,11 +408,17 @@ export async function syncLeaveTypeToSupabase(name: string) {
   }
 }
 
-export async function deleteLeaveTypeFromSupabase(name: string) {
+export async function deleteLeaveTypeFromSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    await supabase.from("custom_leave_types").delete().eq("name", name);
-    await supabase.from("custom_leaves").delete().eq("name", name);
+    let query1 = supabase.from("custom_leave_types").delete().eq("name", name);
+    let query2 = supabase.from("custom_leaves").delete().eq("name", name);
+    if (companyId) {
+      query1 = query1.eq("company_id", companyId);
+      query2 = query2.eq("company_id", companyId);
+    }
+    await query1;
+    await query2;
     console.log(`Successfully deleted leave type "${name}" from Supabase 'custom_leave_types' / 'custom_leaves' table.`);
   } catch (e) {
     console.warn("Supabase custom_leave_types delete error:", e);
@@ -378,6 +440,7 @@ export async function ensureEmployeeSynced(employeeId: string) {
     if (emp) {
       const record = {
         id: emp.id,
+        company_id: emp.companyId || MGM_COMPANY_ID,
         full_name: emp.fullName,
         email: emp.email,
         phone: emp.phone,
@@ -421,14 +484,16 @@ export async function syncPayslipToSupabase(payslip: any) {
     if (employeeId) {
       await ensureEmployeeSynced(employeeId);
     }
+    const companyId = employeeId ? await getCompanyIdForEmployee(employeeId) : null;
     const record = {
       id: payslip.id,
       employee_id: employeeId,
+      company_id: companyId,
       month: payslip.month || "",
       basic: Number(payslip.basic) || 0,
       hra: Number(payslip.hra) || 0,
       allowances: Number(payslip.allowances) || 0,
-      fines_deducted: Number(payslip.finesDeducted ?? payslip.fines_deducted ?? 0),
+      fines_deducted: Number(payslip.finesDeducted ?? payslip.fines_ded_amount ?? payslip.fines_deducted ?? 0),
       pf_deduction: Number(payslip.pfDeduction ?? payslip.pf_deduction ?? 0),
       tax_deduction: Number(payslip.taxDeduction ?? payslip.tax_deduction ?? 0),
       net_pay: Number(payslip.netPay ?? payslip.net_pay ?? 0),

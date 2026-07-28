@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { loadDatabase } from "@/src/lib/db";
+import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 
 export async function POST(request: Request) {
   try {
     const settings = await request.json();
     const db = loadDatabase();
-    
+
     const timingSettings = {
       clockInTime: settings.clockInTime || "09:00",
       clockOutTime: settings.clockOutTime || "18:00",
@@ -15,12 +15,23 @@ export async function POST(request: Request) {
       breakEndTime: settings.breakEndTime || "14:00"
     };
 
+    const companyId = settings.companyId || "";
+    const recordId = companyId || "default";
+
+    if (companyId) {
+      if (!db.companyTimingSettings) {
+        db.companyTimingSettings = {};
+      }
+      db.companyTimingSettings[companyId] = timingSettings;
+    }
     db.timingSettings = timingSettings;
-    
+    saveDatabase(db);
+
     if (supabase) {
       try {
         const { error } = await supabase.from("timing_settings").upsert({
-          id: "default",
+          id: recordId,
+          company_id: companyId || null,
           clock_in_time: timingSettings.clockInTime,
           clock_out_time: timingSettings.clockOutTime,
           late_threshold: timingSettings.lateThreshold,
@@ -37,7 +48,7 @@ export async function POST(request: Request) {
         throw err;
       }
     }
-    
+
     return NextResponse.json({ success: true, timingSettings });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to save timing settings" }, { status: 500 });

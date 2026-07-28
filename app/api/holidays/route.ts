@@ -29,7 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, date, type } = body;
+    const { name, date, type, companyId } = body;
 
     if (!name || !date) {
       return NextResponse.json({ error: "Name and date are required" }, { status: 400 });
@@ -38,11 +38,12 @@ export async function POST(request: Request) {
     const db = loadDatabase();
     if (!db.holidays) db.holidays = [];
 
-    const newHoliday: Holiday = {
+    const newHoliday: any = {
       id: body.id || `hol-${Date.now()}`,
       name,
       date,
-      type: type || "National"
+      type: type || "National",
+      companyId: companyId || body.company_id || null
     };
 
     db.holidays.push(newHoliday);

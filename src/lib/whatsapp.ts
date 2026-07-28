@@ -75,27 +75,29 @@ export async function sendWhatsAppMessage(to: string, body: string): Promise<boo
  * Compiles a structured daily attendance summary report.
  * Queries Supabase for active employees and matches today's attendance.
  */
-export async function getAttendanceSummaryMessage(todayStr: string): Promise<string> {
+export async function getAttendanceSummaryMessage(todayStr: string, companyId: string, companyName?: string): Promise<string> {
   const dbClient = supabaseAdmin || supabase;
   if (!dbClient) {
     throw new Error("No database client available");
   }
 
-  // 1. Fetch active employees
+  // 1. Fetch active employees for company
   const { data: employees, error: empError } = await dbClient
     .from("employees")
     .select("id, full_name, role")
-    .eq("status", "Active");
+    .eq("status", "Active")
+    .eq("company_id", companyId);
 
   if (empError) {
     throw new Error(`Failed to fetch employees: ${empError.message}`);
   }
 
-  // 2. Fetch today's attendance records
+  // 2. Fetch today's attendance records for company
   const { data: attendance, error: attError } = await dbClient
     .from("attendance")
     .select("employee_id, clock_in, clock_out, status")
-    .eq("date", todayStr);
+    .eq("date", todayStr)
+    .eq("company_id", companyId);
 
   if (attError) {
     throw new Error(`Failed to fetch attendance: ${attError.message}`);
@@ -147,7 +149,8 @@ export async function getAttendanceSummaryMessage(todayStr: string): Promise<str
     day: "numeric",
   });
 
-  let body = `📊 *MGM Financiers - Daily Attendance Summary* 📊\n`;
+  const dispName = companyName || "SnailHR Tenant";
+  let body = `📊 *${dispName} - Daily Attendance Summary* 📊\n`;
   body += `📅 Date: ${formattedDate}\n\n`;
   body += `📈 *Summary:*\n`;
   body += `• Total Active Employees: ${totalActive}\n`;

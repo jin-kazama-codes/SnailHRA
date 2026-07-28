@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { Employee } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -16,8 +17,29 @@ export async function POST(request: Request) {
     const salt = bcrypt.genSaltSync(10);
     const hashedPassword = bcrypt.hashSync(rawPassword, salt);
 
+    const resolvedCompanyId = body.companyId || body.company_id || "a1b2c3d4-0001-0001-0001-000000000001";
+    let resolvedCompanyName = "Company";
+
+    // Resolve company name dynamically for onboarding task details
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient && resolvedCompanyId) {
+      try {
+        const { data: compData } = await dbClient
+          .from("companies")
+          .select("name")
+          .eq("id", resolvedCompanyId)
+          .maybeSingle();
+        if (compData && compData.name) {
+          resolvedCompanyName = compData.name;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch company name for onboard task:", err);
+      }
+    }
+
     const newEmp: Employee = {
       id: empId,
+      companyId: resolvedCompanyId,
       fullName: body.fullName || "New Agent",
       email: body.email || "",
       phone: body.phone || "+91 99999 88888",
@@ -48,7 +70,7 @@ export async function POST(request: Request) {
       onboardingTasks: body.onboardingTasks || [
         { id: `tsk-auto-${empId}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: body.joiningDate || "2026-07-25" },
         { id: `tsk-auto-${empId}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: body.joiningDate || "2026-07-27" },
-        { id: `tsk-auto-${empId}-3`, taskName: "Allocate MGM FINANCIERS PRIV LIMITED Credentials & Assets", completed: false, dueDate: body.joiningDate || "2026-07-28" }
+        { id: `tsk-auto-${empId}-3`, taskName: `Allocate ${resolvedCompanyName} Credentials & Assets`, completed: false, dueDate: body.joiningDate || "2026-07-28" }
       ],
       avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       bio: body.bio || "",
@@ -63,6 +85,7 @@ export async function POST(request: Request) {
       try {
         await supabase.from("employees").upsert({
           id: newEmp.id,
+          company_id: newEmp.companyId,
           full_name: newEmp.fullName,
           email: newEmp.email,
           phone: newEmp.phone,
@@ -117,6 +140,7 @@ export async function PUT(request: Request) {
       try {
         await supabase.from("employees").upsert({
           id: updatedEmp.id,
+          company_id: updatedEmp.companyId,
           full_name: updatedEmp.fullName,
           email: updatedEmp.email,
           phone: updatedEmp.phone,

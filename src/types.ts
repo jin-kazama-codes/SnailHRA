@@ -1,9 +1,30 @@
-export type UserRole = "admin" | "hr" | "employee";
+export type UserRole = "admin" | "hr" | "employee" | "super_admin";
+
+export interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  subscriptionModel: 1 | 2 | 3 | 4; // 1=Basic, 2=WhatsApp Only, 3=Chatbot Only, 4=Full Suite
+  createdAt: string;
+  isActive: boolean;
+  // Stats (populated by super admin queries)
+  totalEmployees?: number;
+  totalAdmins?: number;
+  totalHR?: number;
+}
+
+export interface SuperAdmin {
+  id: string;
+  email: string;
+  fullName: string;
+  createdAt: string;
+}
 
 export interface Designation {
   id: string;
   title: string;
   department: string;
+  companyId?: string;
 }
 
 export interface EmployeeDocument {
@@ -24,6 +45,7 @@ export interface OnboardingTask {
 
 export interface Employee {
   id: string;
+  companyId?: string; // tenant company reference
   fullName: string;
   email: string;
   phone: string;
@@ -99,6 +121,7 @@ export interface Holiday {
   date: string; // YYYY-MM-DD
   name: string;
   type: "National" | "Regional" | "Restricted";
+  companyId?: string;
 }
 
 export interface Policy {
@@ -107,6 +130,7 @@ export interface Policy {
   category: "Conduct & Ethics" | "Employee Benefits" | "Compliance & Security" | "NBFC Sales & Commissions";
   content: string;
   lastUpdated: string;
+  companyId?: string;
 }
 
 export interface ExpenseClaim {
@@ -129,6 +153,7 @@ export interface InventoryItem {
   assignedToEmployeeId: string | null;
   assignedDate: string | null;
   branch?: string;
+  companyId?: string;
 }
 
 export interface InventoryRequest {
@@ -149,7 +174,7 @@ export interface Fine {
   reason: "Late Coming" | "Compliance Violation" | "Unprofessional Conduct" | "Lost Asset";
   amount: number;
   date: string; // YYYY-MM-DD
-  status: "Pending" | "Paid" | "Deducted From Payroll";
+  status: "Pending" | "Paid" | "Deducted From Payroll" | "Deducted";
 }
 
 export interface Reimbursement {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { Employee } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -11,6 +12,26 @@ export async function POST(request: Request) {
 
     if (!rawEmployees.length) {
       return NextResponse.json({ error: "No employee data provided" }, { status: 400 });
+    }
+
+    const resolvedCompanyId = (!Array.isArray(body) && (body.companyId || body.company_id)) || "a1b2c3d4-0001-0001-0001-000000000001";
+    let resolvedCompanyName = "Company";
+
+    // Resolve company name dynamically for onboarding task details
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient && resolvedCompanyId) {
+      try {
+        const { data: compData } = await dbClient
+          .from("companies")
+          .select("name")
+          .eq("id", resolvedCompanyId)
+          .maybeSingle();
+        if (compData && compData.name) {
+          resolvedCompanyName = compData.name;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch company name for bulk onboard task:", err);
+      }
     }
 
     const db = loadDatabase();
@@ -81,6 +102,7 @@ export async function POST(request: Request) {
 
       const newEmp: Employee = {
         id: empId,
+        companyId: resolvedCompanyId,
         fullName: item.fullName || item.name || `Employee ${maxNum}`,
         email: item.email || `emp_${maxNum}_${Date.now().toString().slice(-4)}@mgmfinanciers.com`,
         phone: item.phone || "+91 99999 00000",
@@ -111,7 +133,7 @@ export async function POST(request: Request) {
         onboardingTasks: item.onboardingTasks || [
           { id: `tsk-auto-${empId}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: todayStr },
           { id: `tsk-auto-${empId}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: todayStr },
-          { id: `tsk-auto-${empId}-3`, taskName: "Allocate MGM FINANCIERS PRIV LIMITED Credentials & Assets", completed: false, dueDate: todayStr }
+          { id: `tsk-auto-${empId}-3`, taskName: `Allocate ${resolvedCompanyName} Credentials & Assets`, completed: false, dueDate: todayStr }
         ],
         avatarUrl: item.avatarUrl || `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop`,
         bio: item.bio || "",
@@ -127,6 +149,7 @@ export async function POST(request: Request) {
         try {
           await supabase.from("employees").upsert({
             id: newEmp.id,
+            company_id: newEmp.companyId,
             full_name: newEmp.fullName,
             email: newEmp.email,
             phone: newEmp.phone,

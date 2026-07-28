@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { InventoryItem } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
+import { loadDatabase, saveDatabase } from "@/src/lib/db";
 
 export async function GET() {
   if (supabase) {
@@ -33,6 +34,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const db = loadDatabase();
 
     const newItem: InventoryItem = {
       id: body.id || `inv-${Date.now()}`,
@@ -41,8 +43,13 @@ export async function POST(request: Request) {
       category: body.category || "Laptop",
       status: body.status || "Available",
       assignedToEmployeeId: body.assignedToEmployeeId || null,
-      assignedDate: body.assignedDate || null
+      assignedDate: body.assignedDate || null,
+      companyId: body.companyId || body.company_id || undefined
     };
+
+    if (!db.inventory) db.inventory = [];
+    db.inventory = [newItem, ...db.inventory.filter(i => i.id !== newItem.id)];
+    saveDatabase(db);
 
     if (supabase) {
       const record = {
@@ -52,7 +59,8 @@ export async function POST(request: Request) {
         category: newItem.category,
         status: newItem.status,
         assigned_to_employee_id: newItem.assignedToEmployeeId,
-        assigned_date: newItem.assignedDate
+        assigned_date: newItem.assignedDate,
+        company_id: newItem.companyId || null
       };
 
       const { error } = await supabase.from("inventory").upsert(record, { onConflict: "id" });
@@ -73,6 +81,10 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const updatedItem: InventoryItem = await request.json();
+    const db = loadDatabase();
+    if (!db.inventory) db.inventory = [];
+    db.inventory = db.inventory.map(item => item.id === updatedItem.id ? updatedItem : item);
+    saveDatabase(db);
 
     if (supabase) {
       const record = {
@@ -82,7 +94,8 @@ export async function PUT(request: Request) {
         category: updatedItem.category,
         status: updatedItem.status,
         assigned_to_employee_id: updatedItem.assignedToEmployeeId || null,
-        assigned_date: updatedItem.assignedDate || null
+        assigned_date: updatedItem.assignedDate || null,
+        company_id: updatedItem.companyId || (updatedItem as any).company_id || null
       };
 
       const { error } = await supabase.from("inventory").upsert(record, { onConflict: "id" });
@@ -103,6 +116,12 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "ID required" }, { status: 400 });
+
+    const db = loadDatabase();
+    if (db.inventory) {
+      db.inventory = db.inventory.filter(i => i.id !== id);
+      saveDatabase(db);
+    }
 
     if (supabase) {
       const { error } = await supabase.from("inventory").delete().eq("id", id);

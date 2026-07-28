@@ -29,6 +29,7 @@ interface AttendanceViewProps {
     breakEndTime: string;
   };
   onSaveTimingSettings?: (settings: any) => void;
+  companyName?: string;
 }
 
 export default function AttendanceView({
@@ -44,7 +45,8 @@ export default function AttendanceView({
   onSaveDayPunch,
   onClearAllAttendance,
   timingSettings,
-  onSaveTimingSettings
+  onSaveTimingSettings,
+  companyName = "Your Company"
 }: AttendanceViewProps) {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<"personal" | "roster" | "monthly-view">(
@@ -53,6 +55,18 @@ export default function AttendanceView({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [punchLoading, setPunchLoading] = useState(false);
   const [expandedBreaksRowId, setExpandedBreaksRowId] = useState<string | null>(null);
+
+  const formatTime12h = (timeStr?: string) => {
+    if (!timeStr) return "";
+    const [hoursStr, minutesStr] = timeStr.split(":");
+    const hours = parseInt(hoursStr, 10);
+    if (isNaN(hours)) return timeStr;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutesStr || "00";
+    const formattedHours = String(displayHours).padStart(2, '0');
+    return `${formattedHours}:${displayMinutes} ${ampm}`;
+  };
 
   const calculateTotalBreakMinutes = (punch: AttendancePunch) => {
     let breakMs = 0;
@@ -712,7 +726,7 @@ export default function AttendanceView({
                 <span className="text-2xl font-bold text-amber-600 font-mono mt-1 block">
                   {attendance.filter(a => a.employeeId === currentEmployeeId && a.status === "Late").length}
                 </span>
-                <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">After {timingSettings?.lateThreshold || "09:30"} AM</span>
+                <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">After {formatTime12h(timingSettings?.lateThreshold || "09:30")}</span>
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
@@ -734,7 +748,7 @@ export default function AttendanceView({
           <div className="mt-4 bg-emerald-50/50 dark:bg-emerald-950/10 p-3.5 rounded-xl border border-emerald-100/50 dark:border-emerald-900/30 flex items-start space-x-2.5 text-xs text-emerald-800 dark:text-emerald-400 leading-normal">
             <AlertCircle className="w-5.5 h-5.5 text-emerald-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-semibold">MGM FINANCIERS PRIV LIMITED Attendance & Security Policy ({userBranch})</p>
+              <p className="font-semibold">{companyName} Attendance &amp; Security Policy ({userBranch})</p>
               <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
                 {role === "admin" && "Admin clearance level: Access to all branches and full edit rights across the entire company."}
                 {role === "hr" && `HR clearance level: Restricted to branch (${userBranch}). Cannot view or modify records of other branches or senior admins.`}

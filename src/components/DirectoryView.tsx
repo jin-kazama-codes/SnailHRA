@@ -18,12 +18,20 @@ interface DirectoryViewProps {
   currentUserId: string;
   customDepartments?: string[];
   customBranches?: string[];
+  companyId?: string;
+  subscriptionModel?: number;
   onOnboardEmployee: (empData: any) => void;
   onBulkOnboardEmployee?: (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => Promise<void> | void;
   onUpdateEmployee: (id: string, updatedData: any) => Promise<void> | void;
   onAddDocument: (empId: string, docData: any) => void;
   onDeleteDocument: (empId: string, docId: string) => void;
   onToggleOnboardingTask: (empId: string, taskId: string, completed: boolean) => void;
+  onUpdateCollection?: (
+    type: "leaveTypes" | "departments" | "branches",
+    updatedList: string[],
+    action?: "add" | "remove",
+    item?: string
+  ) => Promise<void> | void;
 }
 
 export default function DirectoryView({
@@ -33,12 +41,15 @@ export default function DirectoryView({
   currentUserId,
   customDepartments,
   customBranches,
+  companyId = "",
+  subscriptionModel = 4,
   onOnboardEmployee,
   onBulkOnboardEmployee,
   onUpdateEmployee,
   onAddDocument,
   onDeleteDocument,
-  onToggleOnboardingTask
+  onToggleOnboardingTask,
+  onUpdateCollection
 }: DirectoryViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
@@ -47,6 +58,51 @@ export default function DirectoryView({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Manage departments & branches state
+  const [showManageCollections, setShowManageCollections] = useState(false);
+  const [newDepartmentName, setNewDepartmentName] = useState("");
+  const [newBranchName, setNewBranchName] = useState("");
+
+  const handleAddDepartment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDepartmentName.trim() || !onUpdateCollection) return;
+    const trimmed = newDepartmentName.trim();
+    const currentList = customDepartments || ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"];
+    const newList = currentList.some(d => d.toLowerCase() === trimmed.toLowerCase())
+      ? currentList
+      : [...currentList, trimmed];
+    onUpdateCollection("departments", newList, "add", trimmed);
+    setNewDepartmentName("");
+  };
+
+  const handleRemoveDepartment = (dept: string) => {
+    if (!onUpdateCollection) return;
+    if (confirm(`Are you sure you want to delete the "${dept}" department?`)) {
+      const currentList = customDepartments || ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"];
+      onUpdateCollection("departments", currentList.filter(d => d !== dept), "remove", dept);
+    }
+  };
+
+  const handleAddBranch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBranchName.trim() || !onUpdateCollection) return;
+    const trimmed = newBranchName.trim();
+    const currentList = customBranches || ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"];
+    const newList = currentList.some(b => b.toLowerCase() === trimmed.toLowerCase())
+      ? currentList
+      : [...currentList, trimmed];
+    onUpdateCollection("branches", newList, "add", trimmed);
+    setNewBranchName("");
+  };
+
+  const handleRemoveBranch = (branchItem: string) => {
+    if (!onUpdateCollection) return;
+    if (confirm(`Are you sure you want to delete the "${branchItem}" branch?`)) {
+      const currentList = customBranches || ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"];
+      onUpdateCollection("branches", currentList.filter(b => b !== branchItem), "remove", branchItem);
+    }
+  };
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; category?: string; size?: string } | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -454,7 +510,8 @@ export default function DirectoryView({
       joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
       bankAccount, bankName, bankIfsc, address, bio, password,
       emergencyName, emergencyRelation, emergencyPhone,
-      avatarUrl
+      avatarUrl,
+      companyId: companyId
     };
     onOnboardEmployee(data);
 
@@ -1058,6 +1115,16 @@ export default function DirectoryView({
 
         {(role === "admin" || role === "hr") && (
           <div className="flex items-center gap-2 shrink-0">
+            {role === "admin" && (
+              <button
+                onClick={() => setShowManageCollections(true)}
+                className="bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-900/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
+                title="Manage company departments and branch offices"
+              >
+                <Plus className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                <span>+ Add Dept / Branch</span>
+              </button>
+            )}
             <button
               onClick={() => setViewMode("bulk_upload")}
               className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
@@ -2668,6 +2735,128 @@ export default function DirectoryView({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MANAGE DEPARTMENTS & BRANCHES MODAL ── */}
+      {showManageCollections && role === "admin" && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+              <div>
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base">
+                  Manage Departments &amp; Branches
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">Customize your company's departments and branches</p>
+              </div>
+              <button 
+                onClick={() => setShowManageCollections(false)} 
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-400 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Departments Section */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Departments</h4>
+              <form onSubmit={handleAddDepartment} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newDepartmentName}
+                  onChange={(e) => setNewDepartmentName(e.target.value)}
+                  placeholder="e.g. Finance, Marketing..."
+                  className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-none focus:border-violet-500 font-medium transition-colors"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all cursor-pointer shadow-xs shrink-0"
+                >
+                  Add
+                </button>
+              </form>
+
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 custom-scrollbar">
+                {(customDepartments && customDepartments.length > 0
+                  ? customDepartments
+                  : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+                ).map((dept) => (
+                  <div
+                    key={dept}
+                    className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-300 border border-slate-100 dark:border-[#1a1a1a] rounded-lg text-xs"
+                  >
+                    <span>{dept}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDepartment(dept)}
+                      className="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="h-px bg-slate-100 dark:bg-[#1a1a1a]" />
+
+            {/* Branches Section */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Branches</h4>
+              <form onSubmit={handleAddBranch} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newBranchName}
+                  onChange={(e) => setNewBranchName(e.target.value)}
+                  placeholder="e.g. Pune Branch, Delhi Hub..."
+                  className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-none focus:border-violet-500 font-medium transition-colors"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-all cursor-pointer shadow-xs shrink-0"
+                >
+                  Add
+                </button>
+              </form>
+
+              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 custom-scrollbar">
+                {(customBranches && customBranches.length > 0
+                  ? customBranches
+                  : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
+                ).map((br) => (
+                  <div
+                    key={br}
+                    className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-300 border border-slate-100 dark:border-[#1a1a1a] rounded-lg text-xs"
+                  >
+                    <span>{br}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBranch(br)}
+                      className="text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-[#1a1a1a]">
+              <button
+                type="button"
+                onClick={() => setShowManageCollections(false)}
+                className="bg-slate-100 hover:bg-slate-200 dark:bg-[#0a0a0a] dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 px-5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
           </div>
         </div>
       )}

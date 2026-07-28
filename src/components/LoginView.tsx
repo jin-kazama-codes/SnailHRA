@@ -6,9 +6,10 @@ import { Employee } from "../types";
 
 interface LoginViewProps {
   onLoginSuccess: (employee: Employee) => void;
+  onSuperAdminLink?: () => void;
 }
 
-export default function LoginView({ onLoginSuccess }: LoginViewProps) {
+export default function LoginView({ onLoginSuccess, onSuperAdminLink }: LoginViewProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -39,6 +40,11 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       }
 
       if (data.success && data.employee) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("snailhr_companyId", data.companyId || "");
+          localStorage.setItem("snailhr_companyName", data.companyName || "");
+          localStorage.setItem("snailhr_subscriptionModel", String(data.subscriptionModel || 4));
+        }
         onLoginSuccess(data.employee);
       } else {
         throw new Error("Authentication failed.");
@@ -60,13 +66,13 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
         {/* Branding & Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 bg-gradient-to-br from-emerald-600 via-teal-600 to-emerald-700 rounded-2xl flex items-center justify-center text-white font-black text-base tracking-tight shadow-lg shadow-emerald-600/20 mb-3.5">
-            MGM
+            HR
           </div>
           <h2 className="font-display font-extrabold text-xl tracking-tight text-slate-800 dark:text-white text-center">
-            MGM <span className="text-emerald-500">FINANCIERS</span>
+            Snail<span className="text-emerald-500">HR</span>
           </h2>
           <p className="text-[10px] text-slate-400 dark:text-gray-500 font-bold tracking-widest uppercase mt-0.5">
-            PRIV LIMITED • ENTERPRISE HRMS
+            ENTERPRISE HRMS • SIGN IN
           </p>
         </div>
 
@@ -138,11 +144,23 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
             )}
           </button>
         </form>
+
+        {onSuperAdminLink && (
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-[#1a1a1a] text-center">
+            <button
+              type="button"
+              onClick={onSuperAdminLink}
+              className="text-[11px] text-emerald-600 dark:text-emerald-450 hover:underline font-bold transition-all cursor-pointer"
+            >
+              Access System Master Control Panel
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mt-8 text-center text-[10px] text-slate-400 dark:text-gray-500">
-        <p className="font-bold">MGM FINANCIERS PRIV LIMITED Platform Suite</p>
-        <p className="mt-0.5">Licensed NBFC Workforce Technology • v2.4</p>
+        <p className="font-bold">SnailHR Platform Suite</p>
+        <p className="mt-0.5">Licensed Workforce Technology • v2.4</p>
       </div>
     </div>
   );
