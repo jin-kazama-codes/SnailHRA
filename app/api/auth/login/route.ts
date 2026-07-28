@@ -51,7 +51,8 @@ export async function POST(request: Request) {
               basic: Number(data.salary_basic ?? salaryFromRow?.basic ?? 45000),
               hra: Number(data.salary_hra ?? salaryFromRow?.hra ?? 18000),
               allowances: Number(data.salary_allowances ?? salaryFromRow?.allowances ?? 10000),
-              pfDeduction: Number(data.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200)
+              pfDeduction: Number(data.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200),
+              tdsDeduction: Number(data.salary_tds_deduction ?? salaryFromRow?.tdsDeduction ?? 0)
             },
             bankDetails: {
               accountNumber: String(data.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),

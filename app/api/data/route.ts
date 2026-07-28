@@ -278,7 +278,8 @@ export async function GET() {
               basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? fallbackEmp?.salary?.basic ?? 45000),
               hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? fallbackEmp?.salary?.hra ?? 18000),
               allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? fallbackEmp?.salary?.allowances ?? 10000),
-              pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? fallbackEmp?.salary?.pfDeduction ?? 3200)
+              pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? fallbackEmp?.salary?.pfDeduction ?? 3200),
+              tdsDeduction: Number(row.salary_tds_deduction ?? salaryFromRow?.tdsDeduction ?? fallbackEmp?.salary?.tdsDeduction ?? 0)
             },
             bankDetails: {
               accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? fallbackEmp?.bankDetails?.accountNumber ?? ""),

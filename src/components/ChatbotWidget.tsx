@@ -173,7 +173,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
       const errorMsg: Message = {
         id: `msg-err-${Date.now()}`,
         sender: "bot",
-        text: "I encountered an issue connecting to the AI MGM FINANCIERS PRIV LIMITED Core. Please ensure your GEMINI_API_KEY is configured in Settings > Secrets.",
+        text: "I encountered an issue connecting to the AI MGM FINANCIERS PRIV LIMITED Core. Please ensure your GROQ_API_KEY is configured in .env.local.",
         timestamp: new Date()
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -227,7 +227,7 @@ export default function ChatbotWidget({ currentEmployeeId, role }: ChatbotWidget
               </div>
               <div>
                 <h3 className="font-display font-semibold text-xs text-white">MGM FINANCIERS PRIV LIMITED Assistant</h3>
-                <span className="text-[10px] text-emerald-200">Gemini 3.5 AI Core • Live</span>
+                <span className="text-[10px] text-emerald-200">Groq Llama 3.3 Core • Live</span>
               </div>
             </div>
             <button 

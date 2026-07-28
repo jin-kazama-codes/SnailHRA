@@ -404,7 +404,7 @@ export default function AttendanceView({
     selectedMonthDays.forEach(day => {
       const dStr = day.toISOString().split("T")[0];
       const punch = punches.find(p => p.date === dStr);
-      const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+      const isWeekend = day.getDay() === 0;
       const holiday = getHolidayOnDate(dStr);
       const leave = getApprovedLeaveOnDate(empId, dStr);
 
@@ -1211,7 +1211,7 @@ export default function AttendanceView({
                 const dayCells = days.map((day, idx) => {
                   const dStr = day.toISOString().split("T")[0];
                   const punch = attendance.find(p => p.employeeId === selectedEmployeeId && p.date === dStr);
-                  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                  const isWeekend = day.getDay() === 0;
                   const holiday = getHolidayOnDate(dStr);
                   const approvedLeave = getApprovedLeaveOnDate(selectedEmployeeId, dStr);
 
@@ -1396,7 +1396,7 @@ export default function AttendanceView({
                   const leave = getApprovedLeaveOnDate(selectedDayModal.employeeId, selectedDayModal.date);
                   const holiday = getHolidayOnDate(selectedDayModal.date);
                   const dayObj = new Date(selectedDayModal.date);
-                  const isWeekend = dayObj.getDay() === 0 || dayObj.getDay() === 6;
+                  const isWeekend = dayObj.getDay() === 0;
 
                   return (
                     <>

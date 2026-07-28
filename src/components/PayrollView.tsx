@@ -266,7 +266,9 @@ export default function PayrollView({
                         const empPendingFines = (fines || [])
                           .filter(f => f.employeeId === emp.id && f.status === "Pending")
                           .reduce((sum, f) => sum + f.amount, 0);
-                        const defaultTaxes = Math.round(grossEarnings * 0.05);
+                        const defaultTaxes = typeof emp.salary.tdsDeduction === "number"
+                          ? emp.salary.tdsDeduction
+                          : Math.round(grossEarnings * 0.05);
                         const netSalaryEstimate = Math.max(0, grossEarnings - pfDeduction - empPendingFines - defaultTaxes);
 
                         return (

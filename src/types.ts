@@ -37,6 +37,7 @@ export interface Employee {
     hra: number;
     allowances: number;
     pfDeduction: number;
+    tdsDeduction?: number;
   };
   bankDetails: {
     accountNumber: string;

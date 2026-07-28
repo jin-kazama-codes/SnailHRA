@@ -71,8 +71,10 @@ export async function POST(request: Request) {
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Pending");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
-    // Calculate Professional Tax + TDS roughly
-    const tax = Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
+    // Use configured TDS/Profession Tax if available, otherwise calculate roughly
+    const tax = typeof employee.salary.tdsDeduction === "number"
+      ? employee.salary.tdsDeduction
+      : Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
 
     const netPay = (employee.salary.basic + employee.salary.hra + employee.salary.allowances) - pf - finesDeduction - tax;
 

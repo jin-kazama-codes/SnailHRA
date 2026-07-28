@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { loadDatabase } from "./db";
 
+import { initWhatsappScheduler } from "./whatsappScheduler";
+
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config();
 
@@ -18,6 +20,14 @@ if (!supabase) {
 } else {
   console.log("Supabase client successfully initialized dynamically from environment.");
 }
+
+// Initialize background WhatsApp scheduler for attendance summaries
+const globalRef = global as any;
+if (!globalRef.whatsappSchedulerStarted) {
+  globalRef.whatsappSchedulerStarted = true;
+  initWhatsappScheduler();
+}
+
 
 export async function syncPunchToSupabase(punch: any) {
   if (!supabase) return;

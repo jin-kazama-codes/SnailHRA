@@ -281,6 +281,7 @@ export default function DirectoryView({
         hra: "salaryHra", hraallowance: "salaryHra", salaryhra: "salaryHra",
         allowances: "salaryAllowances", otherallowances: "salaryAllowances", salaryallowances: "salaryAllowances",
         pfdeduction: "salaryPf", pf: "salaryPf", salarypf: "salaryPf", salarypfdeduction: "salaryPf",
+        tdsdeduction: "salaryTds", tds: "salaryTds", salarytds: "salaryTds", salarytdsdeduction: "salaryTds", taxdeduction: "salaryTds", tax: "salaryTds", salarytax: "salaryTds", tdsprofessiontax: "salaryTds", professiontax: "salaryTds",
         bankname: "bankName", bank: "bankName",
         accountnumber: "bankAccount", bankaccount: "bankAccount", bankaccountnumber: "bankAccount",
         ifsc: "bankIfsc", ifsccode: "bankIfsc", bankifsc: "bankIfsc",
@@ -366,6 +367,7 @@ export default function DirectoryView({
   const [editSalaryHra, setEditSalaryHra] = useState("");
   const [editSalaryAllowances, setEditSalaryAllowances] = useState("");
   const [editSalaryPf, setEditSalaryPf] = useState("");
+  const [editSalaryTds, setEditSalaryTds] = useState("0");
   const [editBankAccount, setEditBankAccount] = useState("");
   const [editBankName, setEditBankName] = useState("");
   const [editBankIfsc, setEditBankIfsc] = useState("");
@@ -397,12 +399,13 @@ export default function DirectoryView({
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
-  const [salaryBasic, setSalaryBasic] = useState("45000");
-  const [salaryHra, setSalaryHra] = useState("18000");
-  const [salaryAllowances, setSalaryAllowances] = useState("10000");
-  const [salaryPf, setSalaryPf] = useState("3200");
+  const [salaryBasic, setSalaryBasic] = useState("");
+  const [salaryHra, setSalaryHra] = useState("");
+  const [salaryAllowances, setSalaryAllowances] = useState("");
+  const [salaryPf, setSalaryPf] = useState("");
+  const [salaryTds, setSalaryTds] = useState("");
   const [bankAccount, setBankAccount] = useState("");
-  const [bankName, setBankName] = useState("State Bank of India");
+  const [bankName, setBankName] = useState("");
   const [bankIfsc, setBankIfsc] = useState("");
   const [address, setAddress] = useState("");
   const [bio, setBio] = useState("");
@@ -448,7 +451,7 @@ export default function DirectoryView({
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
       branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
-      joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf,
+      joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
       bankAccount, bankName, bankIfsc, address, bio, password,
       emergencyName, emergencyRelation, emergencyPhone,
       avatarUrl
@@ -466,6 +469,14 @@ export default function DirectoryView({
     setEmergencyRelation("");
     setEmergencyPhone("");
     setOnboardBranch("");
+    setSalaryBasic("");
+    setSalaryHra("");
+    setSalaryAllowances("");
+    setSalaryPf("");
+    setSalaryTds("");
+    setBankAccount("");
+    setBankName("");
+    setBankIfsc("");
     setProfileImageFile(null);
     setProfileImagePreview("");
     setShowOnboardForm(false);
@@ -529,6 +540,7 @@ export default function DirectoryView({
     setEditSalaryHra(String(emp.salary?.hra || ""));
     setEditSalaryAllowances(String(emp.salary?.allowances || ""));
     setEditSalaryPf(String(emp.salary?.pfDeduction || ""));
+    setEditSalaryTds(String(emp.salary?.tdsDeduction || "0"));
     setEditBankAccount(emp.bankDetails?.accountNumber || "");
     setEditBankName(emp.bankDetails?.bankName || "");
     setEditBankIfsc(emp.bankDetails?.ifsc || "");
@@ -598,6 +610,7 @@ export default function DirectoryView({
           hra: Number(editSalaryHra),
           allowances: Number(editSalaryAllowances),
           pfDeduction: Number(editSalaryPf),
+          tdsDeduction: Number(editSalaryTds),
         },
         bankDetails: {
           accountNumber: editBankAccount,
@@ -1633,40 +1646,54 @@ export default function DirectoryView({
                 {/* Section 3: Salary structure */}
                 <div>
                   <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">3. Salary Allocation Break-up (Monthly)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
                       <input
                         type="number"
                         value={salaryBasic}
                         onChange={(e) => setSalaryBasic(e.target.value)}
+                        placeholder="e.g. 45000"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
                       <input
                         type="number"
                         value={salaryHra}
                         onChange={(e) => setSalaryHra(e.target.value)}
+                        placeholder="e.g. 18000"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
                       <input
                         type="number"
                         value={salaryAllowances}
                         onChange={(e) => setSalaryAllowances(e.target.value)}
+                        placeholder="e.g. 10000"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
                       <input
                         type="number"
                         value={salaryPf}
                         onChange={(e) => setSalaryPf(e.target.value)}
+                        placeholder="e.g. 3200"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">TDS / Profession Tax (INR)</label>
+                      <input
+                        type="number"
+                        value={salaryTds}
+                        onChange={(e) => setSalaryTds(e.target.value)}
+                        placeholder="e.g. 6150"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
@@ -1964,8 +1991,8 @@ export default function DirectoryView({
                 {/* Section 3: Salary structure */}
                 <div>
                   <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">3. Salary Allocation Break-up (Monthly)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
                       <input
                         type="number"
@@ -1974,7 +2001,7 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
                       <input
                         type="number"
@@ -1983,7 +2010,7 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
                       <input
                         type="number"
@@ -1992,12 +2019,21 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>
-                    <div>
+                    <div className="flex flex-col justify-end">
                       <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
                       <input
                         type="number"
                         value={editSalaryPf}
                         onChange={(e) => setEditSalaryPf(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end">
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">TDS / Profession Tax (INR)</label>
+                      <input
+                        type="number"
+                        value={editSalaryTds}
+                        onChange={(e) => setEditSalaryTds(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                       />
                     </div>

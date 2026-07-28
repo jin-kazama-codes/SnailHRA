@@ -93,7 +93,8 @@ export async function POST(request: Request) {
           basic: Number(item.salary?.basic ?? item.salaryBasic ?? 40000),
           hra: Number(item.salary?.hra ?? item.salaryHra ?? 16000),
           allowances: Number(item.salary?.allowances ?? item.salaryAllowances ?? 8000),
-          pfDeduction: Number(item.salary?.pfDeduction ?? item.salaryPf ?? 3600)
+          pfDeduction: Number(item.salary?.pfDeduction ?? item.salaryPf ?? 3600),
+          tdsDeduction: Number(item.salary?.tdsDeduction ?? item.salaryTds ?? 0)
         },
         bankDetails: {
           accountNumber: String(item.bankDetails?.accountNumber ?? item.bankAccount ?? `999${Math.floor(10000000 + Math.random() * 90000000)}`),
@@ -145,6 +146,7 @@ export async function POST(request: Request) {
             salary_hra: newEmp.salary?.hra,
             salary_allowances: newEmp.salary?.allowances,
             salary_pf_deduction: newEmp.salary?.pfDeduction,
+            salary_tds_deduction: newEmp.salary?.tdsDeduction,
             bank_account_number: newEmp.bankDetails?.accountNumber,
             bank_name: newEmp.bankDetails?.bankName,
             bank_ifsc: newEmp.bankDetails?.ifsc,

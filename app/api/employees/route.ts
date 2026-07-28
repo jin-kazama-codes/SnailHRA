@@ -30,7 +30,8 @@ export async function POST(request: Request) {
         basic: Number(body.salaryBasic) || 40000,
         hra: Number(body.salaryHra) || 16000,
         allowances: Number(body.salaryAllowances) || 8000,
-        pfDeduction: Number(body.salaryPf) || 3600
+        pfDeduction: Number(body.salaryPf) || 3600,
+        tdsDeduction: Number(body.salaryTds) || 0
       },
       bankDetails: body.bankDetails || {
         accountNumber: body.bankAccount || "",
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
           salary_hra: newEmp.salary?.hra,
           salary_allowances: newEmp.salary?.allowances,
           salary_pf_deduction: newEmp.salary?.pfDeduction,
+          salary_tds_deduction: newEmp.salary?.tdsDeduction,
           bank_account_number: newEmp.bankDetails?.accountNumber,
           bank_name: newEmp.bankDetails?.bankName,
           bank_ifsc: newEmp.bankDetails?.ifsc,

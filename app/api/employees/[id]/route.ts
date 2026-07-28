@@ -48,6 +48,7 @@ export async function PUT(
           salary_hra: emp.salary?.hra,
           salary_allowances: emp.salary?.allowances,
           salary_pf_deduction: emp.salary?.pfDeduction,
+          salary_tds_deduction: emp.salary?.tdsDeduction,
           bank_account_number: emp.bankDetails?.accountNumber,
           bank_name: emp.bankDetails?.bankName,
           bank_ifsc: emp.bankDetails?.ifsc,

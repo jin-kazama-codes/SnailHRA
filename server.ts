@@ -4,7 +4,6 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import { supabase } from "./src/lib/supabase.js";
 import bcrypt from "bcryptjs";
 import { 
@@ -464,6 +463,7 @@ async function syncEmployeeToSupabase(emp: Employee) {
         salary_hra: emp.salary?.hra,
         salary_allowances: emp.salary?.allowances,
         salary_pf_deduction: emp.salary?.pfDeduction,
+        salary_tds_deduction: emp.salary?.tdsDeduction,
         bank_account_number: emp.bankDetails?.accountNumber,
         bank_name: emp.bankDetails?.bankName,
         bank_ifsc: emp.bankDetails?.ifsc,
@@ -530,7 +530,13 @@ async function startServer() {
             branch: data.branch || "Mumbai Branch",
             joiningDate: data.joining_date || data.joiningDate || "2024-03-15",
             status: data.status || "Active",
-            salary: typeof data.salary === "string" ? JSON.parse(data.salary) : (data.salary || { basic: 45000, hra: 18000, allowances: 10000, pfDeduction: 3200 }),
+            salary: {
+              basic: Number(data.salary_basic ?? (typeof data.salary === "string" ? JSON.parse(data.salary).basic : (data.salary?.basic ?? 45000))),
+              hra: Number(data.salary_hra ?? (typeof data.salary === "string" ? JSON.parse(data.salary).hra : (data.salary?.hra ?? 18000))),
+              allowances: Number(data.salary_allowances ?? (typeof data.salary === "string" ? JSON.parse(data.salary).allowances : (data.salary?.allowances ?? 10000))),
+              pfDeduction: Number(data.salary_pf_deduction ?? (typeof data.salary === "string" ? JSON.parse(data.salary).pfDeduction : (data.salary?.pfDeduction ?? 3200))),
+              tdsDeduction: Number(data.salary_tds_deduction ?? (typeof data.salary === "string" ? JSON.parse(data.salary).tdsDeduction : (data.salary?.tdsDeduction ?? 0)))
+            },
             bankDetails: typeof data.bank_details === "string" ? JSON.parse(data.bank_details) : (data.bankDetails || { accountNumber: "", bankName: "SBI", ifsc: "" }),
             address: data.address || "",
             emergencyContact: typeof data.emergency_contact === "string" ? JSON.parse(data.emergency_contact) : (data.emergencyContact || { name: "", relation: "", phone: "" }),
@@ -617,7 +623,8 @@ async function startServer() {
         basic: Number(empData.salaryBasic) || 40000,
         hra: Number(empData.salaryHra) || 16000,
         allowances: Number(empData.salaryAllowances) || 8000,
-        pfDeduction: Number(empData.salaryPf) || 3600
+        pfDeduction: Number(empData.salaryPf) || 3600,
+        tdsDeduction: Number(empData.salaryTds) || 0
       },
       bankDetails: {
         accountNumber: empData.bankAccount || "112233445566",
@@ -719,7 +726,8 @@ async function startServer() {
             basic: Number(empData.salaryBasic) || 45000,
             hra: Number(empData.salaryHra) || 18000,
             allowances: Number(empData.salaryAllowances) || 10000,
-            pfDeduction: Number(empData.salaryPf) || 3200
+            pfDeduction: Number(empData.salaryPf) || 3200,
+            tdsDeduction: Number(empData.salaryTds) || 0
           },
           bankDetails: {
             accountNumber: empData.bankAccount || "50100234567891",
@@ -1409,8 +1417,10 @@ async function startServer() {
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Pending");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
-    // Calculate Professional Tax + TDS roughly
-    const tax = Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
+    // Use configured TDS/Profession Tax if available, otherwise calculate roughly
+    const tax = typeof employee.salary.tdsDeduction === "number"
+      ? employee.salary.tdsDeduction
+      : Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
 
     const netPay = (employee.salary.basic + employee.salary.hra + employee.salary.allowances) - pf - finesDeduction - tax;
 
@@ -1531,6 +1541,13 @@ async function startServer() {
     }
 
     try {
+      if (supabase) {
+        try {
+          await fetchAllFromSupabase();
+        } catch (sbErr) {
+          console.warn("Failed to fetch live database from Supabase for chatbot:", sbErr);
+        }
+      }
       const dbState = readDatabase();
       const employee = dbState.employees.find(e => e.id === employeeId);
       
@@ -1583,6 +1600,12 @@ Logged-in Employee Context:
 You are SnailHR AI Assistant, a helpful and highly professional human resources companion built for SnailHR (a modern NBFC HR tech platform).
 Your primary job is to assist HR managers, Admins, and Employees with their queries in a concise, warm, objective, and extremely polite tone.
 
+Scope and Safety Guidelines (CRITICAL):
+- You have full access and the right to read the entire database. You can query and display information, salary details, and personal/professional records of any employee when asked.
+- You must ONLY answer questions directly related to MGM FINANCIERS PRIV LIMITED, SnailHR, or the provided database context (e.g. employee details, policies, holidays, company metrics, etc.).
+- If the user asks general knowledge questions, coding/technical help, personal questions, creative writing, or anything unrelated to the MGM FINANCIERS PRIV LIMITED company, policies, or database context, you MUST politely refuse to answer and return ONLY this exact message, and ABSOLUTELY NOTHING ELSE (do not add any greetings, intro, follow-up help, or extra text):
+  "I am only authorized to answer questions related to MGM FINANCIERS PRIV LIMITED company, policies, and its HR database. Please keep your queries relevant to the company."
+
 Context Guidelines:
 - Today's date is strictly Monday, July 20, 2026. SnailHR is based in India.
 - You have live access to the SnailHR database. Use the database context below to answer queries exactly, without inventing figures or names.
@@ -1605,36 +1628,52 @@ ${policiesContext}
 ---------------------------------
 `;
 
-      const contents: any[] = [];
+      const messagesList: any[] = [
+        {
+          role: "system",
+          content: systemInstruction
+        }
+      ];
       if (chatHistory && Array.isArray(chatHistory)) {
-        chatHistory.forEach(ch => {
-          contents.push({
-            role: ch.role === "user" ? "user" : "model",
-            parts: [{ text: ch.text }]
+        chatHistory.forEach((ch: any) => {
+          messagesList.push({
+            role: ch.role === "user" ? "user" : "assistant",
+            content: ch.text
           });
         });
       }
-      contents.push({ role: "user", parts: [{ text: message }] });
+      messagesList.push({ role: "user", content: message });
 
-      if (!process.env.GEMINI_API_KEY) {
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
         const fallbackText = getSmartExpressFallback(message, dbState, employee);
         return res.status(200).json({ text: fallbackText });
       }
 
       try {
-        const aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const response = await aiClient.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: contents,
-          config: {
-            systemInstruction: systemInstruction,
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "llama-3.3-70b-versatile",
+            messages: messagesList,
             temperature: 0.7,
-          }
+          })
         });
 
-        res.json({ text: response.text });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `Groq API responded with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content || "";
+        res.json({ text });
       } catch (apiErr: any) {
-        console.warn("Gemini API call failed, using DB fallback:", apiErr?.message || apiErr);
+        console.warn("Groq API call failed, using DB fallback:", apiErr?.message || apiErr);
         const fallbackText = getSmartExpressFallback(message, dbState, employee);
         return res.status(200).json({ text: fallbackText });
       }

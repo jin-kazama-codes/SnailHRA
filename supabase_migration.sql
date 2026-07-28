@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS employees (
   salary_hra              NUMERIC(12, 2),
   salary_allowances       NUMERIC(12, 2),
   salary_pf_deduction     NUMERIC(12, 2),
+  salary_tds_deduction    NUMERIC(12, 2),
 
   -- Nested bankDetails object (flattened)
   bank_account_number     TEXT,
