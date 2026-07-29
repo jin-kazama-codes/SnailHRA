@@ -42,7 +42,7 @@ export default function DirectoryView({
   customDepartments,
   customBranches,
   companyId = "",
-  subscriptionModel = 4,
+  subscriptionModel = 1,
   onOnboardEmployee,
   onBulkOnboardEmployee,
   onUpdateEmployee,

@@ -108,7 +108,7 @@ export async function POST(request: Request) {
 
     const resolvedCompanyId = employee.companyId || (employee as any).company_id || "a1b2c3d4-0001-0001-0001-000000000001";
     let resolvedCompanyName = "";
-    let resolvedSubscriptionModel = 4;
+    let resolvedSubscriptionModel = 1;
 
     // Use supabaseAdmin to bypass RLS and reliably fetch the company name
     const dbClient = supabaseAdmin || supabase;
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         }
         if (compData) {
           resolvedCompanyName = compData.name || "";
-          resolvedSubscriptionModel = compData.subscription_model ?? 4;
+          resolvedSubscriptionModel = compData.subscription_model ?? 1;
         }
       } catch (err) {
         console.warn("Error fetching company details:", err);

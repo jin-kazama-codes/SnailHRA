@@ -101,9 +101,9 @@ export default function App() {
 
   const [subscriptionModel, setSubscriptionModel] = useState<1 | 2 | 3 | 4>(() => {
     if (typeof window !== "undefined") {
-      return (Number(localStorage.getItem("snailhr_subscriptionModel")) as 1 | 2 | 3 | 4) || 4; // Default Full Suite
+      return (Number(localStorage.getItem("snailhr_subscriptionModel")) as 1 | 2 | 3 | 4) || 1; // Default Basic
     }
-    return 4;
+    return 1;
   });
 
   useEffect(() => {
@@ -374,7 +374,7 @@ export default function App() {
     if (typeof window !== "undefined") {
       const newCompanyName = localStorage.getItem("snailhr_companyName") || "";
       const newCompanyId = localStorage.getItem("snailhr_companyId") || "";
-      const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "4") as 1|2|3|4;
+      const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "1") as 1|2|3|4;
       setCompanyName(newCompanyName);
       setCompanyId(newCompanyId);
       setSubscriptionModel(newSubModel);

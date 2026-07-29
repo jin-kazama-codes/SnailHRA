@@ -34,7 +34,7 @@ export default function ConfigurationView({
   customDepartments,
   customBranches,
   supabaseStatus,
-  subscriptionModel = 4,
+  subscriptionModel = 1,
   onAddDesignation,
   onRemoveDesignation,
   onUpdateCollection

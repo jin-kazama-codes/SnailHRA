@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import bcrypt from "bcryptjs";
 
 // Use the service role key so RLS on super_admins table doesn't block the query
 function getAdminClient() {
@@ -38,8 +39,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    // Plain-text comparison (password stored as-is in super_admins)
-    if (data.password !== password) {
+    // Verify password using bcrypt (with plain-text fallback)
+    const isMatch = bcrypt.compareSync(password, data.password) || data.password === password;
+    if (!isMatch) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 

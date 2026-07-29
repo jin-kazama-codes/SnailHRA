@@ -22,7 +22,13 @@ export async function PUT(
 
     const updatePayload: Record<string, any> = {};
     if (name !== undefined) updatePayload.name = name;
-    if (subscriptionModel !== undefined) updatePayload.subscription_model = subscriptionModel;
+    if (subscriptionModel !== undefined) {
+      const model = Number(subscriptionModel);
+      if (![1, 2, 3, 4].includes(model)) {
+        return NextResponse.json({ error: "subscriptionModel must be 1, 2, 3, or 4" }, { status: 400 });
+      }
+      updatePayload.subscription_model = model;
+    }
     if (isActive !== undefined) updatePayload.is_active = isActive;
 
     const { data, error } = await db
@@ -37,7 +43,18 @@ export async function PUT(
       return NextResponse.json({ error: "Failed to update company" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, company: data });
+    // Map snake_case DB columns → camelCase expected by the frontend Company type
+    const company = {
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      subscriptionModel: data.subscription_model ?? 1,
+      isActive: data.is_active ?? true,
+      totalEmployees: data.total_employees ?? 0,
+      totalAdmins: data.total_admins ?? 0,
+      createdAt: data.created_at,
+    };
+    return NextResponse.json({ success: true, company });
   } catch (err) {
     console.error("Company PUT error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });

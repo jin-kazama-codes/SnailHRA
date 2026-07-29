@@ -106,7 +106,7 @@ const initialData: AppState = {
       id: MGM_COMPANY_ID,
       name: "MGM Financiers Priv Limited",
       slug: "mgm-financiers",
-      subscriptionModel: 4,
+      subscriptionModel: 1,
       createdAt: new Date().toISOString(),
       isActive: true
     }
@@ -639,7 +639,7 @@ async function startServer() {
 
     // Resolve company info for this employee
     const empCompanyId = employee.companyId || MGM_COMPANY_ID;
-    let subscriptionModel: 1 | 2 | 3 | 4 = 4; // default Full Suite
+    let subscriptionModel: 1 | 2 | 3 | 4 = 1; // default Basic (features must be purchased)
     let companyName = "MGM Financiers Priv Limited";
     if (supabase) {
       try {
@@ -965,7 +965,7 @@ async function startServer() {
       }
       // fallback to in-memory
       const comp = (db.companies || []).find(c => c.id === companyId);
-      const model = comp?.subscriptionModel || 4;
+      const model = comp?.subscriptionModel || 1;
       res.json({
         subscriptionModel: model,
         companyName: comp?.name || "MGM Financiers Priv Limited",
