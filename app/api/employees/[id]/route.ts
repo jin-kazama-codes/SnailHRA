@@ -37,6 +37,8 @@ export async function PUT(
           department: emp.department,
           branch: emp.branch,
           joining_date: emp.joiningDate,
+          date_of_birth: emp.dateOfBirth || null,
+          company_id: emp.companyId || emp.company_id || null,
           status: emp.status,
           address: emp.address,
           emergency_contact_name: emp.emergencyContact?.name,

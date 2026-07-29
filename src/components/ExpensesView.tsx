@@ -64,7 +64,7 @@ export default function ExpensesView({
   };
 
   const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Agent";
+    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
   return (

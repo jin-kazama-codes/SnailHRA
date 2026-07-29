@@ -155,7 +155,7 @@ export default function InventoryView({
   };
 
   const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Agent";
+    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
   const getEmployeeDept = (empId: string) => {

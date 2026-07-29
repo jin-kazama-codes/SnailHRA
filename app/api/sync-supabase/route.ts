@@ -94,7 +94,8 @@ export async function POST() {
         bank_account_number: emp.bankDetails?.accountNumber,
         bank_name: emp.bankDetails?.bankName,
         bank_ifsc: emp.bankDetails?.ifsc,
-        password: emp.password || null
+        password: emp.password || null,
+        date_of_birth: emp.dateOfBirth || null
       }));
       const { error } = await supabase.from("employees").upsert(employeeRecords, { onConflict: "id" });
       if (error) {

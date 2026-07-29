@@ -94,8 +94,10 @@ export async function POST(request: Request) {
       // Extract & format designation
       let desgId = item.designationId || "des-4";
       if (!item.designationId && item.designationTitle) {
+        const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
         const matchedDesg = db.designations?.find(
-          d => d.title.toLowerCase() === String(item.designationTitle).toLowerCase()
+          d => d.title.toLowerCase() === String(item.designationTitle).toLowerCase() &&
+               (d.companyId || (d as any).company_id || MGM_COMPANY_ID) === resolvedCompanyId
         );
         if (matchedDesg) desgId = matchedDesg.id;
       }
@@ -110,6 +112,7 @@ export async function POST(request: Request) {
         designationId: desgId,
         department: item.department || "Loans",
         joiningDate: item.joiningDate || todayStr,
+        dateOfBirth: item.dateOfBirth || item.date_of_birth || item.dob || undefined,
         status: item.status === "Probation" || item.status === "Suspended" ? item.status : "Active",
         salary: {
           basic: Number(item.salary?.basic ?? item.salaryBasic ?? 40000),
@@ -158,6 +161,7 @@ export async function POST(request: Request) {
             department: newEmp.department,
             branch: newEmp.branch,
             joining_date: newEmp.joiningDate,
+            date_of_birth: newEmp.dateOfBirth || null,
             status: newEmp.status,
             address: newEmp.address,
             emergency_contact_name: newEmp.emergencyContact?.name,

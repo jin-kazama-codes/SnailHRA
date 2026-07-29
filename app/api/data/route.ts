@@ -105,11 +105,16 @@ export async function GET(request: Request) {
       ]);
 
       if (designationsRes && designationsRes.data && designationsRes.data.length > 0) {
-        db.designations = designationsRes.data.map((row: any) => ({
+        const sbDesignations = designationsRes.data.map((row: any) => ({
           id: row.id,
           title: row.title,
-          department: row.department
+          department: row.department,
+          companyId: row.company_id || row.companyId || null
         }));
+        const desMap = new Map();
+        (db.designations || []).forEach((d: any) => { if (d.id) desMap.set(d.id, d); });
+        sbDesignations.forEach((d: any) => { desMap.set(d.id, d); });
+        db.designations = Array.from(desMap.values());
       }
 
       if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
@@ -341,7 +346,8 @@ export async function GET(request: Request) {
             onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || fallbackEmp?.onboardingTasks || []),
             avatarUrl: row.avatar_url || row.avatarUrl || fallbackEmp?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
             bio: row.bio || fallbackEmp?.bio || "",
-            password: row.password || fallbackEmp?.password || ""
+            password: row.password || fallbackEmp?.password || "",
+            dateOfBirth: row.date_of_birth || fallbackEmp?.dateOfBirth || undefined
           };
         });
         const empMap = new Map();
@@ -409,6 +415,14 @@ export async function GET(request: Request) {
     } catch (err) {
       console.warn("Supabase hydration error in GET /api/data:", err);
     }
+  }
+
+  const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
+  if (companyId) {
+    db.designations = (db.designations || []).filter((d: any) => {
+      const dCompId = d.companyId || d.company_id || MGM_COMPANY_ID;
+      return dCompId === companyId;
+    });
   }
 
   return NextResponse.json(db);

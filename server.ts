@@ -283,10 +283,11 @@ async function fetchExcelUploadsFromSupabase(): Promise<ExcelUploadRecord[]> {
 async function fetchAllFromSupabase(): Promise<AppState> {
   if (!supabase) return db;
   try {
-    const [leavesRes, attendanceRes, employeesRes] = await Promise.all([
+    const [leavesRes, attendanceRes, employeesRes, designationsRes] = await Promise.all([
       supabase.from("leaves").select("*"),
       supabase.from("attendance").select("*"),
-      supabase.from("employees").select("*")
+      supabase.from("employees").select("*"),
+      supabase.from("designations").select("*")
     ]);
 
     if (leavesRes.data && leavesRes.data.length > 0) {
@@ -362,6 +363,19 @@ async function fetchAllFromSupabase(): Promise<AppState> {
       console.log("Supabase 'employees' table empty - Hydrating initial employee roster and seeding to Supabase...");
       db.employees = initialEmployees;
       await syncAllEmployeesToSupabase(initialEmployees);
+    }
+
+    if (designationsRes && designationsRes.data && designationsRes.data.length > 0) {
+      const sbDesignations = designationsRes.data.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        department: row.department,
+        companyId: row.company_id || row.companyId || null
+      }));
+      const desMap = new Map();
+      (db.designations || []).forEach((d: any) => { if (d.id) desMap.set(d.id, d); });
+      sbDesignations.forEach((d: any) => { desMap.set(d.id, d); });
+      db.designations = Array.from(desMap.values());
     }
   } catch (err) {
     console.warn("Error fetching data directly from Supabase tables:", err);
@@ -544,6 +558,7 @@ async function startServer() {
       const filteredData = {
         ...currentData,
         employees: companyEmployees,
+        designations: (currentData.designations || []).filter(d => (d.companyId || (d as any).company_id || MGM_COMPANY_ID) === reqCompanyId),
         attendance: (currentData.attendance || []).filter(a => employeeIds.has(a.employeeId)),
         leaves: (currentData.leaves || []).filter(l => employeeIds.has(l.employeeId)),
         expenses: (currentData.expenses || []).filter(e => employeeIds.has(e.employeeId)),
@@ -563,6 +578,7 @@ async function startServer() {
       res.json({
         ...initialData,
         employees: fallbackEmployees,
+        designations: (initialData.designations || []).filter(d => (d.companyId || (d as any).company_id || MGM_COMPANY_ID) === reqCompanyId),
         attendance: (initialData.attendance || []).filter(a => fallbackIds.has(a.employeeId)),
         leaves: (initialData.leaves || []).filter(l => fallbackIds.has(l.employeeId)),
       });
@@ -1112,11 +1128,13 @@ async function startServer() {
         const empData = incomingEmployees[i];
         const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
 
+        const targetCompanyId = req.body.companyId || empData.companyId || empData.company_id || MGM_COMPANY_ID;
         // Find designation match if title is provided
         let desigId = "des-4";
         if (empData.designationTitle) {
           const match = db.designations.find(d =>
-            d.title.toLowerCase().trim() === String(empData.designationTitle).toLowerCase().trim()
+            d.title.toLowerCase().trim() === String(empData.designationTitle).toLowerCase().trim() &&
+            (d.companyId || (d as any).company_id || MGM_COMPANY_ID) === targetCompanyId
           );
           if (match) desigId = match.id;
         }
@@ -1134,7 +1152,7 @@ async function startServer() {
 
         const newEmp: Employee = {
           id: newEmpId,
-          companyId: req.body.companyId || empData.companyId || empData.company_id || MGM_COMPANY_ID,
+          companyId: targetCompanyId,
           fullName: empData.fullName || `Agent ${newEmpId}`,
           email: empData.email || `agent.${newEmpId.toLowerCase()}@mgmfinanciers.com`,
           phone: empData.phone || "+91 98765 00000",

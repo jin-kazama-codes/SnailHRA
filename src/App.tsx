@@ -423,7 +423,7 @@ export default function App() {
 
   // 1. Onboard employee
   const handleOnboardEmployee = async (empData: any) => {
-    showToast("Onboarding new agent, please wait...", "info");
+    showToast("Onboarding new employee, please wait...", "info");
     try {
       const res = await fetch("/api/employees", {
         method: "POST",
@@ -435,11 +435,11 @@ export default function App() {
         showToast("Employee onboarded successfully! Credential campaign sent.", "success");
       } else {
         const errData = await res.json().catch(() => ({}));
-        showToast(`Failed to onboard agent: ${errData.error || "Server error"}`, "error");
+        showToast(`Failed to onboard employee: ${errData.error || "Server error"}`, "error");
       }
     } catch (err: any) {
       console.error(err);
-      showToast(`Error onboarding agent: ${err?.message || err}`, "error");
+      showToast(`Error onboarding employee: ${err?.message || err}`, "error");
     }
   };
 
@@ -1286,7 +1286,7 @@ export default function App() {
   const navigationLinks = [
     { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard className="w-4.5 h-4.5" /> },
     ...((activeRole === "admin" || activeRole === "hr") ? [
-      { id: "directory", label: "Agent Directory", icon: <Users className="w-4.5 h-4.5" /> }
+      { id: "directory", label: "Employee Directory", icon: <Users className="w-4.5 h-4.5" /> }
     ] : []),
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
@@ -1361,7 +1361,7 @@ export default function App() {
       <div className="flex-1 flex flex-col lg:flex-row">
 
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a]/80 p-4 shrink-0 space-y-6">
+        <aside className="hidden lg:block w-64 bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a]/80 p-4 shrink-0 space-y-6 sticky top-[57px] h-[calc(100vh-57px)] overflow-hidden hover:overflow-y-auto custom-scrollbar">
 
           {/* Current Profile details card */}
           {currentEmployee && (

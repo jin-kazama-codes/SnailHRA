@@ -84,7 +84,7 @@ export default function PayrollView({
   };
 
   const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Agent";
+    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
   const getEmployeeEmail = (empId: string) => {
@@ -228,7 +228,7 @@ export default function PayrollView({
               <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
                   <div>
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Lending Agents Payroll Center</h3>
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Employees Payroll Center</h3>
                     <p className="text-xs text-slate-400 dark:text-gray-500">Generate structural salary slips with automated email dispatch</p>
                   </div>
 
@@ -246,14 +246,14 @@ export default function PayrollView({
 
                 <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] text-slate-500 dark:text-gray-400 leading-normal flex items-start space-x-2">
                   <HelpCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                  <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the agent's email address.</span>
+                  <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the employee's email address.</span>
                 </div>
 
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                        <th className="py-2.5 px-3 whitespace-nowrap">Agent Name</th>
+                        <th className="py-2.5 px-3 whitespace-nowrap">Employee Name</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">Base Compensation</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">HRA + Allowances</th>
                         <th className="py-2.5 px-3 whitespace-nowrap">Fines Deducted</th>
@@ -359,7 +359,7 @@ export default function PayrollView({
                 {totalItems > 0 && (
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a] text-xs">
                     <div className="text-slate-400 font-medium">
-                      Showing <span className="font-bold text-slate-700 dark:text-gray-200">{startIndex + 1}</span> to <span className="font-bold text-slate-700 dark:text-gray-200">{endIndex}</span> of <span className="font-bold text-slate-700 dark:text-gray-200">{totalItems}</span> agents
+                      Showing <span className="font-bold text-slate-700 dark:text-gray-200">{startIndex + 1}</span> to <span className="font-bold text-slate-700 dark:text-gray-200">{endIndex}</span> of <span className="font-bold text-slate-700 dark:text-gray-200">{totalItems}</span> employees
                     </div>
 
                     <div className="flex items-center space-x-1.5">
@@ -558,7 +558,7 @@ export default function PayrollView({
               {/* Employee Detail Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-[#0a0a0a]/40 p-4 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a]/50">
                 <div>
-                  <span className="text-slate-400 block">Agent Name</span>
+                  <span className="text-slate-400 block">Employee Name</span>
                   <span className="font-semibold text-slate-700 dark:text-gray-300">{getEmployeeName(activeSlip.employeeId)}</span>
                 </div>
                 <div>

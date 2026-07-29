@@ -28,6 +28,7 @@ export default function OnboardAgentSlideover({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [empRole, setEmpRole] = useState<"admin" | "hr" | "employee">(defaultRole);
+  const [dateOfBirth, setDateOfBirth] = useState("");
 
   // Section 2 — placement
   const [department, setDepartment] = useState("Management");
@@ -97,6 +98,7 @@ export default function OnboardAgentSlideover({
           department,
           designation,
           joiningDate,
+          dateOfBirth,
           branch,
           salaryBasic: Number(salaryBasic) || 0,
           salaryHra: Number(salaryHra) || 0,
@@ -142,7 +144,7 @@ export default function OnboardAgentSlideover({
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4 mb-6">
           <div>
             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-lg flex items-center">
-              <UserPlus className="w-5 h-5 text-violet-500 mr-2" /> Onboard New Agent
+              <UserPlus className="w-5 h-5 text-violet-500 mr-2" /> Onboard New Employee
             </h3>
             <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
               For: <span className="font-bold text-violet-500">{companyName}</span> · Initiate payroll, workspace assets, and welcome sequence
@@ -203,6 +205,11 @@ export default function OnboardAgentSlideover({
                   <option value="admin">Administrator</option>
                 </select>
               </div>
+              <div>
+                <label className={labelCls}>Date of Birth *</label>
+                <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
+                  className={inputCls} required />
+              </div>
               <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl">
                 <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700 shrink-0">
                   {profileImagePreview
@@ -210,7 +217,7 @@ export default function OnboardAgentSlideover({
                     : <Camera className="w-5 h-5 text-slate-400" />}
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Agent Profile Photo</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Employee Profile Photo</p>
                   <input type="file" ref={profileImageRef} accept="image/*"
                     onChange={handleProfileImageSelect} className="hidden" />
                   <button type="button" onClick={() => profileImageRef.current?.click()}
@@ -331,14 +338,14 @@ export default function OnboardAgentSlideover({
 
           {/* 7. Bio */}
           <div>
-            <label className={labelCls}>Agent Bio / Profile Summary</label>
+            <label className={labelCls}>Employee Bio / Profile Summary</label>
             <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2}
               placeholder="Brief outline of credentials or professional experience..."
               className={`${inputCls} resize-none`} />
           </div>
 
           {/* Submit */}
-          <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
+          <div className="flex justify-center space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
             <button type="button" onClick={onClose}
               className="bg-slate-100 hover:bg-slate-200 dark:bg-[#0a0a0a] dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 px-4 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-colors">
               Cancel

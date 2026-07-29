@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
   CheckCircle2, Users, FileText, AlertCircle, IndianRupee, Package, Briefcase, Home,
-  Award, ChevronRight, Activity, TrendingUp
+  Award, ChevronRight, Activity, TrendingUp, Cake
 } from "lucide-react";
 import { Employee, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine } from "../types";
 
@@ -95,17 +95,101 @@ export default function DashboardView({
   const myPayslip = currentEmployee ? (payslips.find(p => p.employeeId === currentEmployee.id) || payslips[0]) : undefined;
   const myAssets = currentEmployee ? inventory.filter(i => i.assignedToEmployeeId === currentEmployee.id) : [];
 
-  // Dynamic celebrations derived from employees database catalog
-  const upcomingBirthdays = employees.map(emp => {
-    const joinYear = new Date(emp.joiningDate).getFullYear();
-    const currentYear = time.getFullYear();
-    const tenureYears = Math.max(1, currentYear - joinYear);
+  // Helper to calculate days until the next occurrence of a month and day
+  const getDaysUntilNextOccurrence = (dateStr: string) => {
+    if (!dateStr) return null;
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const month = parseInt(match[2], 10) - 1; // 0-indexed month
+    const day = parseInt(match[3], 10);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const currentYear = today.getFullYear();
+    let nextOccur = new Date(currentYear, month, day);
+    
+    if (nextOccur < today) {
+      nextOccur = new Date(currentYear + 1, month, day);
+    }
+    
+    const diffTime = nextOccur.getTime() - today.getTime();
+    const daysDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return {
-      name: emp.fullName,
-      role: `${emp.department} • ${tenureYears} Year${tenureYears > 1 ? 's' : ''} Work Anniversary`,
-      date: new Date(emp.joiningDate).toLocaleDateString([], { month: 'short', day: 'numeric' })
+      daysDiff,
+      nextOccurDate: nextOccur,
+      month,
+      day
     };
-  });
+  };
+
+  const computedBirthdays = employees
+    .filter(e => e.dateOfBirth)
+    .map(emp => {
+      const occurrence = getDaysUntilNextOccurrence(emp.dateOfBirth!);
+      if (!occurrence) return null;
+      
+      const birthYear = new Date(emp.dateOfBirth!).getFullYear();
+      const nextAge = occurrence.nextOccurDate.getFullYear() - birthYear;
+      
+      return {
+        emp,
+        daysDiff: occurrence.daysDiff,
+        dateStr: occurrence.nextOccurDate.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        label: `Turning ${nextAge}`,
+        birthYear
+      };
+    })
+    .filter((b): b is NonNullable<typeof b> => b !== null)
+    .sort((a, b) => a.daysDiff - b.daysDiff);
+
+  const computedAnniversaries = employees
+    .filter(e => e.joiningDate)
+    .map(emp => {
+      const occurrence = getDaysUntilNextOccurrence(emp.joiningDate);
+      if (!occurrence) return null;
+      
+      const joinYear = new Date(emp.joiningDate).getFullYear();
+      const nextAnniversaryYears = occurrence.nextOccurDate.getFullYear() - joinYear;
+      
+      if (nextAnniversaryYears <= 0) return null;
+      
+      const getOrdinal = (n: number) => {
+        const s = ["th", "st", "nd", "rd"];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      };
+      
+      return {
+        emp,
+        daysDiff: occurrence.daysDiff,
+        dateStr: occurrence.nextOccurDate.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        label: `${getOrdinal(nextAnniversaryYears)} Anniversary`,
+        years: nextAnniversaryYears
+      };
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null)
+    .sort((a, b) => a.daysDiff - b.daysDiff);
+
+  const getDesignationTitle = (id?: string) => {
+    const map: Record<string, string> = {
+      "des-1": "Managing Director",
+      "des-2": "Head of Credit & Risk",
+      "des-3": "HR Business Partner",
+      "des-4": "Senior Loan Officer",
+      "des-5": "Insurance Underwriter",
+      "des-6": "Sales Relationship Manager",
+      "des-7": "Collections Specialist",
+      "des-8": "Compliance Officer"
+    };
+    return (id && map[id]) || "Specialist";
+  };
+
+  const getMilestoneIcon = (years: number) => {
+    if (years >= 5) return "🥇";
+    if (years >= 3) return "🏆";
+    return "⭐";
+  };
 
   return (
     <div className="space-y-6">
@@ -167,130 +251,54 @@ export default function DashboardView({
           </div>
 
           <div className="border-t border-slate-100 dark:border-[#1a1a1a] pt-3">
-            {role === "employee" && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 dark:text-gray-400">Shift Status:</span>
-                  <span className={`font-bold px-2.5 py-0.5 rounded-full uppercase text-[10px] ${
-                    myTodayPunch?.clockOut ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
-                    myTodayPunch ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse" :
-                    "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                  }`}>
-                    {myTodayPunch?.clockOut ? "Completed" : myTodayPunch ? "Clocked In" : "Not Clocked In"}
-                  </span>
-                </div>
-
-                {myTodayPunch && (
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-gray-400 font-mono bg-slate-50 dark:bg-[#0a0a0a] px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-[#1a1a1a]">
-                    <span>In: <strong className="text-slate-700 dark:text-gray-200">{formatTimeStr(myTodayPunch.clockIn)}</strong></span>
-                    {myTodayPunch.clockOut && (
-                      <span>Out: <strong className="text-slate-700 dark:text-gray-200">{formatTimeStr(myTodayPunch.clockOut)}</strong></span>
-                    )}
-                  </div>
-                )}
-
-                {onPunchAction && currentEmployee && (
-                  <div>
-                    {!myTodayPunch ? (
-                      <button
-                        onClick={() => onPunchAction(currentEmployee.id, "clockin")}
-                        className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Clock In Now</span>
-                      </button>
-                    ) : !myTodayPunch.clockOut ? (
-                      <button
-                        onClick={() => onPunchAction(currentEmployee.id, "clockout")}
-                        className="w-full flex items-center justify-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-rose-600/10 cursor-pointer"
-                      >
-                        <Square className="w-3.5 h-3.5 fill-current" />
-                        <span>Clock Out Shift</span>
-                      </button>
-                    ) : (
-                      <div className="text-center text-[11px] text-emerald-600 dark:text-emerald-400 font-medium py-1">
-                        ✓ Excellent! Shift completed for today.
-                      </div>
-                    )}
-                  </div>
-                )}
+            {/* Clock In / Clock Out Section visible for all roles */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 dark:text-gray-400">Shift Status:</span>
+                <span className={`font-bold px-2.5 py-0.5 rounded-full uppercase text-[10px] ${
+                  myTodayPunch?.clockOut ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                  myTodayPunch ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse" :
+                  "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                }`}>
+                  {myTodayPunch?.clockOut ? "Completed" : myTodayPunch ? "Clocked In" : "Not Clocked In"}
+                </span>
               </div>
-            )}
 
-            {role === "hr" && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold">
-                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
-                    <span className="block text-slate-400">Leaves Pending</span>
-                    <span className="text-xs font-bold text-amber-500 font-mono">{hrBranchPendingLeaves} Requests</span>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
-                    <span className="block text-slate-400">Expenses Pending</span>
-                    <span className="text-xs font-bold text-teal-500 font-mono">{hrBranchPendingExpenses} Claims</span>
-                  </div>
+              {myTodayPunch && (
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-gray-400 font-mono bg-slate-50 dark:bg-[#0a0a0a] px-2.5 py-1.5 rounded-lg border border-slate-100 dark:border-[#1a1a1a]">
+                  <span>In: <strong className="text-slate-700 dark:text-gray-200">{formatTimeStr(myTodayPunch.clockIn)}</strong></span>
+                  {myTodayPunch.clockOut && (
+                    <span>Out: <strong className="text-slate-700 dark:text-gray-205">{formatTimeStr(myTodayPunch.clockOut)}</strong></span>
+                  )}
                 </div>
+              )}
 
-                {setCurrentView && (
-                  <div className="space-y-1.5">
+              {onPunchAction && currentEmployee && (
+                <div>
+                  {!myTodayPunch ? (
                     <button
-                      onClick={() => setCurrentView("leaves")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      onClick={() => onPunchAction(currentEmployee.id, "clockin")}
+                      className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-emerald-600/10 cursor-pointer"
                     >
-                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2 text-amber-500" /> Review Branch Leaves</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Clock In Now</span>
                     </button>
+                  ) : !myTodayPunch.clockOut ? (
                     <button
-                      onClick={() => setCurrentView("directory")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                      onClick={() => onPunchAction(currentEmployee.id, "clockout")}
+                      className="w-full flex items-center justify-center space-x-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-md shadow-rose-600/10 cursor-pointer"
                     >
-                      <span className="flex items-center"><Users className="w-3.5 h-3.5 mr-2 text-emerald-500" /> Employee Directory</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <Square className="w-3.5 h-3.5 fill-current" />
+                      <span>Clock Out Shift</span>
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {role === "admin" && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold">
-                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
-                    <span className="block text-slate-400">Total Personnel</span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-gray-200 font-mono">{adminTotalUsers} Members</span>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
-                    <span className="block text-slate-400">System Approvals</span>
-                    <span className="text-xs font-bold text-amber-500 font-mono">{adminPendingLeaves + adminPendingExpenses} Items</span>
-                  </div>
+                  ) : (
+                    <div className="text-center text-[11px] text-emerald-600 dark:text-emerald-400 font-medium py-1">
+                      ✓ Excellent! Shift completed for today.
+                    </div>
+                  )}
                 </div>
-
-                {setCurrentView && (
-                  <div className="space-y-1.5">
-                    <button
-                      onClick={() => setCurrentView("configurations")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <span className="flex items-center"><Activity className="w-3.5 h-3.5 mr-2 text-indigo-500" /> System Settings</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentView("inventory")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <span className="flex items-center"><Package className="w-3.5 h-3.5 mr-2 text-indigo-500" /> Corporate Assets</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                    <button
-                      onClick={() => setCurrentView("leaves")}
-                      className="w-full flex items-center justify-between bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] text-slate-700 dark:text-gray-300 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <span className="flex items-center"><Calendar className="w-3.5 h-3.5 mr-2 text-emerald-500" /> Leave Approvals</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -434,8 +442,8 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* Lower Insights Grid: Holidays & Leave Tracker */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Upper Insights Grid: Holidays & Assets */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         
         {/* Upcoming Holidays Card */}
         <div id="holidays-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
@@ -469,31 +477,6 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Celebrations */}
-        <div id="celebrations-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
-          <div className="flex items-center justify-between mb-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-2">
-            <div className="flex items-center space-x-2">
-              <Gift className="w-4 h-4 text-pink-500" />
-              <h4 className="font-display font-semibold text-slate-800 dark:text-white">Birthdays & Anniversaries</h4>
-            </div>
-            <span className="text-[10px] bg-pink-50 text-pink-700 dark:bg-pink-950/30 dark:text-pink-400 px-2 py-0.5 rounded-full font-bold">This Month</span>
-          </div>
-
-          <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-            {upcomingBirthdays.slice(0, 2).map((b, idx) => (
-              <div key={idx} className="flex items-center space-x-2.5 text-xs bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-1.5 rounded-xl">
-                <div className="w-7 h-7 rounded-full bg-pink-100 dark:bg-pink-950/50 flex items-center justify-center text-pink-600 dark:text-pink-400 font-bold text-xs">
-                  {b.name ? b.name.charAt(0) : "A"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-700 dark:text-gray-300 truncate">{b.name}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{b.role} • {b.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Assets / Onboarding Summary */}
         <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between min-h-[220px]">
           <div className="flex items-center justify-between mb-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-2">
@@ -503,7 +486,6 @@ export default function DashboardView({
                 {role === "employee" ? "My Hardware Assets" : "Corporate Assets"}
               </h4>
             </div>
-            <span className="text-[10px] bg-teal-50 text-teal-700 dark:bg-teal-950/30 dark:text-teal-400 px-2 py-0.5 rounded-full font-bold">Assigned</span>
           </div>
 
           <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
@@ -524,6 +506,171 @@ export default function DashboardView({
           </div>
         </div>
 
+      </div>
+
+      {/* Lower Insights Grid: Birthdays & Anniversaries */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mt-4 sm:mt-6">
+        {/* Upcoming Birthdays Card */}
+        <div id="birthdays-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow flex flex-col overflow-hidden min-h-[460px]">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-5 text-center text-white relative flex flex-col items-center justify-center select-none shrink-0 min-h-[260px] h-[260px]">
+            <h4 className="font-display font-black text-lg tracking-wide uppercase text-transparent bg-clip-text bg-gradient-to-r from-emerald-100 to-teal-50">
+              Upcoming Birthday
+            </h4>
+            
+            {computedBirthdays.length > 0 ? (
+              <>
+                <p className="text-[11px] font-bold text-amber-300 mt-1">
+                  Coming up on {computedBirthdays[0].dateStr}!
+                </p>
+                <div className="flex flex-col items-center mt-4">
+                  <img
+                    src={computedBirthdays[0].emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                    alt={computedBirthdays[0].emp.fullName}
+                    className="w-14 h-14 rounded-full border-2 border-emerald-400/80 object-cover shadow-md"
+                  />
+                  <p className="text-[12px] font-extrabold mt-2 text-emerald-50">
+                    {computedBirthdays[0].emp.fullName}
+                  </p>
+                  <p className="text-[9px] text-emerald-200/80 mt-0.5">
+                    {getDesignationTitle(computedBirthdays[0].emp.designationId)}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-emerald-300 mt-2 italic">No upcoming birthdays.</p>
+            )}
+          </div>
+
+          {/* List Section */}
+          <div className="bg-white dark:bg-[#0f0f0f] p-4 flex-1 flex flex-col justify-between rounded-b-2xl">
+            <div>
+              <div className="flex items-center space-x-1.5 text-slate-500 dark:text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2 pb-1.5 border-b border-slate-50 dark:border-[#1a1a1a]">
+                <Gift className="w-3.5 h-3.5 text-pink-500 animate-pulse" />
+                <span>Other Upcoming Birthdays</span>
+              </div>
+
+              <div className="space-y-2 max-h-[190px] overflow-y-auto custom-scrollbar pr-1">
+                {computedBirthdays.slice(1, 5).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-1.5 hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 rounded-xl px-1.5 transition-all">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <img
+                        src={item.emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                        alt={item.emp.fullName}
+                        className="w-8 h-8 rounded-full border border-slate-100 dark:border-gray-800 object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-700 dark:text-gray-250 truncate">
+                          {item.emp.fullName}
+                        </p>
+                        <p className="text-[9px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
+                          {item.dateStr} • {item.label}
+                        </p>
+                        <p className="text-[9px] text-pink-650 dark:text-pink-400 font-medium truncate mt-0.5">
+                          {getDesignationTitle(item.emp.designationId)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <Cake className="w-3.5 h-3.5 text-pink-500/80" />
+                    </div>
+                  </div>
+                ))}
+                {computedBirthdays.length <= 1 && (
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 italic py-2 text-center">No other upcoming birthdays.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Upcoming Anniversaries Card */}
+        <div id="anniversaries-card" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow flex flex-col overflow-hidden min-h-[460px]">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-5 text-center text-white relative flex flex-col items-center select-none shrink-0 min-h-[260px] h-[260px]">
+            {/* Legend */}
+            <div className="flex items-center justify-center space-x-3 text-[9px] font-bold text-emerald-250 bg-emerald-950/30 px-3 py-1 rounded-full border border-emerald-800/30 mb-3">
+              <span className="flex items-center"><span className="mr-0.5">⭐</span> 1-3 Years</span>
+              <span className="flex items-center"><span className="mr-0.5">🏆</span> 3-5 Years</span>
+              <span className="flex items-center"><span className="mr-0.5">🥇</span> 5+ Years</span>
+            </div>
+
+            <h4 className="font-display font-black text-lg tracking-wide uppercase text-transparent bg-clip-text bg-gradient-to-r from-emerald-100 to-teal-50">
+              Upcoming Work Anniversaries
+            </h4>
+            <p className="text-[10px] text-emerald-200/95 mt-1 max-w-[280px] leading-relaxed">
+              🌟 A milestone is approaching as we prepare to celebrate a work anniversary at <span className="font-bold text-amber-300">{companyName || 'CodeVamp'}</span>. 🌟
+            </p>
+
+            {/* Featured Anniversaries (Top 2 closest) */}
+            <div className="flex justify-center items-center space-x-8 mt-4 w-full">
+              {computedAnniversaries.slice(0, 2).map((item, idx) => (
+                <div key={idx} className="flex flex-col items-center">
+                  <div className="relative">
+                    <img
+                      src={item.emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                      alt={item.emp.fullName}
+                      className="w-14 h-14 rounded-full border-2 border-emerald-400/80 object-cover shadow-md"
+                    />
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-950 border border-emerald-800/60 rounded-full flex items-center justify-center text-[10px]">
+                      {getMilestoneIcon(item.years)}
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-extrabold mt-2 text-emerald-50 flex items-center">
+                    {item.emp.fullName.split(" ")[0]} {getMilestoneIcon(item.years)}
+                  </p>
+                  <p className="text-[9px] text-emerald-200/80 font-medium mt-0.5">
+                    {item.dateStr} • Completing {item.years} year{item.years > 1 ? 's' : ''}
+                  </p>
+                </div>
+              ))}
+              {computedAnniversaries.length === 0 && (
+                <div className="py-4 text-center text-emerald-300/80 text-xs italic">
+                  No upcoming milestones.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* List Section */}
+          <div className="bg-white dark:bg-[#0f0f0f] p-4 flex-1 flex flex-col justify-between rounded-b-2xl">
+            <div>
+              <div className="flex items-center space-x-1.5 text-slate-500 dark:text-gray-400 font-bold text-[10px] uppercase tracking-wider mb-2 pb-1.5 border-b border-slate-50 dark:border-[#1a1a1a]">
+                <Briefcase className="w-3.5 h-3.5 text-violet-500" />
+                <span>Other Work Anniversaries</span>
+              </div>
+
+              <div className="space-y-2 max-h-[190px] overflow-y-auto custom-scrollbar pr-1">
+                {computedAnniversaries.slice(2, 6).map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs py-1.5 hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 rounded-xl px-1.5 transition-all">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <img
+                        src={item.emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                        alt={item.emp.fullName}
+                        className="w-8 h-8 rounded-full border border-slate-100 dark:border-gray-800 object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-700 dark:text-gray-200 truncate flex items-center">
+                          {item.emp.fullName}
+                          <span className="ml-1 text-[9px]">{getMilestoneIcon(item.years)}</span>
+                        </p>
+                        <p className="text-[9px] text-slate-400 dark:text-gray-500 truncate mt-0.5">
+                          {item.emp.joiningDate && new Date(item.emp.joiningDate).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })} • Completing {item.years} year{item.years > 1 ? 's' : ''}
+                        </p>
+                        <p className="text-[9px] text-violet-600 dark:text-violet-400 font-medium truncate mt-0.5">
+                          {getDesignationTitle(item.emp.designationId)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {computedAnniversaries.length <= 2 && (
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 italic py-2 text-center">No other upcoming anniversaries.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Leave Status Monitoring Row (Filtered by Role) */}
@@ -549,7 +696,7 @@ export default function DashboardView({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                <th className="py-2.5 px-3">Agent Name</th>
+                <th className="py-2.5 px-3">Employee Name</th>
                 <th className="py-2.5 px-3">Leave Category</th>
                 <th className="py-2.5 px-3">Duration</th>
                 <th className="py-2.5 px-3">Applied Date</th>
@@ -577,7 +724,7 @@ export default function DashboardView({
                   ? matchedEmp.fullName
                   : (leave.employeeName && !leave.employeeName.startsWith("Employee EMP-") && !leave.employeeName.startsWith("Employee "))
                   ? leave.employeeName
-                  : (matchedEmp?.fullName || leave.employeeId || "Agent");
+                  : (matchedEmp?.fullName || leave.employeeId || "Employee");
 
                 const statusVal = leave.status || "Pending";
                 return (

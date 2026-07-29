@@ -10,7 +10,45 @@ export async function POST(request: Request) {
     const body = await request.json();
     const db = loadDatabase();
 
-    const nextNum = 1000 + db.employees.length + 1;
+    let nextNum = 1001;
+    let maxNum = 1000;
+    if (db.employees && db.employees.length > 0) {
+      db.employees.forEach((e: any) => {
+        if (e.id && e.id.startsWith("EMP-")) {
+          const num = parseInt(e.id.replace("EMP-", ""), 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      });
+    }
+    nextNum = maxNum + 1;
+
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      try {
+        const { data: lastEmp } = await dbClient
+          .from("employees")
+          .select("id")
+          .like("id", "EMP-%")
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastEmp?.id) {
+          const match = lastEmp.id.match(/EMP-(\d+)/);
+          if (match) {
+            const lastNum = parseInt(match[1], 10);
+            if (lastNum >= nextNum) {
+              nextNum = lastNum + 1;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch highest ID from Supabase:", err);
+      }
+    }
+
     const empId = body.id || `EMP-${nextNum}`;
 
     const rawPassword = body.password || "Nawaz123#";
@@ -21,7 +59,6 @@ export async function POST(request: Request) {
     let resolvedCompanyName = "Company";
 
     // Resolve company name dynamically for onboarding task details
-    const dbClient = supabaseAdmin || supabase;
     if (dbClient && resolvedCompanyId) {
       try {
         const { data: compData } = await dbClient
@@ -47,6 +84,7 @@ export async function POST(request: Request) {
       designationId: body.designationId || "des-4",
       department: body.department || "Loans",
       joiningDate: body.joiningDate || new Date().toISOString().split("T")[0],
+      dateOfBirth: body.dateOfBirth || undefined,
       status: body.status || "Active",
       salary: body.salary || {
         basic: Number(body.salaryBasic) || 40000,
@@ -94,6 +132,7 @@ export async function POST(request: Request) {
           department: newEmp.department,
           branch: newEmp.branch,
           joining_date: newEmp.joiningDate,
+          date_of_birth: newEmp.dateOfBirth || null,
           status: newEmp.status,
           address: newEmp.address,
           emergency_contact_name: newEmp.emergencyContact?.name,
@@ -149,6 +188,7 @@ export async function PUT(request: Request) {
           department: updatedEmp.department,
           branch: updatedEmp.branch,
           joining_date: updatedEmp.joiningDate,
+          date_of_birth: updatedEmp.dateOfBirth || null,
           status: updatedEmp.status,
           address: updatedEmp.address,
           emergency_contact_name: updatedEmp.emergencyContact?.name,

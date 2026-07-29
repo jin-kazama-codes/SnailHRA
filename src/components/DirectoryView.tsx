@@ -430,6 +430,7 @@ export default function DirectoryView({
   const [editEmergencyName, setEditEmergencyName] = useState("");
   const [editEmergencyRelation, setEditEmergencyRelation] = useState("");
   const [editEmergencyPhone, setEditEmergencyPhone] = useState("");
+  const [editDateOfBirth, setEditDateOfBirth] = useState("");
 
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
@@ -455,6 +456,7 @@ export default function DirectoryView({
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [salaryBasic, setSalaryBasic] = useState("");
   const [salaryHra, setSalaryHra] = useState("");
   const [salaryAllowances, setSalaryAllowances] = useState("");
@@ -507,7 +509,7 @@ export default function DirectoryView({
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
       branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
-      joiningDate, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
+      joiningDate, dateOfBirth, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
       bankAccount, bankName, bankIfsc, address, bio, password,
       emergencyName, emergencyRelation, emergencyPhone,
       avatarUrl,
@@ -525,6 +527,7 @@ export default function DirectoryView({
     setEmergencyName("");
     setEmergencyRelation("");
     setEmergencyPhone("");
+    setDateOfBirth("");
     setOnboardBranch("");
     setSalaryBasic("");
     setSalaryHra("");
@@ -604,6 +607,7 @@ export default function DirectoryView({
     setEditEmergencyName(emp.emergencyContact?.name || "");
     setEditEmergencyRelation(emp.emergencyContact?.relation || "");
     setEditEmergencyPhone(emp.emergencyContact?.phone || "");
+    setEditDateOfBirth(emp.dateOfBirth || "");
     setEditProfileImageFile(null);
     setEditProfileImagePreview(emp.avatarUrl || "");
     setShowEditModal(true);
@@ -662,6 +666,7 @@ export default function DirectoryView({
         address: editAddress,
         bio: editBio,
         avatarUrl: avatarUrl,
+        dateOfBirth: editDateOfBirth,
         salary: {
           basic: Number(editSalaryBasic),
           hra: Number(editSalaryHra),
@@ -727,7 +732,7 @@ export default function DirectoryView({
             <button
               onClick={() => setViewMode("roster")}
               className="p-2 bg-slate-50 dark:bg-[#1a1a1a] hover:bg-slate-100 dark:hover:bg-[#252525] text-slate-700 dark:text-gray-200 rounded-xl transition-all border border-slate-100 dark:border-[#222] cursor-pointer"
-              title="Back to Agent Roster"
+              title="Back to Employee Roster"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -985,7 +990,7 @@ export default function DirectoryView({
                     <th className="p-3 font-bold">Upload Date & Time</th>
                     <th className="p-3 font-bold">Filename</th>
                     <th className="p-3 font-bold">Uploaded By</th>
-                    <th className="p-3 font-bold">Agents Imported</th>
+                    <th className="p-3 font-bold">Employees Imported</th>
                     <th className="p-3 font-bold">Dynamic Custom Fields</th>
                     <th className="p-3 font-bold">Status</th>
                     <th className="p-3 font-bold text-right">Actions</th>
@@ -1014,7 +1019,7 @@ export default function DirectoryView({
                       </td>
                       <td className="p-3">
                         <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full text-[11px]">
-                          +{item.recordCount} Agents
+                          +{item.recordCount} Employees
                         </span>
                       </td>
                       <td className="p-3">
@@ -1075,7 +1080,7 @@ export default function DirectoryView({
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Search NBFC agents by name, email, or ID..."
+              placeholder="Search NBFC employees by name, email, or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-10 pr-4 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
@@ -1141,7 +1146,7 @@ export default function DirectoryView({
               className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
             >
               <UserPlus className="w-4 h-4" />
-              <span>Onboard New Agent</span>
+              <span>Onboard New Employee</span>
             </button>
           </div>
         )}
@@ -1152,8 +1157,8 @@ export default function DirectoryView({
         {/* Left Side: Employee List */}
         <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex flex-col h-[650px]">
           <div className="mb-4">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Active Agent Roster</h3>
-            <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} agents matching criteria</p>
+            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Active Employees Roster</h3>
+            <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} employees matching criteria</p>
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
@@ -1225,7 +1230,10 @@ export default function DirectoryView({
                       <p className="text-xs text-slate-500 dark:text-gray-400 font-medium mt-1">
                         {getDesignationTitle(activeEmployee.designationId)} ({activeEmployee.department} Department)
                       </p>
-                      <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">Joined on {activeEmployee.joiningDate}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">
+                        Joined on {activeEmployee.joiningDate}
+                        {activeEmployee.dateOfBirth && ` • Born on ${new Date(activeEmployee.dateOfBirth).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}`}
+                      </p>
                     </div>
                   </div>
 
@@ -1252,7 +1260,7 @@ export default function DirectoryView({
                 {/* Biography */}
                 {activeEmployee.bio && (
                   <div className="mt-5 pt-4 border-t border-slate-50 dark:border-gray-800">
-                    <h4 className="text-xs font-semibold text-slate-400 dark:text-gray-400 uppercase tracking-wider mb-1.5">Agent Biography</h4>
+                    <h4 className="text-xs font-semibold text-slate-400 dark:text-gray-400 uppercase tracking-wider mb-1.5">Employee Biography</h4>
                     <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed font-sans">{activeEmployee.bio}</p>
                   </div>
                 )}
@@ -1337,7 +1345,7 @@ export default function DirectoryView({
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mb-3 leading-tight">Must be completed by newly onboarded NBFC agents during the 15-day probation window.</p>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mb-3 leading-tight">Must be completed by newly onboarded NBFC employees during the 15-day probation window.</p>
 
                   <div className="space-y-2.5">
                     {activeEmployee.onboardingTasks.map(task => (
@@ -1529,7 +1537,7 @@ export default function DirectoryView({
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
                 <div>
                   <h3 className="font-display font-semibold text-slate-800 dark:text-white text-lg flex items-center">
-                    <UserPlus className="w-5 h-5 text-emerald-500 mr-2" /> Onboard New Agent
+                    <UserPlus className="w-5 h-5 text-emerald-500 mr-2" /> Onboard New Employee
                   </h3>
                   <p className="text-xs text-slate-400 dark:text-gray-500">Initiate payroll, workspace assets, and welcome sequence</p>
                 </div>
@@ -1607,13 +1615,13 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                         disabled={role === "hr"}
                       >
-                        <option value="employee">Employee / Agent</option>
+                        <option value="employee">Employee</option>
                         {role === "admin" && <option value="hr">HR Manager</option>}
                         {role === "admin" && <option value="admin">Administrator</option>}
                       </select>
                       {role === "hr" && (
                         <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
-                          HR Managers can only onboard Employee / Agent roles.
+                          HR Managers can only onboard Employee roles.
                         </p>
                       )}
                     </div>
@@ -1627,7 +1635,7 @@ export default function DirectoryView({
                         )}
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Agent Profile Photo</label>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Employee Profile Photo</label>
                         <input
                           type="file"
                           ref={profileImageRef}
@@ -1688,6 +1696,15 @@ export default function DirectoryView({
                         value={joiningDate}
                         onChange={(e) => setJoiningDate(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                       />
                     </div>
                     <div>
@@ -1858,7 +1875,7 @@ export default function DirectoryView({
 
                 {/* Section 7: Biography */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Agent Bio / Profile Summary</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employee Bio / Profile Summary</label>
                   <textarea
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
@@ -1868,7 +1885,7 @@ export default function DirectoryView({
                   />
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
+                <div className="flex justify-center space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
                   <button
                     type="button"
                     onClick={() => setShowOnboardForm(false)}
@@ -1951,13 +1968,13 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                         disabled={role === "hr"}
                       >
-                        <option value="employee">Employee / Agent</option>
+                        <option value="employee">Employee</option>
                         {role === "admin" && <option value="hr">HR Manager</option>}
                         {role === "admin" && <option value="admin">Administrator</option>}
                       </select>
                       {role === "hr" && (
                         <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
-                          HR Managers can only assign Employee / Agent roles.
+                          HR Managers can only assign Employee roles.
                         </p>
                       )}
                     </div>
@@ -1973,6 +1990,15 @@ export default function DirectoryView({
                         <option value="Suspended">Suspended</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={editDateOfBirth}
+                        onChange={(e) => setEditDateOfBirth(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      />
+                    </div>
 
                     <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
                       <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700 shrink-0">
@@ -1983,7 +2009,7 @@ export default function DirectoryView({
                         )}
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Agent Profile Photo</label>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Employee Profile Photo</label>
                         <input
                           type="file"
                           ref={editProfileImageRef}
@@ -2191,7 +2217,7 @@ export default function DirectoryView({
 
                 {/* Section 7: Biography */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Agent Bio / Profile Summary</label>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employee Bio / Profile Summary</label>
                   <textarea
                     value={editBio}
                     onChange={(e) => setEditBio(e.target.value)}
@@ -2200,7 +2226,7 @@ export default function DirectoryView({
                   />
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
+                <div className="flex justify-center space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
                   <button
                     type="button"
                     onClick={() => setShowEditModal(false)}
@@ -2554,7 +2580,7 @@ export default function DirectoryView({
                     Bulk Onboard Employees
                   </h2>
                   <p className="text-xs text-slate-400 dark:text-gray-500">
-                    Upload an Excel (.xlsx / .xls / .csv) file to add multiple agents at once.
+                    Upload an Excel (.xlsx / .xls / .csv) file to add multiple employees at once.
                   </p>
                 </div>
               </div>

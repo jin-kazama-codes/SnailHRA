@@ -53,6 +53,7 @@ export interface Employee {
   designationId: string; // references Designation.id
   department: string;
   joiningDate: string;
+  dateOfBirth?: string;
   status: "Active" | "Probation" | "Suspended";
   salary: {
     basic: number;

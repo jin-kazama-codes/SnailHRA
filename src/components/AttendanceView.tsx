@@ -934,8 +934,8 @@ export default function AttendanceView({
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                  <th className="py-2.5 px-3">Agent ID</th>
-                  <th className="py-2.5 px-3">Agent Name</th>
+                  <th className="py-2.5 px-3">Employee ID</th>
+                  <th className="py-2.5 px-3">Employee Name</th>
                   <th className="py-2.5 px-3">Branch / Dept</th>
                   <th className="py-2.5 px-3">Date</th>
                   <th className="py-2.5 px-3">Clock In</th>

@@ -110,7 +110,7 @@ export default function LeavesView({
     const emp = employees.find(e => e.id === empId);
     if (emp) return emp.fullName;
     if (fallbackName && !fallbackName.startsWith("Employee")) return fallbackName;
-    return "Agent";
+    return "Employee";
   };
 
   const getEmployeeDept = (empId: string) => {

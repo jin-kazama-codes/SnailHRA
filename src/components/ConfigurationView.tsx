@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import { 
-  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, 
-  Database, CheckCircle, AlertTriangle, Copy, Check, RefreshCw 
+  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2 
 } from "lucide-react";
 import { Designation } from "../types";
 
@@ -39,7 +38,7 @@ export default function ConfigurationView({
   onRemoveDesignation,
   onUpdateCollection
 }: ConfigurationViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "supabase">("general");
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations">("general");
 
   // Local Form States
   const [newDesignationTitle, setNewDesignationTitle] = useState("");
@@ -48,47 +47,6 @@ export default function ConfigurationView({
   const [newLeaveType, setNewLeaveType] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
   const [newBranch, setNewBranch] = useState("");
-
-  const [copiedSql, setCopiedSql] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  const handleSyncDatabase = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch("/api/sync-supabase", { method: "POST" });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setSyncResult({ success: true, message: data.message || "Sync completed successfully!" });
-      } else {
-        setSyncResult({ success: false, message: data.error || "Sync failed." });
-      }
-    } catch (err: any) {
-      setSyncResult({ success: false, message: err.message || "An error occurred during sync." });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // SQL Snippet for Supabase Setup
-  const sqlSnippet = `-- 1. Create SnailHR Cloud State Table
-CREATE TABLE IF NOT EXISTS snailhr_state (
-  key text PRIMARY KEY,
-  value jsonb NOT NULL,
-  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Initialize AppState row (Optional)
-INSERT INTO snailhr_state (key, value)
-VALUES ('app_state', '{}')
-ON CONFLICT (key) DO NOTHING;`;
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(sqlSnippet);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
 
   const handleAddDesignation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,7 +126,7 @@ ON CONFLICT (key) DO NOTHING;`;
                "Basic Plan"}
             </span>
           </div>
-          <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, leave policies, and Cloud storage states</p>
+          <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, and leave policies</p>
         </div>
 
         <div className="flex items-center bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
@@ -183,13 +141,6 @@ ON CONFLICT (key) DO NOTHING;`;
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Designations Matrix
-          </button>
-          <button 
-            onClick={() => setActiveSubTab("supabase")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "supabase" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white flex items-center gap-1" : "text-slate-400 hover:text-slate-600 flex items-center gap-1"}`}
-          >
-            <Database className="w-3.5 h-3.5" />
-            Supabase Cloud
           </button>
         </div>
       </div>
@@ -416,136 +367,6 @@ ON CONFLICT (key) DO NOTHING;`;
         </div>
       )}
 
-      {/* Sub Tab 3: Supabase Setup Monitor */}
-      {activeSubTab === "supabase" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Status Tracker */}
-          <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
-            <div>
-              <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-4">
-                <Database className="w-4.5 h-4.5 text-teal-500" />
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Supabase Status</h3>
-              </div>
-
-              <div className="space-y-4 text-xs">
-                <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a]">
-                  <span className="font-semibold text-slate-500">Client Connection</span>
-                  {supabaseStatus.connected ? (
-                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                      <CheckCircle className="w-4 h-4" /> Connected
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-amber-500 dark:text-amber-400 font-bold animate-pulse">
-                      <AlertTriangle className="w-4 h-4" /> File Fallback
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a]">
-                  <span className="font-semibold text-slate-500">Sync Pipeline</span>
-                  {supabaseStatus.synced ? (
-                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                      <CheckCircle className="w-4 h-4" /> Live Cloud Synced
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400 font-bold">
-                      <AlertTriangle className="w-4 h-4" /> Setup Required
-                    </span>
-                  )}
-                </div>
-
-                {supabaseStatus.error && (
-                  <div className="p-3 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-950/50 rounded-xl text-rose-700 dark:text-rose-400 text-[11px] leading-relaxed">
-                    <p className="font-bold">Error logs:</p>
-                    <p className="font-mono mt-1 text-[10px] break-all">{supabaseStatus.error}</p>
-                  </div>
-                )}
-
-                {supabaseStatus.connected && (
-                  <button
-                    onClick={handleSyncDatabase}
-                    disabled={syncing}
-                    className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800/50 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-                  >
-                    {syncing ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Syncing Data...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Database className="w-3.5 h-3.5" />
-                        <span>Sync Local Data to Supabase</span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {syncResult && (
-                  <div className={`p-3 rounded-xl text-[11px] leading-relaxed border ${
-                    syncResult.success 
-                      ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-950/50 text-emerald-700 dark:text-emerald-400" 
-                      : "bg-rose-50/50 dark:bg-rose-950/20 border-rose-100 dark:border-rose-950/50 text-rose-700 dark:text-rose-400"
-                  }`}>
-                    <p className="font-semibold">{syncResult.success ? "Success:" : "Error:"}</p>
-                    <p className="mt-0.5">{syncResult.message}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-emerald-50/40 dark:bg-emerald-950/10 p-3.5 rounded-xl border border-emerald-100/50 dark:border-emerald-900/30 text-[11px] text-emerald-800 dark:text-emerald-400 leading-normal">
-              <span className="font-bold">How MGM FINANCIERS PRIV LIMITED Sync Works</span>
-              <p className="mt-1 text-emerald-700/80 dark:text-emerald-400/80">
-                MGM FINANCIERS PRIV LIMITED utilizes an ultra-fast, robust cloud sync pipeline. The entire organizational state is automatically read and synchronized in an atomic key-value configuration. If your database table is pending, the app automatically fails-safe to the local JSON filesystem, so operations never halt!
-              </p>
-            </div>
-          </div>
-
-          {/* Setup Guide */}
-          <div className="lg:col-span-2 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-            <div>
-              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Supabase Setup Guide & SQL Console</h3>
-              <p className="text-xs text-slate-400 dark:text-gray-400">Run this simple DDL script inside your Supabase SQL Editor to activate live synchronization immediately.</p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="relative">
-                <pre className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl p-4 text-[11px] font-mono text-slate-700 dark:text-emerald-400/90 overflow-x-auto custom-scrollbar max-h-[180px] leading-relaxed">
-                  {sqlSnippet}
-                </pre>
-                
-                <button
-                  onClick={copyToClipboard}
-                  className="absolute top-2.5 right-2.5 bg-white dark:bg-[#1a1a1a] hover:bg-slate-100 border border-slate-100 dark:border-[#2a2a2a] text-slate-500 dark:text-gray-400 p-2 rounded-lg cursor-pointer transition-colors flex items-center gap-1 text-xs"
-                >
-                  {copiedSql ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-[10px] font-semibold text-emerald-500">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span className="text-[10px] font-semibold">Copy Code</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="text-xs text-slate-500 dark:text-gray-400 space-y-2 leading-relaxed bg-slate-50/50 dark:bg-[#1a1a1a]/30 p-4 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a]">
-                <span className="font-bold text-slate-700 dark:text-gray-300">Detailed Steps:</span>
-                <ol className="list-decimal list-inside space-y-1 pl-1">
-                  <li>Log in to your <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-emerald-500 hover:underline">Supabase Dashboard</a> and open your project.</li>
-                  <li>Click on the <b>SQL Editor</b> icon in the left-hand navigation sidebar.</li>
-                  <li>Click <b>New Query</b>, paste the SQL code snippet above into the console.</li>
-                  <li>Click the <b>Run</b> button. The table will be provisioned in milliseconds, and MGM FINANCIERS PRIV LIMITED will instantly sync live!</li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
