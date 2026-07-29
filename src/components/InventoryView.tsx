@@ -83,6 +83,8 @@ export default function InventoryView({
   const [reqItemName, setReqItemName] = useState("");
   const [reqCategory, setReqCategory] = useState("Laptop");
   const [reqReason, setReqReason] = useState("");
+  const [itemSelectionMode, setItemSelectionMode] = useState<"select" | "custom">("select");
+  const [selectedExistingAssetId, setSelectedExistingAssetId] = useState("");
 
   const handleAddAssetSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,14 +116,23 @@ export default function InventoryView({
 
   const handleRequestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reqItemName || !reqReason) return;
+    let finalItemName = reqItemName;
+    if (itemSelectionMode === "select") {
+      const existingAsset = inventory.find(i => i.id === selectedExistingAssetId);
+      if (!existingAsset) return;
+      finalItemName = `${existingAsset.name} (S/N: ${existingAsset.serialNumber})`;
+    } else {
+      if (!reqItemName) return;
+    }
+    if (!reqReason) return;
     onApplyAssetRequest({
       employeeId: currentEmployeeId,
-      itemName: reqItemName,
+      itemName: finalItemName,
       category: reqCategory,
       reason: reqReason
     });
     setReqItemName("");
+    setSelectedExistingAssetId("");
     setReqReason("");
     setShowRequestForm(false);
   };
@@ -335,56 +346,214 @@ export default function InventoryView({
         <div className="space-y-6">
           {/* Submit Request Form (Employee Only) */}
           {showRequestForm && role === "employee" && (
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow animate-in fade-in duration-200">
-              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Submit Asset Requisition</h3>
-
-              <form onSubmit={handleRequestSubmit} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl overflow-hidden shadow-xs dark:neon-glow animate-in fade-in duration-200">
+              {/* Form Header */}
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-[#1a1a1a] bg-gradient-to-r from-slate-50 to-white dark:from-[#0a0a0a] dark:to-[#0f0f0f]">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 flex items-center justify-center">
+                    <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
                   <div>
-                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Item Specifications Required *</label>
-                    <input 
-                      type="text"
-                      value={reqItemName}
-                      onChange={(e) => setReqItemName(e.target.value)}
-                      placeholder="e.g. Lenovo ThinkPad T14 (For Loan Evaluations)"
-                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
-                      required
-                    />
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">Submit Asset Requisition</h3>
+                    <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">Select from directory or request a new hardware asset</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleRequestSubmit} className="p-6 space-y-5 text-xs">
+
+                {/* Mode Toggle Cards */}
+                <div>
+                  <label className="block font-bold text-slate-600 dark:text-gray-300 mb-3 text-[11px] uppercase tracking-wider">Item Specifications Required *</label>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    {/* Select from Directory card */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemSelectionMode("select");
+                        setReqItemName("");
+                        const first = inventory.find(i => i.status === "Available");
+                        setSelectedExistingAssetId(first ? first.id : "");
+                      }}
+                      className={`relative p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer group ${
+                        itemSelectionMode === "select"
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 shadow-md shadow-emerald-100 dark:shadow-emerald-950/30"
+                          : "border-slate-200 dark:border-[#262626] bg-slate-50 dark:bg-[#0a0a0a] hover:border-slate-300 dark:hover:border-[#333]"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 transition-colors ${
+                        itemSelectionMode === "select" ? "bg-emerald-500 text-white" : "bg-slate-200 dark:bg-[#1a1a1a] text-slate-400"
+                      }`}>
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <p className={`font-bold text-[11px] mb-0.5 ${itemSelectionMode === "select" ? "text-emerald-700 dark:text-emerald-400" : "text-slate-600 dark:text-gray-400"}`}>
+                        From Directory
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-gray-500 leading-relaxed">Pick an existing registered asset</p>
+                      {itemSelectionMode === "select" && (
+                        <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
+                        </div>
+                      )}
+                    </button>
+
+                    {/* Request New Asset card */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemSelectionMode("custom");
+                        setSelectedExistingAssetId("");
+                      }}
+                      className={`relative p-4 rounded-xl border-2 text-left transition-all duration-200 cursor-pointer group ${
+                        itemSelectionMode === "custom"
+                          ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/20 shadow-md shadow-indigo-100 dark:shadow-indigo-950/30"
+                          : "border-slate-200 dark:border-[#262626] bg-slate-50 dark:bg-[#0a0a0a] hover:border-slate-300 dark:hover:border-[#333]"
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 transition-colors ${
+                        itemSelectionMode === "custom" ? "bg-indigo-500 text-white" : "bg-slate-200 dark:bg-[#1a1a1a] text-slate-400"
+                      }`}>
+                        <Plus className="w-4 h-4" />
+                      </div>
+                      <p className={`font-bold text-[11px] mb-0.5 ${itemSelectionMode === "custom" ? "text-indigo-700 dark:text-indigo-400" : "text-slate-600 dark:text-gray-400"}`}>
+                        New Asset Request
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-gray-500 leading-relaxed">Specify an asset not yet registered</p>
+                      {itemSelectionMode === "custom" && (
+                        <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
+                        </div>
+                      )}
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Asset Category</label>
+                  {/* Select Mode — Asset Picker */}
+                  {itemSelectionMode === "select" && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {inventory.length === 0 ? (
+                        <div className="flex items-start space-x-3 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/40">
+                          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-bold text-amber-700 dark:text-amber-400 text-[11px]">No assets in directory</p>
+                            <p className="text-amber-600 dark:text-amber-500 text-[10px] mt-0.5">No hardware has been registered yet. Switch to <span className="font-bold">New Asset Request</span> to describe what you need.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <select
+                              value={selectedExistingAssetId}
+                              onChange={(e) => {
+                                setSelectedExistingAssetId(e.target.value);
+                                const asset = inventory.find(i => i.id === e.target.value);
+                                if (asset) setReqCategory(asset.category);
+                              }}
+                              className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-[#262626] font-semibold cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400 transition-all"
+                            >
+                              <option value="" disabled>— Choose an asset from the directory —</option>
+                              {inventory.map(asset => (
+                                <option key={asset.id} value={asset.id}>
+                                  {asset.status === "Available" ? "✅" : asset.status === "Assigned" ? "🔒" : "⚠️"} {asset.name} · S/N: {asset.serialNumber} · [{asset.status}]
+                                </option>
+                              ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                          </div>
+
+                          {/* Selected Asset Preview Card */}
+                          {selectedExistingAssetId && (() => {
+                            const asset = inventory.find(i => i.id === selectedExistingAssetId);
+                            if (!asset) return null;
+                            const isAvailable = asset.status === "Available";
+                            return (
+                              <div className={`flex items-center space-x-3 p-3.5 rounded-xl border ${
+                                isAvailable
+                                  ? "bg-emerald-50 dark:bg-emerald-950/15 border-emerald-200 dark:border-emerald-900/40"
+                                  : "bg-amber-50 dark:bg-amber-950/15 border-amber-200 dark:border-amber-900/40"
+                              }`}>
+                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isAvailable ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" : "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+                                }`}>
+                                  {getAssetIcon(asset.category)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-slate-800 dark:text-white text-[11px] truncate">{asset.name}</p>
+                                  <p className="text-slate-400 dark:text-gray-500 text-[10px] font-mono mt-0.5">S/N: {asset.serialNumber}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase shrink-0 ${
+                                  isAvailable
+                                    ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+                                    : "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400"
+                                }`}>
+                                  {asset.status}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Custom Mode — Text Input */}
+                  {itemSelectionMode === "custom" && (
+                    <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                      <input
+                        type="text"
+                        value={reqItemName}
+                        onChange={(e) => setReqItemName(e.target.value)}
+                        placeholder="e.g. Lenovo ThinkPad T14 (For Loan Evaluations)"
+                        className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#262626] font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400 transition-all placeholder:text-slate-300 dark:placeholder:text-gray-600"
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Asset Category */}
+                <div>
+                  <label className="block font-bold text-slate-600 dark:text-gray-300 mb-2 text-[11px] uppercase tracking-wider">Asset Category</label>
+                  <div className="relative">
                     <select
                       value={reqCategory}
                       onChange={(e) => setReqCategory(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
+                      className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 dark:border-[#262626] font-semibold cursor-pointer appearance-none focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400 transition-all"
                     >
-                      <option value="Laptop">Laptop Notebook</option>
-                      <option value="Mobile Tablet">Mobile Sales Tablet</option>
-                      <option value="WiFi Dongle">4G WiFi Dongle</option>
-                      <option value="Other">Other Miscellaneous</option>
+                      <option value="Laptop">💻 Laptop Notebook</option>
+                      <option value="Mobile Tablet">📱 Mobile Sales Tablet</option>
+                      <option value="WiFi Dongle">📡 4G WiFi Dongle</option>
+                      <option value="Other">🖥️ Other Miscellaneous</option>
                     </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
                   </div>
                 </div>
 
+                {/* Justification */}
                 <div>
-                  <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Requisition Justification *</label>
-                  <textarea 
+                  <label className="block font-bold text-slate-600 dark:text-gray-300 mb-2 text-[11px] uppercase tracking-wider">Requisition Justification *</label>
+                  <textarea
                     value={reqReason}
                     onChange={(e) => setReqReason(e.target.value)}
                     placeholder="Specify operational requirement, customer site field audits, etc..."
-                    rows={2.5}
-                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
+                    rows={3}
+                    className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-4 py-3 rounded-xl border border-slate-200 dark:border-[#262626] focus:outline-none focus:ring-2 focus:ring-emerald-400/30 focus:border-emerald-400 transition-all resize-none placeholder:text-slate-300 dark:placeholder:text-gray-600 leading-relaxed"
                     required
                   />
                 </div>
 
-                <div className="flex justify-end">
+                {/* Submit Row */}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-[#1a1a1a]">
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500">Your request will be reviewed by HR / Admin</p>
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-xl cursor-pointer"
+                    className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold px-5 py-2 rounded-xl cursor-pointer transition-all flex items-center space-x-1.5 shadow-md shadow-emerald-200 dark:shadow-emerald-950/40"
                   >
-                    Submit Ticket
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Submit Ticket</span>
                   </button>
                 </div>
               </form>
