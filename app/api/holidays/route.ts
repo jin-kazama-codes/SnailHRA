@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { Holiday } from "@/src/types";
+import { Holiday, capitalizeName } from "@/src/types";
 import { supabase, syncHolidayToSupabase, deleteHolidayFromSupabase } from "@/src/lib/supabase";
 
 export async function GET() {
@@ -12,7 +12,7 @@ export async function GET() {
         if (data && data.length > 0) {
           const sbHolidays = data.map((row: any) => ({
             id: row.id,
-            name: row.name,
+            name: capitalizeName(row.name),
             date: row.date,
             type: row.type || "National"
           }));
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     const newHoliday: any = {
       id: body.id || `hol-${Date.now()}`,
-      name,
+      name: capitalizeName(name),
       date,
       type: type || "National",
       companyId: companyId || body.company_id || null

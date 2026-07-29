@@ -3,6 +3,20 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
+function capitalizeName(name: string | null | undefined): string {
+  if (!name) return "";
+  return name
+    .trim()
+    .split(/\s+/)
+    .map(word => {
+      if (!word) return "";
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const companyId = searchParams.get("companyId") || "";
@@ -36,7 +50,7 @@ export async function GET(request: Request) {
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
-        payslipsRes, designationsRes
+        payslipsRes, designationsRes, expenseCategoriesRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -99,7 +113,10 @@ export async function GET(request: Request) {
           
           companyId
             ? safeQuery(dbClient.from("designations").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
-            : safeQuery(dbClient.from("designations").select("*"))
+            : safeQuery(dbClient.from("designations").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("expense_categories").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("expense_categories").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -107,14 +124,27 @@ export async function GET(request: Request) {
       if (designationsRes && designationsRes.data && designationsRes.data.length > 0) {
         const sbDesignations = designationsRes.data.map((row: any) => ({
           id: row.id,
-          title: row.title,
-          department: row.department,
+          title: capitalizeName(row.title),
+          department: capitalizeName(row.department),
           companyId: row.company_id || row.companyId || null
         }));
         const desMap = new Map();
         (db.designations || []).forEach((d: any) => { if (d.id) desMap.set(d.id, d); });
         sbDesignations.forEach((d: any) => { desMap.set(d.id, d); });
         db.designations = Array.from(desMap.values());
+      }
+
+      if (expenseCategoriesRes && expenseCategoriesRes.data && expenseCategoriesRes.data.length > 0) {
+        const sbCategories = expenseCategoriesRes.data.map((row: any) => ({
+          id: row.id,
+          name: capitalizeName(row.name),
+          companyId: row.company_id || row.companyId || null,
+          description: row.description || ""
+        }));
+        const catMap = new Map();
+        (db.expenseCategories || []).forEach((c: any) => { if (c.id) catMap.set(c.id, c); });
+        sbCategories.forEach((c: any) => { catMap.set(c.id, c); });
+        db.expenseCategories = Array.from(catMap.values());
       }
 
       if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
@@ -142,7 +172,7 @@ export async function GET(request: Request) {
         const sbFines = finesRes.data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
-          employeeName: row.employee_name || row.employeeName || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
           reason: row.reason || "Late Coming",
           amount: Number(row.amount) || 0,
           date: row.date || "",
@@ -169,7 +199,7 @@ export async function GET(request: Request) {
         const sbRequests = inventoryRequestsRes.data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
-          employeeName: row.employee_name || row.employeeName || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
           itemName: row.item_name || row.itemName || "",
           category: row.category || "Laptop",
           requestDate: row.request_date || row.requestDate || "",
@@ -200,7 +230,8 @@ export async function GET(request: Request) {
         const sbExpenses = expensesRes.data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
-          employeeName: row.employee_name || row.employeeName || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+          companyId: row.company_id || row.companyId || null,
           category: row.category || "Others",
           amount: Number(row.amount) || 0,
           date: row.date || "",
@@ -208,15 +239,15 @@ export async function GET(request: Request) {
           status: row.status || "Pending"
         }));
         const expMap = new Map();
-        sbExpenses.forEach((e: any) => { if (e.id) expMap.set(e.id, e); });
         (db.expenses || []).forEach((e: any) => { if (e.id) expMap.set(e.id, e); });
+        sbExpenses.forEach((e: any) => { if (e.id) expMap.set(e.id, e); });
         db.expenses = Array.from(expMap.values());
       }
 
       if (holidaysRes.data && holidaysRes.data.length > 0) {
         db.holidays = holidaysRes.data.map((row: any) => ({
           id: row.id,
-          name: row.name,
+          name: capitalizeName(row.name),
           date: row.date,
           type: row.type || "National"
         })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -226,7 +257,7 @@ export async function GET(request: Request) {
         const sbLeaves = leavesRes.data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
-          employeeName: row.employee_name || row.employeeName || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
           leaveType: row.leave_type || row.leaveType || "Casual Leave",
           startDate: row.start_date || row.startDate || "",
           endDate: row.end_date || row.endDate || "",
@@ -315,7 +346,7 @@ export async function GET(request: Request) {
           return {
             id: row.id,
             companyId: row.company_id || row.companyId || fallbackEmp?.companyId || "",
-            fullName: row.full_name || row.fullName || fallbackEmp?.fullName || "",
+            fullName: capitalizeName(row.full_name || row.fullName || fallbackEmp?.fullName || ""),
             email: row.email || fallbackEmp?.email || "",
             phone: row.phone || fallbackEmp?.phone || "",
             role: row.role || fallbackEmp?.role || "employee",
@@ -375,15 +406,15 @@ export async function GET(request: Request) {
       }
 
       if (deptsRes.data) {
-        db.customDepartments = deptsRes.data.map((d: any) => d.name).filter(Boolean);
+        db.customDepartments = deptsRes.data.map((d: any) => capitalizeName(d.name)).filter(Boolean);
       }
 
       if (branchesRes.data) {
-        db.customBranches = branchesRes.data.map((b: any) => b.name).filter(Boolean);
+        db.customBranches = branchesRes.data.map((b: any) => capitalizeName(b.name)).filter(Boolean);
       }
 
       const rawLeaveTypes = leaveTypesRes.data || customLeavesRes.data || [];
-      db.customLeaveTypes = rawLeaveTypes.map((l: any) => l.name).filter(Boolean);
+      db.customLeaveTypes = rawLeaveTypes.map((l: any) => capitalizeName(l.name)).filter(Boolean);
 
       // Load local tenant specific timing setting if available
       if (companyId && db.companyTimingSettings?.[companyId]) {

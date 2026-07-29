@@ -189,6 +189,20 @@ export async function POST() {
       }
     }
 
+    // 5b. Sync expense categories
+    if (db.expenseCategories && db.expenseCategories.length > 0) {
+      const categoryRecords = db.expenseCategories.map(c => ({
+        id: c.id,
+        name: c.name,
+        company_id: c.companyId || MGM_COMPANY_ID,
+        description: c.description || ""
+      }));
+      const { error } = await supabase.from("expense_categories").upsert(categoryRecords, { onConflict: "id" });
+      if (error) {
+        console.warn("Sync: expense_categories upsert warning:", error.message);
+      }
+    }
+
     // 6. Sync expenses
     if (db.expenses && db.expenses.length > 0) {
       const expenseRecords = db.expenses.map(e => ({

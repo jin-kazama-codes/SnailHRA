@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
+import { capitalizeName } from "@/src/types";
 import { 
   syncDepartmentToSupabase, deleteDepartmentFromSupabase,
   syncBranchToSupabase, deleteBranchFromSupabase,
@@ -13,21 +14,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Type and updatedList array are required." }, { status: 400 });
     }
 
+    const capitalizedList = updatedList.map((item: string) => capitalizeName(item));
+    const capitalizedAdded = addedItem ? capitalizeName(addedItem) : undefined;
+
     const db = loadDatabase();
 
     let previousList: string[] = [];
     if (type === "leaveTypes") {
       previousList = db.customLeaveTypes || [];
-      if (addedItem && !updatedList.includes(addedItem)) updatedList.push(addedItem);
-      db.customLeaveTypes = updatedList;
+      if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
+      db.customLeaveTypes = capitalizedList;
     } else if (type === "departments") {
       previousList = db.customDepartments || [];
-      if (addedItem && !updatedList.includes(addedItem)) updatedList.push(addedItem);
-      db.customDepartments = updatedList;
+      if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
+      db.customDepartments = capitalizedList;
     } else if (type === "branches") {
       previousList = db.customBranches || [];
-      if (addedItem && !updatedList.includes(addedItem)) updatedList.push(addedItem);
-      db.customBranches = updatedList;
+      if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
+      db.customBranches = capitalizedList;
     } else {
       return NextResponse.json({ error: "Invalid collection type." }, { status: 400 });
     }
@@ -35,8 +39,8 @@ export async function POST(request: Request) {
     saveDatabase(db);
 
     // Identify added and removed items
-    const added = addedItem || updatedList.find((item: string) => !previousList.includes(item));
-    const removed = removedItem || previousList.find((item: string) => !updatedList.includes(item));
+    const added = capitalizedAdded || capitalizedList.find((item: string) => !previousList.includes(item));
+    const removed = removedItem || previousList.find((item: string) => !capitalizedList.includes(item));
 
     // Sync changes to Supabase database tables asynchronously
     if (type === "departments") {

@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2 
 } from "lucide-react";
-import { Designation } from "../types";
+import { Designation, ExpenseCategory } from "../types";
 
 interface ConfigurationViewProps {
   designations: Designation[];
   customLeaveTypes: string[];
   customDepartments: string[];
   customBranches: string[];
+  expenseCategories: ExpenseCategory[];
   supabaseStatus: {
     connected: boolean;
     synced: boolean;
@@ -25,6 +26,8 @@ interface ConfigurationViewProps {
     action?: "add" | "remove",
     item?: string
   ) => void;
+  onAddExpenseCategory: (name: string, description: string) => void;
+  onRemoveExpenseCategory: (id: string) => void;
 }
 
 export default function ConfigurationView({
@@ -32,13 +35,27 @@ export default function ConfigurationView({
   customLeaveTypes,
   customDepartments,
   customBranches,
+  expenseCategories,
   supabaseStatus,
   subscriptionModel = 1,
   onAddDesignation,
   onRemoveDesignation,
-  onUpdateCollection
+  onUpdateCollection,
+  onAddExpenseCategory,
+  onRemoveExpenseCategory
 }: ConfigurationViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations">("general");
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("snailhr_configSubTab") as any) || "general";
+    }
+    return "general";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("snailhr_configSubTab", activeSubTab);
+    }
+  }, [activeSubTab]);
 
   // Local Form States
   const [newDesignationTitle, setNewDesignationTitle] = useState("");
@@ -47,6 +64,17 @@ export default function ConfigurationView({
   const [newLeaveType, setNewLeaveType] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
   const [newBranch, setNewBranch] = useState("");
+
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatDesc, setNewCatDesc] = useState("");
+
+  const handleSubmitExpenseCat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
+    setNewCatName("");
+    setNewCatDesc("");
+  };
 
   const handleAddDesignation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +169,12 @@ export default function ConfigurationView({
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Designations Matrix
+          </button>
+          <button 
+            onClick={() => setActiveSubTab("expenses")}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "expenses" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            Expense Categories
           </button>
         </div>
       </div>
@@ -360,6 +394,96 @@ export default function ConfigurationView({
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub Tab 3: Expense Categories */}
+      {activeSubTab === "expenses" && (
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-50 dark:border-[#1a1a1a] pb-3">
+            <div>
+              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Corporate Expense Categories</h3>
+              <p className="text-xs text-slate-400 dark:text-gray-400">Configure business filing categories visible to employee portals</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Add Category form */}
+            <div className="lg:col-span-1 p-4 bg-slate-50 dark:bg-[#0a0a0a]/50 border border-slate-100/50 dark:border-[#1a1a1a] rounded-xl space-y-4 h-fit">
+              <h4 className="font-display font-semibold text-slate-700 dark:text-gray-300 text-xs">Register Expense Category</h4>
+              
+              <form onSubmit={handleSubmitExpenseCat} className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Travel & Accommodation"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-800 dark:text-white focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Brief Description</label>
+                  <textarea
+                    placeholder="e.g. Client meetings travel, hotel bookings"
+                    value={newCatDesc}
+                    onChange={(e) => setNewCatDesc(e.target.value)}
+                    rows={2}
+                    className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-800 dark:text-white focus:outline-hidden"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Category</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Categories list table */}
+            <div className="lg:col-span-2 overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
+                    <th className="py-2 px-3">Category Name</th>
+                    <th className="py-2 px-3">Description</th>
+                    <th className="py-2 px-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
+                  {expenseCategories.map(cat => (
+                    <tr key={cat.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/40 transition-colors">
+                      <td className="py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-300">{cat.name}</td>
+                      <td className="py-2.5 px-3 text-slate-500 dark:text-gray-400 font-medium">{cat.description || "-"}</td>
+                      <td className="py-2.5 px-3 text-right">
+                        <button
+                          onClick={() => {
+                            if (confirm(`Are you sure you want to remove category "${cat.name}"?`)) {
+                              onRemoveExpenseCategory(cat.id);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {expenseCategories.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="text-center py-4 text-slate-400">No expense categories registered.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { ExpenseClaim } from "@/src/types";
+import { ExpenseClaim, capitalizeName } from "@/src/types";
 import { supabase, syncExpenseToSupabase } from "@/src/lib/supabase";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const companyId = searchParams.get("companyId") || "";
   const db = loadDatabase();
   if (supabase) {
     try {
-      const { data } = await supabase.from("expenses").select("*");
+      const query = companyId 
+        ? supabase.from("expenses").select("*").eq("company_id", companyId)
+        : supabase.from("expenses").select("*");
+      const { data } = await query;
       if (data && data.length > 0) {
         const mappedExpenses: ExpenseClaim[] = data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
           employeeName: row.employee_name || row.employeeName || "",
+          companyId: row.company_id || row.companyId || null,
           category: row.category || "Others",
           amount: Number(row.amount) || 0,
           date: row.date || "",
@@ -39,13 +45,15 @@ export async function POST(request: Request) {
     const db = loadDatabase();
     
     const emp = db.employees.find(e => e.id === body.employeeId);
-    const empName = body.employeeName || emp?.fullName || "Employee " + (body.employeeId || "");
+    const empName = capitalizeName(body.employeeName || emp?.fullName || "Employee " + (body.employeeId || ""));
+    const companyId = body.companyId || emp?.companyId || (emp as any)?.company_id || "a1b2c3d4-0001-0001-0001-000000000001";
     const claimId = body.id || "exp-" + Date.now();
 
     const newClaim: ExpenseClaim = {
       id: claimId,
       employeeId: body.employeeId || "",
       employeeName: empName,
+      companyId: companyId,
       category: body.category || "Others",
       amount: Number(body.amount) || 0,
       date: body.date || new Date().toISOString().split("T")[0],

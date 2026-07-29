@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { LeaveRequest } from "@/src/types";
+import { LeaveRequest, capitalizeName } from "@/src/types";
 import { supabase, ensureEmployeeSynced } from "@/src/lib/supabase";
 
 export async function GET() {
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     const db = loadDatabase();
     const emp = db.employees?.find(e => e.id === leaveData.employeeId);
-    const empName = emp?.fullName || (leaveData.employeeName && !leaveData.employeeName.startsWith("Employee ") ? leaveData.employeeName : leaveData.employeeId);
+    const empName = capitalizeName(emp?.fullName || (leaveData.employeeName && !leaveData.employeeName.startsWith("Employee ") ? leaveData.employeeName : leaveData.employeeId));
 
     const newLeave: LeaveRequest = {
       id: leaveId,

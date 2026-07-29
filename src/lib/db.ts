@@ -4,7 +4,7 @@ import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory
 } from "../types";
 
 export interface AppState {
@@ -15,6 +15,7 @@ export interface AppState {
   holidays: Holiday[];
   policies: Policy[];
   expenses: ExpenseClaim[];
+  expenseCategories?: ExpenseCategory[];
   inventory: InventoryItem[];
   inventoryRequests: InventoryRequest[];
   fines: Fine[];
@@ -159,6 +160,7 @@ const initialEmployees: Employee[] = [
 ];
 
 export function getInitialState(): AppState {
+  const defaultCompanyId = "a1b2c3d4-0001-0001-0001-000000000001";
   return {
     designations: initialDesignations,
     employees: initialEmployees,
@@ -167,6 +169,7 @@ export function getInitialState(): AppState {
     holidays: [],
     policies: initialPolicies,
     expenses: [],
+    expenseCategories: [],
     inventory: [],
     inventoryRequests: [],
     fines: [],
@@ -238,6 +241,7 @@ export function loadDatabase(): AppState {
         designations: (parsed.designations && parsed.designations.length > 0) ? parsed.designations : initialDesignations,
         holidays: parsed.holidays || [],
         policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
+        expenseCategories: parsed.expenseCategories || getInitialState().expenseCategories,
         timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings,
         excelUploads: parsed.excelUploads || cachedState.excelUploads || []
       };

@@ -3,7 +3,7 @@ import { loadDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import bcrypt from "bcryptjs";
-import { Employee } from "@/src/types";
+import { Employee, capitalizeName } from "@/src/types";
 
 export async function POST(request: Request) {
   try {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
           employee = {
             id: data.id,
             companyId: data.company_id || "",
-            fullName: data.full_name || data.fullName || "",
+            fullName: capitalizeName(data.full_name || data.fullName || ""),
             email: data.email || "",
             phone: data.phone || "",
             role: data.role || "employee",

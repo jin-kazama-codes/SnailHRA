@@ -21,7 +21,7 @@ import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory
 } from "./src/types";
 
 // Default MGM Financiers company ID (matches migration script)
@@ -44,6 +44,7 @@ interface AppState {
   holidays: Holiday[];
   policies: Policy[];
   expenses: ExpenseClaim[];
+  expenseCategories?: ExpenseCategory[];
   inventory: InventoryItem[];
   inventoryRequests: InventoryRequest[];
   fines: Fine[];
@@ -85,6 +86,7 @@ const initialData: AppState = {
   holidays: initialHolidays,
   policies: initialPolicies,
   expenses: initialExpenses,
+  expenseCategories: [],
   inventory: initialInventory,
   inventoryRequests: initialInventoryRequests,
   fines: initialFines,

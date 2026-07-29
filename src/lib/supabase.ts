@@ -150,7 +150,7 @@ export async function syncExpenseToSupabase(expense: any) {
   if (!supabase) return;
   try {
     await ensureEmployeeSynced(expense.employeeId);
-    const companyId = await getCompanyIdForEmployee(expense.employeeId);
+    const companyId = expense.companyId || await getCompanyIdForEmployee(expense.employeeId);
     const record = {
       id: expense.id,
       employee_id: expense.employeeId,

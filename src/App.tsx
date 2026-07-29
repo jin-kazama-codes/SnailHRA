@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
-  Receipt, Package, ShieldAlert, Sun, Moon, RefreshCw,
+  ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
   Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut
 } from "lucide-react";
 
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
-  Holiday, Policy, ExpenseClaim, InventoryItem,
+  Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole
 } from "./types";
 
@@ -163,6 +163,7 @@ export default function App() {
   const [customLeaveTypes, setCustomLeaveTypes] = useState<string[]>([]);
   const [customDepartments, setCustomDepartments] = useState<string[]>([]);
   const [customBranches, setCustomBranches] = useState<string[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; synced: boolean; error?: string }>({
     connected: false,
     synced: false
@@ -224,7 +225,13 @@ export default function App() {
   const refreshDatabase = async () => {
     try {
       const activeCompanyId = localStorage.getItem("snailhr_companyId") || "";
-      const res = await fetch(`/api/data?companyId=${activeCompanyId}`);
+      const res = await fetch(`/api/data?companyId=${activeCompanyId}`, {
+        cache: "no-store",
+        headers: {
+          "Pragma": "no-cache",
+          "Cache-Control": "no-cache"
+        }
+      });
       if (!res.ok) throw new Error("Failed to fetch SnailHR tenant database.");
       const data = await res.json();
 
@@ -314,6 +321,7 @@ export default function App() {
       setCustomLeaveTypes(data.customLeaveTypes || []);
       setCustomDepartments(data.customDepartments || []);
       setCustomBranches(data.customBranches || []);
+      setExpenseCategories(data.expenseCategories || []);
 
       // Check Supabase Synchronization Status
       try {
@@ -797,6 +805,7 @@ export default function App() {
         id: tempId,
         employeeId: empId,
         employeeName: empName,
+        companyId: companyId || emp?.companyId || (emp as any)?.company_id || "a1b2c3d4-0001-0001-0001-000000000001",
         category: expenseData.category || "Others",
         amount: Number(expenseData.amount) || 0,
         date: expenseData.date || new Date().toISOString().split("T")[0],
@@ -815,12 +824,12 @@ export default function App() {
       });
 
       if (res.ok) {
+        showToast("Expense claim logged. Supervisor review pending.", "success");
         const resData = await res.json();
         if (resData.claim) {
           setExpenses(prev => [resData.claim, ...(prev || []).filter(e => e.id !== resData.claim.id && e.id !== tempId)]);
         }
         await refreshDatabase();
-        showToast("Expense claim logged. Supervisor review pending.", "success");
       }
     } catch (err) {
       console.error(err);
@@ -861,12 +870,12 @@ export default function App() {
       });
 
       if (res.ok) {
+        showToast(`Expense claim ${status.toLowerCase()} successfully.`, status === "Approved" ? "success" : "info");
         const resData = await res.json();
         if (resData.expense) {
           setExpenses(prev => prev.map(e => e.id === id ? resData.expense : e));
         }
         await refreshDatabase();
-        showToast(`Expense claim ${status.toLowerCase()} successfully.`, status === "Approved" ? "success" : "info");
       }
     } catch (err) {
       console.error(err);
@@ -1214,6 +1223,56 @@ export default function App() {
     }
   };
 
+  const handleAddExpenseCategory = async (name: string, description: string) => {
+    try {
+      const tempId = `expcat-${Date.now()}`;
+      const newCat: ExpenseCategory = {
+        id: tempId,
+        name,
+        companyId,
+        description
+      };
+      setExpenseCategories(prev => [newCat, ...prev]);
+
+      const res = await fetch("/api/expense-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCat)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Expense Category created successfully!", "success");
+      } else {
+        showToast("Failed to create expense category.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error creating expense category.", "error");
+      await refreshDatabase();
+    }
+  };
+
+  const handleRemoveExpenseCategory = async (id: string) => {
+    try {
+      setExpenseCategories(prev => prev.filter(c => c.id !== id));
+      const res = await fetch(`/api/expense-categories?id=${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Expense Category deleted successfully.", "info");
+      } else {
+        showToast("Failed to delete expense category.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting expense category.", "error");
+      await refreshDatabase();
+    }
+  };
+
   // Super Admin view routing
   if (isSuperAdminMode) {
     if (!isSuperAdminLoggedIn) {
@@ -1291,6 +1350,7 @@ export default function App() {
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
     { id: "payroll", label: "Payroll & Payslips", icon: <IndianRupee className="w-4.5 h-4.5" /> },
+    { id: "expenses", label: "Expense & Claims", icon: <ReceiptText className="w-4.5 h-4.5" /> },
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },
     { id: "fines", label: "Disciplinary Fines", icon: <Scale className="w-4.5 h-4.5" /> },
@@ -1593,6 +1653,7 @@ export default function App() {
           {currentView === "expenses" && (
             <ExpensesView
               expenses={expenses}
+              expenseCategories={expenseCategories}
               employees={employees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
@@ -1642,11 +1703,14 @@ export default function App() {
               customLeaveTypes={customLeaveTypes}
               customDepartments={customDepartments}
               customBranches={customBranches}
+              expenseCategories={expenseCategories}
               supabaseStatus={supabaseStatus}
               subscriptionModel={subscriptionModel}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onUpdateCollection={handleUpdateCollection}
+              onAddExpenseCategory={handleAddExpenseCategory}
+              onRemoveExpenseCategory={handleRemoveExpenseCategory}
             />
           )}
 

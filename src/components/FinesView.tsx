@@ -82,6 +82,10 @@ export default function FinesView({
     return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
+  const getEmployeeDept = (empId: string) => {
+    return employees.find(e => e.id === empId)?.department || "";
+  };
+
   const pendingFinesCount = fines.filter(f => f.status === "Pending").length;
 
   return (
@@ -209,7 +213,7 @@ export default function FinesView({
                       </div>
                       <div>
                         <span className="block leading-tight">{fine.employeeName || getEmployeeName(fine.employeeId)}</span>
-                        <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal font-mono">{fine.employeeId}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal">{getEmployeeDept(fine.employeeId)}</span>
                       </div>
                     </td>
                     <td className="py-3 px-3 text-slate-650 dark:text-gray-450 font-semibold">{fine.reason}</td>

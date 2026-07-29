@@ -5,10 +5,11 @@ import {
   DollarSign, FileText, Plus, Check, X, ShieldAlert, 
   HelpCircle, Sparkles, Receipt, RefreshCw, AlertCircle
 } from "lucide-react";
-import { ExpenseClaim, Employee, UserRole } from "../types";
+import { ExpenseClaim, Employee, UserRole, ExpenseCategory } from "../types";
 
 interface ExpensesViewProps {
   expenses: ExpenseClaim[];
+  expenseCategories: ExpenseCategory[];
   employees: Employee[];
   role: UserRole;
   currentEmployeeId: string;
@@ -18,6 +19,7 @@ interface ExpensesViewProps {
 
 export default function ExpensesView({
   expenses,
+  expenseCategories,
   employees,
   role,
   currentEmployeeId,
@@ -29,7 +31,17 @@ export default function ExpensesView({
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Claim fields
-  const [category, setCategory] = useState<any>("Travel & Fuel");
+  const [category, setCategory] = useState(() => {
+    return expenseCategories && expenseCategories.length > 0
+      ? expenseCategories[0].name
+      : "";
+  });
+
+  React.useEffect(() => {
+    if (expenseCategories && expenseCategories.length > 0 && !expenseCategories.some(c => c.name === category)) {
+      setCategory(expenseCategories[0].name);
+    }
+  }, [expenseCategories, category]);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(() => {
     const d = new Date();
@@ -104,15 +116,17 @@ export default function ExpensesView({
                       <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Expense Category</label>
                       <select
                         value={category}
-                        onChange={(e) => setCategory(e.target.value as any)}
+                        onChange={(e) => setCategory(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
                       >
-                        <option value="Travel & Fuel">Travel & Fuel (Client Site Audits)</option>
-                        <option value="Client Entertainment">Client Entertainment & Dinners</option>
-                        <option value="Broadband & Phone">Broadband & Office Phone</option>
-                        <option value="Office Supplies">Office Stationery & Supplies</option>
-                        <option value="Training & Courses">Professional Training & Certs</option>
-                        <option value="Others">Others / Miscellaneous</option>
+                        {expenseCategories.map((cat) => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name} {cat.description ? `(${cat.description})` : ""}
+                          </option>
+                        ))}
+                        {expenseCategories.length === 0 && (
+                          <option value="">No Categories Configured</option>
+                        )}
                       </select>
                     </div>
 

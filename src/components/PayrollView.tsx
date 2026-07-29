@@ -283,7 +283,7 @@ export default function PayrollView({
                               </div>
                               <div>
                                 <span className="block leading-tight">{emp.fullName}</span>
-                                <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal font-mono">{emp.id}</span>
+                                <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal">{emp.department}</span>
                               </div>
                             </td>
                             <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400 font-semibold whitespace-nowrap">₹{emp.salary.basic.toLocaleString()}</td>

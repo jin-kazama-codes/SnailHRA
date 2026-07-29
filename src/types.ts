@@ -134,11 +134,20 @@ export interface Policy {
   companyId?: string;
 }
 
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  companyId?: string; // or company_id
+  description?: string;
+  createdAt?: string;
+}
+
 export interface ExpenseClaim {
   id: string;
   employeeId: string;
   employeeName: string;
-  category: "Travel & Fuel" | "Client Entertainment" | "Broadband & Phone" | "Office Supplies" | "Training & Courses" | "Others";
+  companyId?: string;
+  category: string;
   amount: number;
   date: string; // YYYY-MM-DD
   description: string;
@@ -232,6 +241,18 @@ export interface ExcelUploadRecord {
   detectedCustomFields: string[];
   status: "Success" | "Partial" | "Failed";
   fileData?: string; // base64 or text content of uploaded file
+}
+
+export function capitalizeName(name: string | null | undefined): string {
+  if (!name) return "";
+  return name
+    .trim()
+    .split(/\s+/)
+    .map(word => {
+      if (!word) return "";
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
 }
 
 

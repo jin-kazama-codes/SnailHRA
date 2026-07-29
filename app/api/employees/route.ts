@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { Employee } from "@/src/types";
+import { Employee, capitalizeName } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import bcrypt from "bcryptjs";
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     const newEmp: Employee = {
       id: empId,
       companyId: resolvedCompanyId,
-      fullName: body.fullName || "New Agent",
+      fullName: capitalizeName(body.fullName || "New Agent"),
       email: body.email || "",
       phone: body.phone || "+91 99999 88888",
       role: body.role || "employee",
@@ -165,6 +165,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const updatedEmp: Employee = await request.json();
+    updatedEmp.fullName = capitalizeName(updatedEmp.fullName);
     const db = loadDatabase();
     if (!db.employees) db.employees = [];
     const index = db.employees.findIndex(e => e.id === updatedEmp.id);
