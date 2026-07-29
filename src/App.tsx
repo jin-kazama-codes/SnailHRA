@@ -4,13 +4,13 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
-  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut
+  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video
 } from "lucide-react";
 
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting
 } from "./types";
 
 // Import Modular Views
@@ -28,6 +28,7 @@ import ChatbotWidget from "./components/ChatbotWidget";
 import LoginView from "./components/LoginView";
 import SuperAdminLoginView from "./components/SuperAdminLoginView";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
+import MeetingsView from "./components/MeetingsView";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -158,6 +159,7 @@ export default function App() {
   const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [emails, setEmails] = useState<SimulatedEmail[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   // Organization Config States
   const [customLeaveTypes, setCustomLeaveTypes] = useState<string[]>([]);
@@ -317,6 +319,7 @@ export default function App() {
       });
       setPayslips(data.payslips || []);
       setEmails(data.simulatedEmails || []);
+      setMeetings(data.meetings || []);
 
       setCustomLeaveTypes(data.customLeaveTypes || []);
       setCustomDepartments(data.customDepartments || []);
@@ -411,6 +414,7 @@ export default function App() {
     setReimbursements([]);
     setPayslips([]);
     setEmails([]);
+    setMeetings([]);
     setCustomLeaveTypes([]);
     setCustomDepartments([]);
     setCustomBranches([]);
@@ -1273,6 +1277,50 @@ export default function App() {
     }
   };
 
+  const handleAddMeeting = async (meetingData: any) => {
+    try {
+      const res = await fetch("/api/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(meetingData)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Meeting scheduled successfully!", "success");
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`Failed to schedule meeting: ${errData.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error scheduling meeting: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
+  const handleCancelMeeting = async (id: string) => {
+    try {
+      const res = await fetch(`/api/meetings/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Meeting cancelled successfully.", "info");
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`Failed to cancel meeting: ${errData.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error cancelling meeting: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
   // Super Admin view routing
   if (isSuperAdminMode) {
     if (!isSuperAdminLoggedIn) {
@@ -1349,6 +1397,7 @@ export default function App() {
     ] : []),
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
+    { id: "meetings", label: "Scheduled Meetings", icon: <Video className="w-4.5 h-4.5" /> },
     { id: "payroll", label: "Payroll & Payslips", icon: <IndianRupee className="w-4.5 h-4.5" /> },
     { id: "expenses", label: "Expense & Claims", icon: <ReceiptText className="w-4.5 h-4.5" /> },
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
@@ -1694,6 +1743,19 @@ export default function App() {
               companyName={companyName}
               onAddFine={handleAddFine}
               onUpdateFineStatus={handleUpdateFineStatus}
+            />
+          )}
+
+          {currentView === "meetings" && (
+            <MeetingsView
+              meetings={meetings}
+              employees={employees}
+              role={activeRole}
+              currentEmployeeId={currentEmployeeId}
+              customDepartments={customDepartments}
+              onAddMeeting={handleAddMeeting}
+              onCancelMeeting={handleCancelMeeting}
+              companyName={companyName}
             />
           )}
 

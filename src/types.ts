@@ -255,4 +255,26 @@ export function capitalizeName(name: string | null | undefined): string {
     .join(" ");
 }
 
+export interface Meeting {
+  id: string;
+  companyId: string;
+  title: string;
+  description: string;
+  reason: string;
+  type: "Online" | "Offline" | "Hybrid";
+  organizerId: string;
+  participantIds: string[];
+  department?: string;
+  priority?: "Low" | "Medium" | "High" | "Urgent";
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration?: string;
+  timezone?: string;
+  location?: string;
+  link?: string;
+  createdAt: string;
+}
+
+
 

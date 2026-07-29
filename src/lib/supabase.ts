@@ -512,5 +512,54 @@ export async function syncPayslipToSupabase(payslip: any) {
   }
 }
 
+export async function syncMeetingToSupabase(meeting: any) {
+  if (!supabase) return;
+  try {
+    const record = {
+      id: meeting.id,
+      company_id: meeting.companyId,
+      title: meeting.title,
+      description: meeting.description,
+      reason: meeting.reason,
+      type: meeting.type,
+      organizer_id: meeting.organizerId,
+      participant_ids: meeting.participantIds,
+      department: meeting.department || null,
+      priority: meeting.priority || null,
+      date: meeting.date,
+      start_time: meeting.startTime,
+      end_time: meeting.endTime,
+      duration: meeting.duration || null,
+      timezone: meeting.timezone || null,
+      location: meeting.location || null,
+      link: meeting.link || null,
+      created_at: meeting.createdAt || new Date().toISOString()
+    };
+    const { error } = await supabase.from("meetings").upsert(record, { onConflict: "id" });
+    if (error) {
+      console.warn("Supabase meetings table upsert error:", error.message, error.details);
+    } else {
+      console.log("Successfully synced meeting to Supabase 'meetings' table:", meeting.id);
+    }
+  } catch (e) {
+    console.warn("Supabase meeting sync warning:", e);
+  }
+}
+
+export async function deleteMeetingFromSupabase(meetingId: string) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from("meetings").delete().eq("id", meetingId);
+    if (error) {
+      console.warn("Supabase meetings table delete error:", error.message);
+    } else {
+      console.log("Successfully deleted meeting from Supabase 'meetings' table:", meetingId);
+    }
+  } catch (e) {
+    console.warn("Supabase meeting delete warning:", e);
+  }
+}
+
+
 
 

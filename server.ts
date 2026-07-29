@@ -21,7 +21,7 @@ import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting
 } from "./src/types";
 
 // Default MGM Financiers company ID (matches migration script)
@@ -60,7 +60,7 @@ interface AppState {
   companyTimingSettings?: Record<string, TimingSettings>;
   excelUploads?: ExcelUploadRecord[];
 
-  // Multi-tenant companies
+  meetings?: Meeting[];
   companies: Company[];
 }
 
@@ -93,6 +93,7 @@ const initialData: AppState = {
   reimbursements: initialReimbursements,
   payslips: initialPayslips,
   simulatedEmails: initialSimulatedEmails,
+  meetings: [],
   customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity/Paternity", "Loss of Pay"],
   customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "Marketing"],
   customBranches: ["Snail Mumbai HQ", "Noida Field Hub", "Pune Branch Office", "Hyderabad Insurance Center", "Bangalore Tech Hub"],

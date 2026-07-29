@@ -4,7 +4,7 @@ import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting
 } from "../types";
 
 export interface AppState {
@@ -29,6 +29,7 @@ export interface AppState {
   companyTimingSettings?: Record<string, TimingSettings>;
   attendanceBreaks?: AttendanceBreak[];
   excelUploads?: ExcelUploadRecord[];
+  meetings?: Meeting[];
 }
 
 const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
@@ -187,7 +188,8 @@ export function getInitialState(): AppState {
       breakEndTime: "14:00"
     },
     attendanceBreaks: [],
-    excelUploads: []
+    excelUploads: [],
+    meetings: []
   };
 }
 
@@ -243,7 +245,8 @@ export function loadDatabase(): AppState {
         policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
         expenseCategories: parsed.expenseCategories || getInitialState().expenseCategories,
         timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings,
-        excelUploads: parsed.excelUploads || cachedState.excelUploads || []
+        excelUploads: parsed.excelUploads || cachedState.excelUploads || [],
+        meetings: parsed.meetings || []
       };
       return cachedState;
     }

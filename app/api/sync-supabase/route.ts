@@ -277,6 +277,34 @@ export async function POST() {
       }
     }
 
+    // 10. Sync meetings
+    if (db.meetings && db.meetings.length > 0) {
+      const meetingRecords = db.meetings.map(m => ({
+        id: m.id,
+        company_id: m.companyId || MGM_COMPANY_ID,
+        title: m.title,
+        description: m.description,
+        reason: m.reason,
+        type: m.type,
+        organizer_id: m.organizerId,
+        participant_ids: m.participantIds,
+        department: m.department || null,
+        priority: m.priority || null,
+        date: m.date,
+        start_time: m.startTime,
+        end_time: m.endTime,
+        duration: m.duration || null,
+        timezone: m.timezone || null,
+        location: m.location || null,
+        link: m.link || null,
+        created_at: m.createdAt || new Date().toISOString()
+      }));
+      const { error } = await supabase.from("meetings").upsert(meetingRecords, { onConflict: "id" });
+      if (error) {
+        console.warn("Sync: meetings upsert warning:", error.message);
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Successfully synced all local dataset elements directly to Supabase cloud instance." });
   } catch (error: any) {
     console.error("Database sync exception:", error);

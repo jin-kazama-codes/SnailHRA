@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
-        payslipsRes, designationsRes, expenseCategoriesRes
+        payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -116,7 +116,10 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("designations").select("*")),
           companyId
             ? safeQuery(dbClient.from("expense_categories").select("*").eq("company_id", companyId))
-            : safeQuery(dbClient.from("expense_categories").select("*"))
+            : safeQuery(dbClient.from("expense_categories").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("meetings").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("meetings").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -403,6 +406,42 @@ export async function GET(request: Request) {
         } else {
           db.inventory = (db.inventory || []).filter((i: any) => !i.assignedToEmployeeId || companyEmpIds.has(i.assignedToEmployeeId));
         }
+      }
+
+      if (meetingsRes && meetingsRes.data && meetingsRes.data.length > 0) {
+        db.meetings = meetingsRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || row.companyId || null,
+          title: row.title || "",
+          description: row.description || "",
+          reason: row.reason || "",
+          type: row.type || "Online",
+          organizerId: row.organizer_id || row.organizerId || "",
+          participantIds: Array.isArray(row.participant_ids) 
+            ? row.participant_ids 
+            : typeof row.participant_ids === 'string' 
+              ? JSON.parse(row.participant_ids) 
+              : [],
+          department: row.department || undefined,
+          priority: row.priority || undefined,
+          date: row.date || "",
+          startTime: row.start_time || row.startTime || "",
+          endTime: row.end_time || row.endTime || "",
+          duration: row.duration || undefined,
+          timezone: row.timezone || undefined,
+          location: row.location || undefined,
+          link: row.link || undefined,
+          createdAt: row.created_at || row.createdAt || new Date().toISOString()
+        }));
+        if (db.employees && db.employees.length > 0) {
+          const companyEmpIds = new Set(db.employees.map((e: any) => e.id));
+          db.meetings = (db.meetings || []).filter((m: any) => 
+            companyEmpIds.has(m.organizerId) || 
+            m.participantIds.some((pId: string) => companyEmpIds.has(pId))
+          );
+        }
+      } else {
+        db.meetings = [];
       }
 
       if (deptsRes.data) {
