@@ -27,6 +27,14 @@ export interface Designation {
   companyId?: string;
 }
 
+export interface CorporateAllowanceFaq {
+  id: string;
+  title: string;
+  description: string;
+  companyId?: string;
+  createdAt?: string;
+}
+
 export interface EmployeeDocument {
   id: string;
   name: string;
@@ -273,6 +281,68 @@ export interface Meeting {
   timezone?: string;
   location?: string;
   link?: string;
+  createdAt: string;
+}
+
+// ─── Seating Plan ───────────────────────────────────────────────────────────
+
+export interface SeatSection {
+  id: string;
+  name: string; // e.g. "HR Department", "Directors"
+  color: string; // Tailwind bg color token or hex
+}
+
+export interface Seat {
+  id: string;
+  seatNumber: string;
+  sectionId: string;
+  x: number; // grid column (0-indexed)
+  y: number; // grid row (0-indexed)
+  assignedEmployeeId?: string | null;
+  label?: string;
+  type: "desk" | "reserved" | "cabin" | "empty";
+}
+
+export interface SeatLayout {
+  id: string;
+  companyId: string;
+  name: string; // e.g. "Floor 1 – Main Office"
+  sections: SeatSection[];
+  seats: Seat[];
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+// ─── Room Booking ────────────────────────────────────────────────────────────
+
+export interface Room {
+  id: string;
+  companyId: string;
+  name: string;
+  capacity: number;
+  amenities: string[]; // ["Projector", "Whiteboard", "Video Conferencing"]
+  floor?: string;
+  branch?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface RoomBooking {
+  id: string;
+  companyId: string;
+  roomId: string;
+  roomName: string;
+  requestedBy: string; // employee ID
+  requestedByName: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string;   // HH:MM
+  purpose: string;
+  attendees: string[]; // employee IDs
+  status: "Pending" | "Approved" | "Rejected" | "Cancelled";
+  approvedBy?: string;
+  approvedAt?: string;
   createdAt: string;
 }
 

@@ -4,7 +4,8 @@ import { capitalizeName } from "@/src/types";
 import { 
   syncDepartmentToSupabase, deleteDepartmentFromSupabase,
   syncBranchToSupabase, deleteBranchFromSupabase,
-  syncLeaveTypeToSupabase, deleteLeaveTypeFromSupabase
+  syncLeaveTypeToSupabase, deleteLeaveTypeFromSupabase,
+  syncAmenityToSupabase, deleteAmenityFromSupabase
 } from "@/src/lib/supabase";
 
 export async function POST(request: Request) {
@@ -14,8 +15,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Type and updatedList array are required." }, { status: 400 });
     }
 
-    const capitalizedList = updatedList.map((item: string) => capitalizeName(item));
-    const capitalizedAdded = addedItem ? capitalizeName(addedItem) : undefined;
+    const safeCapitalize = (str: string) => {
+      if (str.includes("|")) {
+        const [name, icon] = str.split("|");
+        return `${capitalizeName(name)}|${icon}`;
+      }
+      return capitalizeName(str);
+    };
+    const capitalizedList = updatedList.map((item: string) => safeCapitalize(item));
+    const capitalizedAdded = addedItem ? safeCapitalize(addedItem) : undefined;
 
     const db = loadDatabase();
 
@@ -32,6 +40,10 @@ export async function POST(request: Request) {
       previousList = db.customBranches || [];
       if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
       db.customBranches = capitalizedList;
+    } else if (type === "amenities") {
+      previousList = db.customAmenities || [];
+      if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
+      db.customAmenities = capitalizedList;
     } else {
       return NextResponse.json({ error: "Invalid collection type." }, { status: 400 });
     }
@@ -52,6 +64,9 @@ export async function POST(request: Request) {
     } else if (type === "leaveTypes") {
       if (added) await syncLeaveTypeToSupabase(added, companyId);
       if (removed) await deleteLeaveTypeFromSupabase(removed, companyId);
+    } else if (type === "amenities") {
+      if (added) await syncAmenityToSupabase(added, companyId);
+      if (removed) await deleteAmenityFromSupabase(removed, companyId);
     }
 
     return NextResponse.json({ 

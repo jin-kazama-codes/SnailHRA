@@ -50,7 +50,8 @@ export async function GET(request: Request) {
         leavesRes, attendanceRes, employeesRes, holidaysRes, expensesRes, 
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
-        payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes
+        payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
+        seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -119,7 +120,22 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("expense_categories").select("*")),
           companyId
             ? safeQuery(dbClient.from("meetings").select("*").eq("company_id", companyId))
-            : safeQuery(dbClient.from("meetings").select("*"))
+            : safeQuery(dbClient.from("meetings").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("corporate_allowances_faq").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("corporate_allowances_faq").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("seat_layouts").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("seat_layouts").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("rooms").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("rooms").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("room_bookings").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("room_bookings").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("custom_amenities").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("custom_amenities").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -148,6 +164,20 @@ export async function GET(request: Request) {
         (db.expenseCategories || []).forEach((c: any) => { if (c.id) catMap.set(c.id, c); });
         sbCategories.forEach((c: any) => { catMap.set(c.id, c); });
         db.expenseCategories = Array.from(catMap.values());
+      }
+
+      if (corporateAllowancesFaqRes && corporateAllowancesFaqRes.data && corporateAllowancesFaqRes.data.length > 0) {
+        const sbFaqs = corporateAllowancesFaqRes.data.map((row: any) => ({
+          id: row.id,
+          title: row.title || "",
+          description: row.description || "",
+          companyId: row.company_id || row.companyId || null,
+          createdAt: row.created_at || row.createdAt || new Date().toISOString()
+        }));
+        const faqMap = new Map();
+        (db.corporateAllowancesFaqs || []).forEach((f: any) => { if (f.id) faqMap.set(f.id, f); });
+        sbFaqs.forEach((f: any) => { faqMap.set(f.id, f); });
+        db.corporateAllowancesFaqs = Array.from(faqMap.values());
       }
 
       if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
@@ -444,6 +474,53 @@ export async function GET(request: Request) {
         db.meetings = [];
       }
 
+      if (seatLayoutsRes && seatLayoutsRes.data) {
+        db.seatLayouts = seatLayoutsRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || row.companyId || null,
+          name: row.name || "",
+          sections: typeof row.sections === "string" ? JSON.parse(row.sections) : (row.sections || []),
+          seats: typeof row.seats === "string" ? JSON.parse(row.seats) : (row.seats || []),
+          updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+          updatedBy: row.updated_by || row.updatedBy || null
+        }));
+      }
+
+      if (roomsRes && roomsRes.data) {
+        db.rooms = roomsRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || row.companyId || null,
+          name: row.name || "",
+          capacity: Number(row.capacity) || 6,
+          amenities: typeof row.amenities === "string" ? JSON.parse(row.amenities) : (row.amenities || []),
+          floor: row.floor || undefined,
+          branch: row.branch || undefined,
+          isActive: row.is_active ?? row.isActive ?? true,
+          createdAt: row.created_at || row.createdAt || new Date().toISOString()
+        }));
+      }
+
+      if (roomBookingsRes && roomBookingsRes.data) {
+        db.roomBookings = roomBookingsRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || row.companyId || null,
+          roomId: row.room_id || row.roomId || "",
+          roomName: row.room_name || row.roomName || "",
+          requestedBy: row.requested_by || row.requestedBy || "",
+          requestedByName: row.requested_by_name || row.requestedByName || "",
+          title: row.title || "",
+          date: row.date || "",
+          startTime: row.start_time || row.startTime || "",
+          endTime: row.end_time || row.endTime || "",
+          purpose: row.purpose || "",
+          attendees: typeof row.attendees === "string" ? JSON.parse(row.attendees) : (row.attendees || []),
+          status: row.status || "Pending",
+          approvedBy: row.approved_by || row.approvedBy || undefined,
+          approvedAt: row.approved_at || row.approvedAt || undefined,
+          createdAt: row.created_at || row.createdAt || new Date().toISOString()
+        }));
+      }
+
       if (deptsRes.data) {
         db.customDepartments = deptsRes.data.map((d: any) => capitalizeName(d.name)).filter(Boolean);
       }
@@ -454,6 +531,12 @@ export async function GET(request: Request) {
 
       const rawLeaveTypes = leaveTypesRes.data || customLeavesRes.data || [];
       db.customLeaveTypes = rawLeaveTypes.map((l: any) => capitalizeName(l.name)).filter(Boolean);
+
+      if (customAmenitiesRes && customAmenitiesRes.data && customAmenitiesRes.data.length > 0) {
+        db.customAmenities = customAmenitiesRes.data.map((a: any) => {
+          return a.icon ? `${capitalizeName(a.name)}|${a.icon}` : capitalizeName(a.name);
+        }).filter(Boolean);
+      }
 
       // Load local tenant specific timing setting if available
       if (companyId && db.companyTimingSettings?.[companyId]) {
@@ -492,6 +575,10 @@ export async function GET(request: Request) {
     db.designations = (db.designations || []).filter((d: any) => {
       const dCompId = d.companyId || d.company_id || MGM_COMPANY_ID;
       return dCompId === companyId;
+    });
+    db.corporateAllowancesFaqs = (db.corporateAllowancesFaqs || []).filter((f: any) => {
+      const fCompId = f.companyId || f.company_id || MGM_COMPANY_ID;
+      return fCompId === companyId;
     });
   }
 

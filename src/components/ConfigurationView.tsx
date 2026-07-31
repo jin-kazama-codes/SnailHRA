@@ -2,16 +2,56 @@
 
 import React, { useState, useEffect } from "react";
 import { 
-  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2 
+  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star,
+  Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
+  Snowflake, Phone, Lightbulb, Mic
 } from "lucide-react";
-import { Designation, ExpenseCategory } from "../types";
+import { Designation, ExpenseCategory, CorporateAllowanceFaq } from "../types";
+
+const AMENITY_ICONS: Record<string, React.ReactNode> = {
+  "Monitor": <Monitor className="w-3.5 h-3.5 text-slate-400" />,
+  "Presentation": <Presentation className="w-3.5 h-3.5 text-slate-400" />,
+  "Wifi": <Wifi className="w-3.5 h-3.5 text-slate-400" />,
+  "Coffee": <Coffee className="w-3.5 h-3.5 text-slate-400" />,
+  "Zap": <Zap className="w-3.5 h-3.5 text-slate-400" />,
+  "Tv": <Tv className="w-3.5 h-3.5 text-slate-400" />,
+  "Cable": <Cable className="w-3.5 h-3.5 text-slate-400" />,
+  "Cpu": <Cpu className="w-3.5 h-3.5 text-slate-400" />,
+  "Volume": <Volume2 className="w-3.5 h-3.5 text-slate-400" />,
+  "Shield": <Shield className="w-3.5 h-3.5 text-slate-400" />,
+  "Star": <Star className="w-3.5 h-3.5 text-slate-400" />,
+  "Snowflake": <Snowflake className="w-3.5 h-3.5 text-slate-400" />,
+  "Phone": <Phone className="w-3.5 h-3.5 text-slate-400" />,
+  "Lightbulb": <Lightbulb className="w-3.5 h-3.5 text-slate-400" />,
+  "Mic": <Mic className="w-3.5 h-3.5 text-slate-400" />,
+};
+
+const ICON_OPTIONS = [
+  { name: "Monitor", icon: <Monitor className="w-4 h-4" /> },
+  { name: "Presentation", icon: <Presentation className="w-4 h-4" /> },
+  { name: "Wifi", icon: <Wifi className="w-4 h-4" /> },
+  { name: "Coffee", icon: <Coffee className="w-4 h-4" /> },
+  { name: "Zap", icon: <Zap className="w-4 h-4" /> },
+  { name: "Tv", icon: <Tv className="w-4 h-4" /> },
+  { name: "Cable", icon: <Cable className="w-4 h-4" /> },
+  { name: "Cpu", icon: <Cpu className="w-4 h-4" /> },
+  { name: "Volume", icon: <Volume2 className="w-4 h-4" /> },
+  { name: "Shield", icon: <Shield className="w-4 h-4" /> },
+  { name: "Snowflake", icon: <Snowflake className="w-4 h-4" /> },
+  { name: "Phone", icon: <Phone className="w-4 h-4" /> },
+  { name: "Lightbulb", icon: <Lightbulb className="w-4 h-4" /> },
+  { name: "Mic", icon: <Mic className="w-4 h-4" /> },
+  { name: "Star", icon: <Star className="w-4 h-4" /> },
+];
 
 interface ConfigurationViewProps {
   designations: Designation[];
   customLeaveTypes: string[];
   customDepartments: string[];
   customBranches: string[];
+  customAmenities: string[];
   expenseCategories: ExpenseCategory[];
+  corporateAllowancesFaqs?: CorporateAllowanceFaq[];
   supabaseStatus: {
     connected: boolean;
     synced: boolean;
@@ -21,13 +61,15 @@ interface ConfigurationViewProps {
   onAddDesignation: (title: string, department: string) => void;
   onRemoveDesignation: (id: string) => void;
   onUpdateCollection: (
-    type: "leaveTypes" | "departments" | "branches", 
+    type: "leaveTypes" | "departments" | "branches" | "amenities", 
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
   ) => void;
   onAddExpenseCategory: (name: string, description: string) => void;
   onRemoveExpenseCategory: (id: string) => void;
+  onAddCorporateAllowanceFaq?: (title: string, description: string, id?: string) => void;
+  onRemoveCorporateAllowanceFaq?: (id: string) => void;
 }
 
 export default function ConfigurationView({
@@ -35,16 +77,20 @@ export default function ConfigurationView({
   customLeaveTypes,
   customDepartments,
   customBranches,
+  customAmenities = [],
   expenseCategories,
+  corporateAllowancesFaqs = [],
   supabaseStatus,
   subscriptionModel = 1,
   onAddDesignation,
   onRemoveDesignation,
   onUpdateCollection,
   onAddExpenseCategory,
-  onRemoveExpenseCategory
+  onRemoveExpenseCategory,
+  onAddCorporateAllowanceFaq,
+  onRemoveCorporateAllowanceFaq
 }: ConfigurationViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses">(() => {
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "allowancesFaq">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("snailhr_configSubTab") as any) || "general";
     }
@@ -64,9 +110,36 @@ export default function ConfigurationView({
   const [newLeaveType, setNewLeaveType] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
   const [newBranch, setNewBranch] = useState("");
+  const [newAmenity, setNewAmenity] = useState("");
+  const [selectedIcon, setSelectedIcon] = useState("Star");
 
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
+
+  const [newFaqTitle, setNewFaqTitle] = useState("");
+  const [newFaqDescription, setNewFaqDescription] = useState("");
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
+
+  const handleSubmitFaq = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFaqTitle.trim() || !newFaqDescription.trim()) return;
+    onAddCorporateAllowanceFaq?.(newFaqTitle.trim(), newFaqDescription.trim(), editingFaqId || undefined);
+    setNewFaqTitle("");
+    setNewFaqDescription("");
+    setEditingFaqId(null);
+  };
+
+  const handleEditFaq = (faq: CorporateAllowanceFaq) => {
+    setEditingFaqId(faq.id);
+    setNewFaqTitle(faq.title);
+    setNewFaqDescription(faq.description);
+  };
+
+  const handleCancelFaqEdit = () => {
+    setEditingFaqId(null);
+    setNewFaqTitle("");
+    setNewFaqDescription("");
+  };
 
   const handleSubmitExpenseCat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +208,29 @@ export default function ConfigurationView({
     }
   };
 
+  const handleAddAmenity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAmenity.trim()) return;
+    const trimmed = newAmenity.trim();
+    const itemString = `${trimmed}|${selectedIcon}`;
+    // Check if duplicate name
+    const isDuplicate = customAmenities.some(a => a.split("|")[0].toLowerCase() === trimmed.toLowerCase());
+    if (isDuplicate) {
+      alert("An amenity with this name already exists.");
+      return;
+    }
+    const newList = [...customAmenities, itemString];
+    onUpdateCollection("amenities", newList, "add", itemString);
+    setNewAmenity("");
+    setSelectedIcon("Star");
+  };
+
+  const handleRemoveAmenity = (amenity: string) => {
+    if (confirm(`Are you sure you want to remove the "${amenity.split("|")[0]}" room amenity?`)) {
+      onUpdateCollection("amenities", customAmenities.filter(a => a !== amenity), "remove", amenity);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header and Sub Tabs */}
@@ -175,6 +271,12 @@ export default function ConfigurationView({
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "expenses" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Expense Categories
+          </button>
+          <button 
+            onClick={() => setActiveSubTab("allowancesFaq")}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "allowancesFaq" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            Corporate Allowances FAQ
           </button>
         </div>
       </div>
@@ -306,6 +408,77 @@ export default function ConfigurationView({
               </div>
             </div>
             <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customLeaveTypes.length} Leave types configured</p>
+          </div>
+
+          {/* Room Amenities block */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
+            <div>
+              <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
+                <Star className="w-4.5 h-4.5 text-amber-500" />
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Room Amenities</h3>
+              </div>
+              
+              <form onSubmit={handleAddAmenity} className="space-y-3 mb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="e.g. Smart TV, HDMI Cable"
+                    value={newAmenity}
+                    onChange={(e) => setNewAmenity(e.target.value)}
+                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded-xl cursor-pointer transition-all"
+                    title="Add Room Amenity"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Icon</label>
+                  <div className="flex flex-wrap gap-1.5 bg-slate-50/50 dark:bg-[#1a1a1a]/20 p-2 rounded-xl border border-slate-100/50 dark:border-[#2a2a2a]">
+                    {ICON_OPTIONS.map(opt => (
+                      <button
+                        key={opt.name}
+                        type="button"
+                        onClick={() => setSelectedIcon(opt.name)}
+                        className={`p-2 rounded-lg cursor-pointer transition-all border ${
+                          selectedIcon === opt.name
+                            ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                            : "bg-white dark:bg-[#0f0f0f] text-slate-500 border-slate-100 dark:border-[#1a1a1a] hover:border-amber-300"
+                        }`}
+                        title={opt.name}
+                      >
+                        {opt.icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </form>
+
+              <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                {customAmenities.map((amenity) => {
+                  const [name, iconName] = amenity.split("|");
+                  return (
+                    <div key={amenity} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
+                      <div className="flex items-center space-x-2">
+                        {AMENITY_ICONS[iconName || "Star"] || <Star className="w-3.5 h-3.5 text-slate-400" />}
+                        <span className="font-semibold text-slate-700 dark:text-gray-300">{name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveAmenity(amenity)}
+                        className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customAmenities.length} Room amenities active</p>
           </div>
         </div>
       )}
@@ -486,6 +659,118 @@ export default function ConfigurationView({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub Tab 4: Corporate Allowances FAQ */}
+      {activeSubTab === "allowancesFaq" && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-50 dark:border-[#1a1a1a] pb-3">
+              <div className="flex items-center space-x-2">
+                <HelpCircle className="w-5 h-5 text-emerald-500" />
+                <div>
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base">Corporate Allowances FAQ Management</h3>
+                  <p className="text-xs text-slate-400">Configure guidelines and claim limits displayed to employees in Expense & Claims view</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form Block */}
+              <div className="bg-slate-50/50 dark:bg-[#1a1a1a]/30 p-4 border border-slate-100 dark:border-[#1a1a1a] rounded-xl space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-display font-semibold text-slate-700 dark:text-gray-200 text-xs uppercase tracking-wider">
+                    {editingFaqId ? "Edit Allowance FAQ" : "Add Allowance FAQ"}
+                  </h4>
+                  {editingFaqId && (
+                    <button 
+                      onClick={handleCancelFaqEdit}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Cancel</span>
+                    </button>
+                  )}
+                </div>
+
+                <form onSubmit={handleSubmitFaq} className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Title / Allowance Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Outstation Travel Allowance"
+                      value={newFaqTitle}
+                      onChange={(e) => setNewFaqTitle(e.target.value)}
+                      required
+                      className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Detailed FAQ Description *</label>
+                    <textarea
+                      placeholder="e.g. Relationship managers qualify for flat outstation lodging and travel allowances up to ₹3,000 per day."
+                      value={newFaqDescription}
+                      onChange={(e) => setNewFaqDescription(e.target.value)}
+                      required
+                      rows={4}
+                      className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    {editingFaqId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    <span>{editingFaqId ? "Update Allowance FAQ" : "Add Allowance FAQ"}</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* FAQs List Table / Cards */}
+              <div className="lg:col-span-2 space-y-3">
+                {corporateAllowancesFaqs.map((faq) => (
+                  <div key={faq.id} className="p-4 bg-white dark:bg-[#1a1a1a]/40 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex items-start justify-between gap-4 hover:border-emerald-500/30 transition-all">
+                    <div className="space-y-1 flex-1">
+                      <h4 className="font-bold text-sm text-slate-800 dark:text-gray-200">{faq.title}</h4>
+                      <p className="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">{faq.description}</p>
+                    </div>
+
+                    <div className="flex items-center space-x-1 shrink-0">
+                      <button
+                        onClick={() => handleEditFaq(faq)}
+                        className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 rounded-lg transition-colors cursor-pointer"
+                        title="Edit FAQ"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete "${faq.title}"?`)) {
+                            onRemoveCorporateAllowanceFaq?.(faq.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer"
+                        title="Delete FAQ"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {corporateAllowancesFaqs.length === 0 && (
+                  <div className="text-center py-10 bg-slate-50/50 dark:bg-[#1a1a1a]/20 rounded-xl border border-dashed border-slate-200 dark:border-[#1a1a1a]">
+                    <HelpCircle className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-xs font-semibold text-slate-500 dark:text-gray-400">No Corporate Allowance FAQs configured for this company yet.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Use the form on the left to add allowance policies & claim guidelines.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

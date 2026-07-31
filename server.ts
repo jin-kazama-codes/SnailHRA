@@ -56,6 +56,7 @@ interface AppState {
   customLeaveTypes: string[];
   customDepartments: string[];
   customBranches: string[];
+  customAmenities?: string[];
   timingSettings: TimingSettings;
   companyTimingSettings?: Record<string, TimingSettings>;
   excelUploads?: ExcelUploadRecord[];
@@ -97,6 +98,7 @@ const initialData: AppState = {
   customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity/Paternity", "Loss of Pay"],
   customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "Marketing"],
   customBranches: ["Snail Mumbai HQ", "Noida Field Hub", "Pune Branch Office", "Hyderabad Insurance Center", "Bangalore Tech Hub"],
+  customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],
   timingSettings: {
     clockInTime: "09:00",
     clockOutTime: "18:00",
@@ -126,6 +128,7 @@ function readDatabaseLocal(): AppState {
       if (!state.customLeaveTypes) state.customLeaveTypes = initialData.customLeaveTypes;
       if (!state.customDepartments) state.customDepartments = initialData.customDepartments;
       if (!state.customBranches) state.customBranches = initialData.customBranches;
+      if (!state.customAmenities) state.customAmenities = initialData.customAmenities;
       if (!state.employees) state.employees = [];
       if (!state.timingSettings) state.timingSettings = initialData.timingSettings;
       if (!state.companies) state.companies = initialData.companies;

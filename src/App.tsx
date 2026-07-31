@@ -4,13 +4,14 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
-  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video
+  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid
 } from "lucide-react";
 
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
+  SeatLayout, Room, RoomBooking
 } from "./types";
 
 // Import Modular Views
@@ -29,6 +30,7 @@ import LoginView from "./components/LoginView";
 import SuperAdminLoginView from "./components/SuperAdminLoginView";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import MeetingsView from "./components/MeetingsView";
+import WorkspaceView from "./components/WorkspaceView";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -160,12 +162,17 @@ export default function App() {
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [emails, setEmails] = useState<SimulatedEmail[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [seatLayouts, setSeatLayouts] = useState<SeatLayout[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomBookings, setRoomBookings] = useState<RoomBooking[]>([]);
 
   // Organization Config States
   const [customLeaveTypes, setCustomLeaveTypes] = useState<string[]>([]);
   const [customDepartments, setCustomDepartments] = useState<string[]>([]);
   const [customBranches, setCustomBranches] = useState<string[]>([]);
+  const [customAmenities, setCustomAmenities] = useState<string[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [corporateAllowancesFaqs, setCorporateAllowancesFaqs] = useState<CorporateAllowanceFaq[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; synced: boolean; error?: string }>({
     connected: false,
     synced: false
@@ -320,11 +327,21 @@ export default function App() {
       setPayslips(data.payslips || []);
       setEmails(data.simulatedEmails || []);
       setMeetings(data.meetings || []);
+      setSeatLayouts(data.seatLayouts || []);
+      setRooms(data.rooms || []);
+      setRoomBookings(prev => {
+        const bookingMap = new Map();
+        (prev || []).forEach((b: any) => { if (b.id) bookingMap.set(b.id, b); });
+        (data.roomBookings || []).forEach((b: any) => { if (b.id) bookingMap.set(b.id, b); });
+        return Array.from(bookingMap.values());
+      });
 
       setCustomLeaveTypes(data.customLeaveTypes || []);
       setCustomDepartments(data.customDepartments || []);
       setCustomBranches(data.customBranches || []);
+      setCustomAmenities(data.customAmenities || []);
       setExpenseCategories(data.expenseCategories || []);
+      setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
 
       // Check Supabase Synchronization Status
       try {
@@ -418,6 +435,10 @@ export default function App() {
     setCustomLeaveTypes([]);
     setCustomDepartments([]);
     setCustomBranches([]);
+    setCustomAmenities([]);
+    setSeatLayouts([]);
+    setRooms([]);
+    setRoomBookings([]);
 
     if (typeof window !== "undefined") {
       localStorage.removeItem("snailhr_isLoggedIn");
@@ -1160,7 +1181,7 @@ export default function App() {
 
   // 20. Update custom collections (Departments, Branches, Leave Policies)
   const handleUpdateCollection = async (
-    type: "leaveTypes" | "departments" | "branches", 
+    type: "leaveTypes" | "departments" | "branches" | "amenities", 
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
@@ -1169,6 +1190,7 @@ export default function App() {
     if (type === "leaveTypes") setCustomLeaveTypes(updatedList);
     if (type === "departments") setCustomDepartments(updatedList);
     if (type === "branches") setCustomBranches(updatedList);
+    if (type === "amenities") setCustomAmenities(updatedList);
 
     try {
       const res = await fetch("/api/config-collections", {
@@ -1184,7 +1206,7 @@ export default function App() {
       });
 
       if (res.ok) {
-        const typeLabel = type === "leaveTypes" ? "Leave Policy" : type === "departments" ? "Department" : "Branch";
+        const typeLabel = type === "leaveTypes" ? "Leave Policy" : type === "departments" ? "Department" : type === "branches" ? "Branch" : "Room Amenity";
         if (action === "add") {
           showToast(`Added "${item}" to ${typeLabel}s successfully!`, "success");
         } else if (action === "remove") {
@@ -1277,6 +1299,56 @@ export default function App() {
     }
   };
 
+  const handleAddCorporateAllowanceFaq = async (title: string, description: string, id?: string) => {
+    try {
+      const faqId = id || `faq-${Date.now()}`;
+      const newFaq: CorporateAllowanceFaq = {
+        id: faqId,
+        title,
+        description,
+        companyId
+      };
+      setCorporateAllowancesFaqs(prev => [newFaq, ...prev.filter(f => f.id !== faqId)]);
+
+      const res = await fetch("/api/corporate-allowances-faq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newFaq)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Corporate Allowance FAQ saved successfully!", "success");
+      } else {
+        showToast("Failed to save corporate allowance FAQ.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error saving corporate allowance FAQ.", "error");
+      await refreshDatabase();
+    }
+  };
+
+  const handleRemoveCorporateAllowanceFaq = async (id: string) => {
+    try {
+      setCorporateAllowancesFaqs(prev => prev.filter(f => f.id !== id));
+      const res = await fetch(`/api/corporate-allowances-faq?id=${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Corporate Allowance FAQ deleted successfully.", "info");
+      } else {
+        showToast("Failed to delete corporate allowance FAQ.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting corporate allowance FAQ.", "error");
+      await refreshDatabase();
+    }
+  };
+
   const handleAddMeeting = async (meetingData: any) => {
     try {
       const res = await fetch("/api/meetings", {
@@ -1317,6 +1389,141 @@ export default function App() {
     } catch (err: any) {
       console.error(err);
       showToast(`Error cancelling meeting: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
+  // Workspace: Save seat layout
+  const handleSaveSeatLayout = async (layout: SeatLayout): Promise<boolean> => {
+    try {
+      const changer = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
+      const res = await fetch("/api/seating", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...layout, updatedBy: changer })
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        if (resData.success && resData.layout) {
+          setSeatLayouts(prev => [resData.layout, ...prev.filter(l => l.id !== resData.layout.id)]);
+        }
+        await refreshDatabase();
+        showToast("Seating layout saved successfully!", "success");
+        return true;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to save layout: ${err.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Error saving layout: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
+  // Workspace: Delete seat layout
+  const handleDeleteSeatLayout = async (id: string) => {
+    try {
+      const res = await fetch(`/api/seating?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSeatLayouts(prev => prev.filter(l => l.id !== id));
+        await refreshDatabase();
+        showToast("Layout deleted.", "info");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Workspace: Save room
+  const handleSaveRoom = async (room: Room): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(room)
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        if (resData.success && resData.room) {
+          setRooms(prev => [resData.room, ...prev.filter(r => r.id !== resData.room.id)]);
+        }
+        await refreshDatabase();
+        showToast("Room saved successfully!", "success");
+        return true;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to save room: ${err.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Error saving room: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
+  // Workspace: Delete room
+  const handleDeleteRoom = async (id: string) => {
+    try {
+      const res = await fetch(`/api/rooms?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setRooms(prev => prev.filter(r => r.id !== id));
+        await refreshDatabase();
+        showToast("Room deleted.", "info");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Workspace: Request room booking
+  const handleBookRoom = async (bookingData: any): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/room-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingData)
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        if (resData.success && resData.booking) {
+          setRoomBookings(prev => [resData.booking, ...prev.filter(b => b.id !== resData.booking.id)]);
+        }
+        showToast("Room booking request submitted! Awaiting admin approval.", "success");
+        return true;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to request booking: ${err.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Error requesting booking: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
+  // Workspace: Update booking status (approve/reject/cancel)
+  const handleUpdateBooking = async (id: string, status: "Approved" | "Rejected" | "Cancelled", approvedBy?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/room-bookings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, approvedBy })
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        if (resData.success && resData.booking) {
+          setRoomBookings(prev => [resData.booking, ...prev.filter(b => b.id !== id)]);
+        }
+        showToast(`Booking ${status.toLowerCase()} successfully.`, "success");
+        return true;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(`Failed to update booking: ${err.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      showToast(`Error updating booking: ${err?.message || err}`, "error");
       return false;
     }
   };
@@ -1398,6 +1605,7 @@ export default function App() {
     { id: "attendance", label: "Attendance Punches", icon: <Clock className="w-4.5 h-4.5" /> },
     { id: "leaves", label: "Leaves & Holidays", icon: <Calendar className="w-4.5 h-4.5" /> },
     { id: "meetings", label: "Scheduled Meetings", icon: <Video className="w-4.5 h-4.5" /> },
+    { id: "workspace", label: "Seating & Rooms", icon: <LayoutGrid className="w-4.5 h-4.5" /> },
     { id: "payroll", label: "Payroll & Payslips", icon: <IndianRupee className="w-4.5 h-4.5" /> },
     { id: "expenses", label: "Expense & Claims", icon: <ReceiptText className="w-4.5 h-4.5" /> },
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
@@ -1703,6 +1911,7 @@ export default function App() {
             <ExpensesView
               expenses={expenses}
               expenseCategories={expenseCategories}
+              corporateAllowancesFaqs={corporateAllowancesFaqs}
               employees={employees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
@@ -1759,13 +1968,35 @@ export default function App() {
             />
           )}
 
+          {currentView === "workspace" && (
+            <WorkspaceView
+              role={activeRole}
+              companyId={companyId}
+              companyName={companyName}
+              currentEmployeeId={currentEmployeeId}
+              employees={employees}
+              seatLayouts={seatLayouts}
+              rooms={rooms}
+              roomBookings={roomBookings}
+              customAmenities={customAmenities}
+              onSaveSeatLayout={handleSaveSeatLayout}
+              onDeleteSeatLayout={handleDeleteSeatLayout}
+              onSaveRoom={handleSaveRoom}
+              onDeleteRoom={handleDeleteRoom}
+              onBookRoom={handleBookRoom}
+              onUpdateBooking={handleUpdateBooking}
+            />
+          )}
+
           {currentView === "configurations" && (activeRole === "admin" || activeRole === "hr") && (
             <ConfigurationView
               designations={designations}
               customLeaveTypes={customLeaveTypes}
               customDepartments={customDepartments}
               customBranches={customBranches}
+              customAmenities={customAmenities}
               expenseCategories={expenseCategories}
+              corporateAllowancesFaqs={corporateAllowancesFaqs}
               supabaseStatus={supabaseStatus}
               subscriptionModel={subscriptionModel}
               onAddDesignation={handleAddDesignation}
@@ -1773,6 +2004,8 @@ export default function App() {
               onUpdateCollection={handleUpdateCollection}
               onAddExpenseCategory={handleAddExpenseCategory}
               onRemoveExpenseCategory={handleRemoveExpenseCategory}
+              onAddCorporateAllowanceFaq={handleAddCorporateAllowanceFaq}
+              onRemoveCorporateAllowanceFaq={handleRemoveCorporateAllowanceFaq}
             />
           )}
 

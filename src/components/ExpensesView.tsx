@@ -5,11 +5,12 @@ import {
   DollarSign, FileText, Plus, Check, X, ShieldAlert, 
   HelpCircle, Sparkles, Receipt, RefreshCw, AlertCircle
 } from "lucide-react";
-import { ExpenseClaim, Employee, UserRole, ExpenseCategory } from "../types";
+import { ExpenseClaim, Employee, UserRole, ExpenseCategory, CorporateAllowanceFaq } from "../types";
 
 interface ExpensesViewProps {
   expenses: ExpenseClaim[];
   expenseCategories: ExpenseCategory[];
+  corporateAllowancesFaqs?: CorporateAllowanceFaq[];
   employees: Employee[];
   role: UserRole;
   currentEmployeeId: string;
@@ -20,6 +21,7 @@ interface ExpensesViewProps {
 export default function ExpensesView({
   expenses,
   expenseCategories,
+  corporateAllowancesFaqs = [],
   employees,
   role,
   currentEmployeeId,
@@ -289,18 +291,16 @@ export default function ExpensesView({
               <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md border-b border-slate-50 dark:border-[#1a1a1a] pb-3">Corporate Allowances FAQ</h3>
               
               <div className="space-y-3.5 text-xs">
-                <div className="space-y-1">
-                  <p className="font-bold text-slate-700 dark:text-gray-300">Client Meetings & Audits</p>
-                  <p className="text-slate-400 leading-normal text-[11px]">Relationship managers can file flat food & entertainment allowances up to ₹2,500 per customer dinner.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-slate-700 dark:text-gray-300">Fuel & Toll Tariffs</p>
-                  <p className="text-slate-400 leading-normal text-[11px]">Field loan officers qualify for flat distance fuel reimbursement logs evaluated at ₹8.5/km. Submit logs detailing warehouse destinations.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-bold text-slate-700 dark:text-gray-300">Broadband Subsidy</p>
-                  <p className="text-slate-400 leading-normal text-[11px]">A flat broadband subsidy up to ₹1,000/month is cleared automatically upon submitting the ISP bill.</p>
-                </div>
+                {corporateAllowancesFaqs.map((faq) => (
+                  <div key={faq.id} className="space-y-1">
+                    <p className="font-bold text-slate-700 dark:text-gray-300">{faq.title}</p>
+                    <p className="text-slate-400 dark:text-gray-400 leading-normal text-[11px]">{faq.description}</p>
+                  </div>
+                ))}
+
+                {corporateAllowancesFaqs.length === 0 && (
+                  <p className="text-slate-400 text-xs italic">No allowance FAQs configured for this company yet.</p>
+                )}
               </div>
             </div>
           </div>

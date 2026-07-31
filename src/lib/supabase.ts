@@ -425,6 +425,64 @@ export async function deleteLeaveTypeFromSupabase(name: string, companyId?: stri
   }
 }
 
+export async function syncAmenityToSupabase(name: string, companyId?: string) {
+  if (!supabase) return;
+  try {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const client = supabaseAdmin || supabase;
+    if (!client) return;
+
+    let displayName = name;
+    let iconName = "";
+    if (name.includes("|")) {
+      [displayName, iconName] = name.split("|");
+    }
+
+    let query = client.from("custom_amenities").select("id").ilike("name", displayName);
+    if (companyId) query = query.eq("company_id", companyId);
+    const { data: existing } = await query;
+    if (existing && existing.length > 0) {
+      console.log(`Amenity "${displayName}" already exists for this company.`);
+      return;
+    }
+    const payload: any = { name: displayName, icon: iconName || null };
+    if (companyId) payload.company_id = companyId;
+    const { error } = await client.from("custom_amenities").insert([payload]);
+    if (error) {
+      console.warn("Supabase custom_amenities insert warning:", error.message);
+    } else {
+      console.log(`Successfully synced amenity "${displayName}" to Supabase 'custom_amenities' table.`);
+    }
+  } catch (e) {
+    console.warn("Supabase custom_amenities sync error:", e);
+  }
+}
+
+export async function deleteAmenityFromSupabase(name: string, companyId?: string) {
+  if (!supabase) return;
+  try {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const client = supabaseAdmin || supabase;
+    if (!client) return;
+
+    let displayName = name;
+    if (name.includes("|")) {
+      displayName = name.split("|")[0];
+    }
+
+    let query = client.from("custom_amenities").delete().ilike("name", displayName);
+    if (companyId) query = (query as any).eq("company_id", companyId);
+    const { error } = await query;
+    if (error) {
+      console.warn("Supabase custom_amenities delete warning:", error.message);
+    } else {
+      console.log(`Successfully deleted amenity "${displayName}" from Supabase 'custom_amenities' table.`);
+    }
+  } catch (e) {
+    console.warn("Supabase custom_amenities delete error:", e);
+  }
+}
+
 export async function ensureEmployeeSynced(employeeId: string) {
   if (!supabase) return;
   try {

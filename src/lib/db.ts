@@ -4,7 +4,8 @@ import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
+  SeatLayout, Room, RoomBooking
 } from "../types";
 
 export interface AppState {
@@ -16,6 +17,7 @@ export interface AppState {
   policies: Policy[];
   expenses: ExpenseClaim[];
   expenseCategories?: ExpenseCategory[];
+  corporateAllowancesFaqs?: CorporateAllowanceFaq[];
   inventory: InventoryItem[];
   inventoryRequests: InventoryRequest[];
   fines: Fine[];
@@ -30,6 +32,10 @@ export interface AppState {
   attendanceBreaks?: AttendanceBreak[];
   excelUploads?: ExcelUploadRecord[];
   meetings?: Meeting[];
+  seatLayouts?: SeatLayout[];
+  rooms?: Room[];
+  roomBookings?: RoomBooking[];
+  customAmenities?: string[];
 }
 
 const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
@@ -73,6 +79,27 @@ const initialPolicies: Policy[] = [
     category: "NBFC Sales & Commissions",
     content: "Relationship managers and field sales agents earn monthly incentive commissions based on verified loan disbursements and loan portfolio performance. All deal documentations must pass audit before commission release.",
     lastUpdated: "2026-04-05"
+  }
+];
+
+export const initialCorporateAllowanceFaqs: CorporateAllowanceFaq[] = [
+  {
+    id: "faq-1",
+    companyId: "a1b2c3d4-0001-0001-0001-000000000001",
+    title: "Client Meetings & Audits",
+    description: "Relationship managers can file flat food & entertainment allowances up to ₹2,500 per customer dinner."
+  },
+  {
+    id: "faq-2",
+    companyId: "a1b2c3d4-0001-0001-0001-000000000001",
+    title: "Fuel & Toll Tariffs",
+    description: "Field loan officers qualify for flat distance fuel reimbursement logs evaluated at ₹8.5/km. Submit logs detailing warehouse destinations."
+  },
+  {
+    id: "faq-3",
+    companyId: "a1b2c3d4-0001-0001-0001-000000000001",
+    title: "Broadband Subsidy",
+    description: "A flat broadband subsidy up to ₹1,000/month is cleared automatically upon submitting the ISP bill."
   }
 ];
 
@@ -171,6 +198,7 @@ export function getInitialState(): AppState {
     policies: initialPolicies,
     expenses: [],
     expenseCategories: [],
+    corporateAllowancesFaqs: initialCorporateAllowanceFaqs,
     inventory: [],
     inventoryRequests: [],
     fines: [],
@@ -180,6 +208,7 @@ export function getInitialState(): AppState {
     customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave"],
     customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "IT"],
     customBranches: ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"],
+    customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],
     timingSettings: {
       clockInTime: "09:00",
       clockOutTime: "18:00",
@@ -189,7 +218,10 @@ export function getInitialState(): AppState {
     },
     attendanceBreaks: [],
     excelUploads: [],
-    meetings: []
+    meetings: [],
+    seatLayouts: [],
+    rooms: [],
+    roomBookings: []
   };
 }
 
@@ -244,9 +276,14 @@ export function loadDatabase(): AppState {
         holidays: parsed.holidays || [],
         policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
         expenseCategories: parsed.expenseCategories || getInitialState().expenseCategories,
+        corporateAllowancesFaqs: parsed.corporateAllowancesFaqs || getInitialState().corporateAllowancesFaqs,
         timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings,
         excelUploads: parsed.excelUploads || cachedState.excelUploads || [],
-        meetings: parsed.meetings || []
+        meetings: parsed.meetings || [],
+        seatLayouts: parsed.seatLayouts || [],
+        rooms: parsed.rooms || [],
+        roomBookings: parsed.roomBookings || [],
+        customAmenities: parsed.customAmenities || getInitialState().customAmenities
       };
       return cachedState;
     }
