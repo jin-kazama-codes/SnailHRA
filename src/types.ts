@@ -7,6 +7,7 @@ export interface Company {
   subscriptionModel: 1 | 2 | 3 | 4; // 1=Basic, 2=WhatsApp Only, 3=Chatbot Only, 4=Full Suite
   createdAt: string;
   isActive: boolean;
+  logoUrl?: string; // Public URL of the company logo stored in Supabase S3
   // Stats (populated by super admin queries)
   totalEmployees?: number;
   totalAdmins?: number;

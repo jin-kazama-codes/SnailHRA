@@ -43,6 +43,7 @@ export default function LoginView({ onLoginSuccess, onSuperAdminLink }: LoginVie
         if (typeof window !== "undefined") {
           localStorage.setItem("snailhr_companyId", data.companyId || "");
           localStorage.setItem("snailhr_companyName", data.companyName || "");
+          localStorage.setItem("snailhr_companyLogoUrl", data.companyLogoUrl || "");
           localStorage.setItem("snailhr_subscriptionModel", String(data.subscriptionModel || 1));
         }
         onLoginSuccess(data.employee);

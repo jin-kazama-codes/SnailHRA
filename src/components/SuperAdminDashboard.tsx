@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Building2, Users, Shield, Plus, CheckCircle,
   XCircle, ShieldCheck, LogOut, Check, Sun, Moon, X,
-  RefreshCw, AlertCircle
+  RefreshCw, AlertCircle, Pencil
 } from "lucide-react";
 import { Company } from "../types";
 import OnboardAgentSlideover from "./OnboardAgentSlideover";
@@ -23,7 +23,18 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
   const [newCompanyName, setNewCompanyName] = useState("");
   const [newCompanySlug, setNewCompanySlug] = useState("");
   const [newCompanyModel, setNewCompanyModel] = useState<1 | 2 | 3 | 4>(1);
+  const [newCompanyLogoUrl, setNewCompanyLogoUrl] = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  // Edit company state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editCompany, setEditCompany] = useState<Company | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editSlug, setEditSlug] = useState("");
+  const [editLogoUrl, setEditLogoUrl] = useState("");
+  const [editLogoUploading, setEditLogoUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
@@ -92,12 +103,12 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
       const res = await fetch("/api/superadmin/companies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newCompanyName, slug: newCompanySlug, subscriptionModel: newCompanyModel }),
+        body: JSON.stringify({ name: newCompanyName, slug: newCompanySlug, subscriptionModel: newCompanyModel, logoUrl: newCompanyLogoUrl || undefined }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setIsCreateCompanyOpen(false);
-        setNewCompanyName(""); setNewCompanySlug(""); setNewCompanyModel(1);
+        setNewCompanyName(""); setNewCompanySlug(""); setNewCompanyModel(1); setNewCompanyLogoUrl("");
         showToast(`${newCompanyName} provisioned successfully.`);
         fetchCompanies();
       } else {
@@ -107,6 +118,88 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
       showToast("Error creating company", "error");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "company-logo");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNewCompanyLogoUrl(data.url);
+      } else {
+        showToast(data.error || "Logo upload failed", "error");
+      }
+    } catch {
+      showToast("Error uploading logo", "error");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const openEdit = (company: Company, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditCompany(company);
+    setEditName(company.name);
+    setEditSlug(company.slug);
+    setEditLogoUrl(company.logoUrl || "");
+    setIsEditOpen(true);
+  };
+
+  const handleEditLogoUpload = async (file: File) => {
+    setEditLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "company-logo");
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEditLogoUrl(data.url);
+      } else {
+        showToast(data.error || "Logo upload failed", "error");
+      }
+    } catch {
+      showToast("Error uploading logo", "error");
+    } finally {
+      setEditLogoUploading(false);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCompany || !editName || !editSlug) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/superadmin/companies/${editCompany.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          slug: editSlug,
+          logoUrl: editLogoUrl || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setIsEditOpen(false);
+        showToast(`${editName} updated successfully.`);
+        fetchCompanies();
+        // Update selected company if it's the one being edited
+        if (selectedCompany?.id === editCompany.id) {
+          setSelectedCompany(prev => prev ? { ...prev, name: editName, slug: editSlug, logoUrl: editLogoUrl || undefined } : null);
+        }
+      } else {
+        showToast(data.error || "Failed to update company", "error");
+      }
+    } catch {
+      showToast("Error updating company", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -308,8 +401,12 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                       }`}
                     >
                       <div className="flex items-start space-x-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#0f0f0f] flex items-center justify-center shrink-0 border border-slate-100 dark:border-[#1a1a1a]">
-                          <Building2 className="w-5 h-5 text-slate-400" />
+                        <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#0f0f0f] flex items-center justify-center shrink-0 border border-slate-100 dark:border-[#1a1a1a] overflow-hidden">
+                          {company.logoUrl ? (
+                            <img src={company.logoUrl} alt={company.name} className="w-full h-full object-contain" />
+                          ) : (
+                            <Building2 className="w-5 h-5 text-slate-400" />
+                          )}
                         </div>
                         <div>
                           <h4 className="font-bold text-sm text-slate-800 dark:text-white">{company.name}</h4>
@@ -327,6 +424,15 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                       </div>
 
                       <div className="flex items-center space-x-2 shrink-0 self-end md:self-center" onClick={e => e.stopPropagation()}>
+                        {/* Edit button */}
+                        <button
+                          onClick={(e) => openEdit(company, e)}
+                          className="p-1.5 rounded-lg border border-violet-200 dark:border-violet-900/50 bg-violet-50 dark:bg-violet-950/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors cursor-pointer"
+                          title="Edit company"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
                         <select
                           value={company.subscriptionModel}
                           onChange={e => handleUpdateCompany(company.id, { subscriptionModel: Number(e.target.value) as 1 | 2 | 3 | 4 })}
@@ -368,9 +474,14 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                 {/* Company summary */}
                 <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 space-y-3">
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-800 dark:text-white">{selectedCompany.name}</h3>
-                      <p className="text-[10px] font-mono text-slate-400 dark:text-gray-500 mt-0.5 truncate max-w-[160px]">ID: {selectedCompany.id}</p>
+                    <div className="flex items-center space-x-3">
+                      {selectedCompany.logoUrl ? (
+                        <img src={selectedCompany.logoUrl} alt={selectedCompany.name} className="w-10 h-10 rounded-xl object-contain border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f]" />
+                      ) : null}
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-white">{selectedCompany.name}</h3>
+                        <p className="text-[10px] font-mono text-slate-400 dark:text-gray-500 mt-0.5 truncate max-w-[160px]">ID: {selectedCompany.id}</p>
+                      </div>
                     </div>
                     <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${selectedCompany.isActive ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50" : "bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700"}`}>
                       {selectedCompany.isActive ? "ACTIVE" : "INACTIVE"}
@@ -385,6 +496,12 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                       <span className="font-bold text-slate-700 dark:text-gray-300">Created: </span>
                       {new Date(selectedCompany.createdAt).toLocaleDateString()}
                     </p>
+                    {selectedCompany.logoUrl && (
+                      <p className="text-slate-500 dark:text-gray-400 break-all">
+                        <span className="font-bold text-slate-700 dark:text-gray-300">Logo URL: </span>
+                        <a href={selectedCompany.logoUrl} target="_blank" rel="noopener noreferrer" className="text-violet-500 underline text-[9px]">{selectedCompany.logoUrl}</a>
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -470,6 +587,49 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                   <option value={4}>Model 4: Full Suite (Both Enabled)</option>
                 </select>
               </div>
+
+              {/* Logo Upload */}
+              <div className="space-y-2">
+                <label className="block text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[10px]">Company Logo</label>
+                <div className="flex items-center gap-3">
+                  {newCompanyLogoUrl ? (
+                    <div className="relative shrink-0">
+                      <img src={newCompanyLogoUrl} alt="Logo preview" className="w-12 h-12 rounded-xl object-contain border border-slate-200 dark:border-[#1a1a1a] bg-slate-50 dark:bg-[#0a0a0a]" />
+                      <button type="button" onClick={() => setNewCompanyLogoUrl("")} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center cursor-pointer">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl border-2 border-dashed border-slate-200 dark:border-[#1a1a1a] flex items-center justify-center text-slate-300 dark:text-slate-600 shrink-0">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                  )}
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${
+                    logoUploading
+                      ? "bg-slate-50 dark:bg-[#0a0a0a] border-slate-100 dark:border-[#1a1a1a] text-slate-400 cursor-wait"
+                      : "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-900/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                  }`}>
+                    {logoUploading ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Uploading...</span></>
+                    ) : (
+                      <><span>📁</span><span>{newCompanyLogoUrl ? "Replace Logo" : "Upload Logo"}</span></>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={logoUploading}
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) handleLogoUpload(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-[9px] text-slate-400 dark:text-gray-500">PNG, JPG, SVG — saved to Supabase S3 storage</p>
+              </div>
+
               <button type="submit" disabled={creating}
                 className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-2 mt-2">
                 {creating ? <><RefreshCw className="w-4 h-4 animate-spin" /><span>Provisioning...</span></> : <span>Provision Company Instance</span>}
@@ -490,6 +650,127 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
           onSuccess={handleAdminCreated}
         />
       )}
+
+      {/* ── EDIT COMPANY MODAL ── */}
+      {isEditOpen && editCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-base text-slate-800 dark:text-white">Edit Company</h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">Update organization details</p>
+              </div>
+              <button
+                onClick={() => setIsEditOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a1a1a]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="h-px bg-slate-100 dark:bg-[#1a1a1a]" />
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              {/* Company Name */}
+              <div className="space-y-1">
+                <label className="block text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[10px]">Company Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="e.g. Acme Corp"
+                  required
+                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] text-slate-700 dark:text-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              {/* URL Slug */}
+              <div className="space-y-1">
+                <label className="block text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[10px]">URL Slug</label>
+                <input
+                  type="text"
+                  value={editSlug}
+                  onChange={e => setEditSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                  placeholder="acme-corp"
+                  required
+                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] text-slate-700 dark:text-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-violet-500 transition-colors font-mono text-[11px]"
+                />
+              </div>
+
+              {/* Logo Upload */}
+              <div className="space-y-2">
+                <label className="block text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[10px]">Company Logo</label>
+                <div className="flex items-center gap-3">
+                  {editLogoUrl ? (
+                    <div className="relative shrink-0">
+                      <img
+                        src={editLogoUrl}
+                        alt="Logo preview"
+                        className="w-14 h-14 rounded-xl object-contain border border-slate-200 dark:border-[#1a1a1a] bg-slate-50 dark:bg-[#0a0a0a]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditLogoUrl("")}
+                        className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-rose-400 transition-colors"
+                        title="Remove logo"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl border-2 border-dashed border-slate-200 dark:border-[#1a1a1a] flex items-center justify-center text-slate-300 dark:text-slate-600 shrink-0">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                  )}
+
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${
+                    editLogoUploading
+                      ? "bg-slate-50 dark:bg-[#0a0a0a] border-slate-100 dark:border-[#1a1a1a] text-slate-400 cursor-wait"
+                      : "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-900/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30"
+                  }`}>
+                    {editLogoUploading ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Uploading...</span></>
+                    ) : (
+                      <><span>📁</span><span>{editLogoUrl ? "Replace Logo" : "Upload Logo"}</span></>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={editLogoUploading}
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) handleEditLogoUpload(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-[9px] text-slate-400 dark:text-gray-500">PNG, JPG, SVG — uploaded to Supabase S3</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="flex-1 border border-slate-200 dark:border-[#1a1a1a] bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-slate-300 font-semibold py-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-2 text-xs"
+                >
+                  {saving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Saving...</span></> : <><Check className="w-3.5 h-3.5" /><span>Save Changes</span></>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

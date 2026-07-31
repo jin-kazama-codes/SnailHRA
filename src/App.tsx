@@ -102,6 +102,13 @@ export default function App() {
     return "";
   });
 
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_companyLogoUrl") || "";
+    }
+    return "";
+  });
+
   const [subscriptionModel, setSubscriptionModel] = useState<1 | 2 | 3 | 4>(() => {
     if (typeof window !== "undefined") {
       return (Number(localStorage.getItem("snailhr_subscriptionModel")) as 1 | 2 | 3 | 4) || 1; // Default Basic
@@ -120,6 +127,7 @@ export default function App() {
         localStorage.removeItem("snailhr_currentView");
         localStorage.removeItem("snailhr_companyId");
         localStorage.removeItem("snailhr_companyName");
+        localStorage.removeItem("snailhr_companyLogoUrl");
         localStorage.removeItem("snailhr_subscriptionModel");
       }
     }
@@ -403,9 +411,11 @@ export default function App() {
       const newCompanyName = localStorage.getItem("snailhr_companyName") || "";
       const newCompanyId = localStorage.getItem("snailhr_companyId") || "";
       const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "1") as 1|2|3|4;
+      const newLogoUrl = localStorage.getItem("snailhr_companyLogoUrl") || "";
       setCompanyName(newCompanyName);
       setCompanyId(newCompanyId);
       setSubscriptionModel(newSubModel);
+      setCompanyLogoUrl(newLogoUrl);
     }
   };
 
@@ -416,6 +426,7 @@ export default function App() {
     setCurrentView("dashboard");
     setCompanyName("");
     setCompanyId("");
+    setCompanyLogoUrl("");
 
     // Clear all tenant-scoped database states to prevent data leakage
     setEmployees([]);
@@ -1632,9 +1643,17 @@ export default function App() {
           </button>
 
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl flex items-center justify-center text-white font-black text-[11px] tracking-tight shadow-md shadow-emerald-600/20">
-              {companyName ? companyName.substring(0, 3).toUpperCase() : "HR"}
-            </div>
+            {companyLogoUrl ? (
+              <img
+                src={companyLogoUrl}
+                alt={companyName || "Company Logo"}
+                className="w-11 h-11 rounded-xl object-contain bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] shadow-md"
+              />
+            ) : (
+              <div className="w-11 h-11 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-xl flex items-center justify-center text-white font-black text-[11px] tracking-tight shadow-md shadow-emerald-600/20">
+                {companyName ? companyName.substring(0, 3).toUpperCase() : "HR"}
+              </div>
+            )}
             <div className="flex flex-col">
               <span className="font-display font-extrabold text-sm sm:text-base text-slate-800 dark:text-white tracking-tight leading-none">
                 <span className="text-emerald-500">{companyName || "SnailHR"}</span>
@@ -1738,7 +1757,20 @@ export default function App() {
             <div className="bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a] w-64 p-4 flex flex-col justify-between h-full animate-in slide-in-from-left duration-200">
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-                  <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">{companyName} Menu</span>
+                  <div className="flex items-center space-x-2">
+                    {companyLogoUrl ? (
+                      <img
+                        src={companyLogoUrl}
+                        alt={companyName || "Company Logo"}
+                        className="w-7 h-7 rounded-lg object-contain bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a] shrink-0"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 bg-gradient-to-br from-emerald-600 to-teal-700 rounded-lg flex items-center justify-center text-white font-black text-[9px] shrink-0">
+                        {companyName ? companyName.substring(0, 2).toUpperCase() : "HR"}
+                      </div>
+                    )}
+                    <span className="font-display font-extrabold text-sm tracking-tight text-slate-800 dark:text-white">{companyName} Menu</span>
+                  </div>
                   <button onClick={() => setMobileMenuOpen(false)} className="p-1 text-slate-400">
                     <X className="w-5 h-5" />
                   </button>

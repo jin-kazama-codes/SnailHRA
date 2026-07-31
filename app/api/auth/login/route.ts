@@ -112,11 +112,12 @@ export async function POST(request: Request) {
 
     // Use supabaseAdmin to bypass RLS and reliably fetch the company name
     const dbClient = supabaseAdmin || supabase;
+    let resolvedCompanyLogoUrl = "";
     if (dbClient && resolvedCompanyId) {
       try {
         const { data: compData, error: compErr } = await dbClient
           .from("companies")
-          .select("name, subscription_model")
+          .select("name, subscription_model, logo_url")
           .eq("id", resolvedCompanyId)
           .maybeSingle();
         if (compErr) {
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
         if (compData) {
           resolvedCompanyName = compData.name || "";
           resolvedSubscriptionModel = compData.subscription_model ?? 1;
+          resolvedCompanyLogoUrl = compData.logo_url || "";
         }
       } catch (err) {
         console.warn("Error fetching company details:", err);
@@ -139,6 +141,7 @@ export async function POST(request: Request) {
       },
       companyId: resolvedCompanyId,
       companyName: resolvedCompanyName,
+      companyLogoUrl: resolvedCompanyLogoUrl,
       subscriptionModel: resolvedSubscriptionModel
     });
   } catch (error) {

@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const bucketOverride = (formData.get("bucket") as string) || BUCKET;
+    const folder = (formData.get("folder") as string) || ""; // e.g. "company-logos"
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -26,7 +27,11 @@ export async function POST(request: Request) {
 
     const timestamp = Date.now();
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const filePath = `${timestamp}_${sanitizedName}`;
+    // If a folder is specified, store under folder/timestamp_filename
+    const filePath = folder
+      ? `${folder}/${timestamp}_${sanitizedName}`
+      : `${timestamp}_${sanitizedName}`;
+
     const mimeType = file.type || "application/octet-stream";
 
     const arrayBuffer = await file.arrayBuffer();

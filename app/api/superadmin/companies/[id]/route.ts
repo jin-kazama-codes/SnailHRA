@@ -14,7 +14,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { name, subscriptionModel, isActive } = await request.json();
+    const { name, slug, subscriptionModel, isActive, logoUrl } = await request.json();
     const { id } = params;
 
     const db = getAdminClient();
@@ -22,6 +22,7 @@ export async function PUT(
 
     const updatePayload: Record<string, any> = {};
     if (name !== undefined) updatePayload.name = name;
+    if (slug !== undefined) updatePayload.slug = slug;
     if (subscriptionModel !== undefined) {
       const model = Number(subscriptionModel);
       if (![1, 2, 3, 4].includes(model)) {
@@ -30,6 +31,8 @@ export async function PUT(
       updatePayload.subscription_model = model;
     }
     if (isActive !== undefined) updatePayload.is_active = isActive;
+    // Allow clearing logo by passing null explicitly, or setting a new URL
+    if (logoUrl !== undefined) updatePayload.logo_url = logoUrl || null;
 
     const { data, error } = await db
       .from("companies")
@@ -39,6 +42,9 @@ export async function PUT(
       .single();
 
     if (error) {
+      if (error.code === "23505") {
+        return NextResponse.json({ error: "A company with this slug already exists" }, { status: 409 });
+      }
       console.error("Update company error:", error.message);
       return NextResponse.json({ error: "Failed to update company" }, { status: 500 });
     }
@@ -50,6 +56,7 @@ export async function PUT(
       slug: data.slug,
       subscriptionModel: data.subscription_model ?? 1,
       isActive: data.is_active ?? true,
+      logoUrl: data.logo_url ?? null,
       totalEmployees: data.total_employees ?? 0,
       totalAdmins: data.total_admins ?? 0,
       createdAt: data.created_at,
