@@ -5,7 +5,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking
+  SeatLayout, Room, RoomBooking, PayrollConfig
 } from "../types";
 
 export interface AppState {
@@ -29,6 +29,7 @@ export interface AppState {
   customBranches: string[];
   timingSettings: TimingSettings;
   companyTimingSettings?: Record<string, TimingSettings>;
+  payrollConfigs?: Record<string, PayrollConfig>;
   attendanceBreaks?: AttendanceBreak[];
   excelUploads?: ExcelUploadRecord[];
   meetings?: Meeting[];
@@ -37,6 +38,7 @@ export interface AppState {
   roomBookings?: RoomBooking[];
   customAmenities?: string[];
 }
+
 
 const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
 
@@ -340,8 +342,9 @@ export function saveDatabase(state: AppState): void {
       });
     }
 
-    // Note: Local db_snailhr.json file writing is disabled because Supabase is active.
-    // fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
+    // Write local db_snailhr.json file to persist database state across restarts and refreshes
+    fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
+
   } catch (err) {
     console.warn("Could not save state in memory:", err);
   }

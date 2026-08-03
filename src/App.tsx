@@ -1139,7 +1139,8 @@ export default function App() {
       const res = await fetch("/api/payroll/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, month })
+        body: JSON.stringify({ employeeId, month, companyId })
+
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1931,6 +1932,7 @@ export default function App() {
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               companyName={companyName}
+              companyId={companyId}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onGeneratePayslip={handleGeneratePayslip}

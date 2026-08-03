@@ -33,7 +33,9 @@ async function syncLocalDbWithSupabase(db: any) {
             bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
             ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
           },
+          companyId: row.company_id || row.companyId || "a1b2c3d4-0001-0001-0001-000000000001",
           address: row.address || "",
+
           emergencyContact: { name: "", relation: "", phone: "" },
           documents: [],
           onboardingTasks: [],
@@ -82,7 +84,7 @@ async function syncLocalDbWithSupabase(db: any) {
 
 export async function POST(request: Request) {
   try {
-    const { employeeId, month } = await request.json();
+    const { employeeId, month, companyId: reqCompanyId } = await request.json();
     if (!employeeId || !month) {
       return NextResponse.json({ error: "Employee ID and Month are required" }, { status: 400 });
     }
@@ -101,27 +103,88 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Payslip already generated for ${employee.fullName} for ${month}` }, { status: 400 });
     }
 
-    // Calculate deductions
-    const pf = employee.salary.pfDeduction || Math.round(employee.salary.basic * 0.08);
-    
+    // Smart resolution for tenant PayrollConfig
+    const empCompanyId = (employee as any).companyId || (employee as any).company_id;
+    let config: any = null;
+
+    if (reqCompanyId && db.payrollConfigs?.[reqCompanyId]) {
+      config = db.payrollConfigs[reqCompanyId];
+    } else if (empCompanyId && db.payrollConfigs?.[empCompanyId]) {
+      config = db.payrollConfigs[empCompanyId];
+    } else {
+      // Look for any tenant config that contains this employeeId in pfExemptEmployeeIds
+      const exemptConfigKey = Object.keys(db.payrollConfigs || {}).find(k => 
+        Array.isArray(db.payrollConfigs[k]?.pfExemptEmployeeIds) && db.payrollConfigs[k].pfExemptEmployeeIds.includes(employeeId)
+      );
+      if (exemptConfigKey) {
+        config = db.payrollConfigs[exemptConfigKey];
+      } else {
+        const firstKey = Object.keys(db.payrollConfigs || {})[0];
+        config = firstKey ? db.payrollConfigs[firstKey] : null;
+      }
+    }
+
+    if (!config) {
+      config = {
+        hraType: "percentage",
+        hraValue: 40,
+        pfType: "percentage",
+        pfValue: 12,
+        pfExemptEmployeeIds: [],
+        allowancesType: "percentage",
+        allowancesValue: 20,
+        taxType: "percentage",
+        taxValue: 5,
+      };
+    }
+
+
+    const basic = Number(employee.salary?.basic) || 45000;
+
+    // Calculate HRA & Allowances based on config rules
+    const hra = config.hraType === "percentage"
+      ? Math.round(basic * (config.hraValue / 100))
+      : config.hraValue;
+
+    const allowances = config.allowancesType === "percentage"
+      ? Math.round(basic * (config.allowancesValue / 100))
+      : config.allowancesValue;
+
+    const gross = basic + hra + allowances;
+
+    // Calculate PF Deduction (Check exemption list for this employee across all tenant configs)
+    const isPfExempt = (
+      (Array.isArray(config?.pfExemptEmployeeIds) && config.pfExemptEmployeeIds.includes(employeeId)) ||
+      Object.values(db.payrollConfigs || {}).some((c: any) =>
+        Array.isArray(c?.pfExemptEmployeeIds) && c.pfExemptEmployeeIds.includes(employeeId)
+      )
+    );
+
+    const pf = isPfExempt
+      ? 0
+      : config.pfType === "percentage"
+      ? Math.round(basic * (config.pfValue / 100))
+      : config.pfValue;
+
+
     // Find pending fines for this employee to deduct
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Deducted From Payroll");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
-    // Use configured TDS/Profession Tax if available, otherwise calculate roughly
-    const tax = typeof employee.salary.tdsDeduction === "number"
-      ? employee.salary.tdsDeduction
-      : Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
+    // Calculate Tax/TDS
+    const tax = config.taxType === "percentage"
+      ? Math.round(gross * (config.taxValue / 100))
+      : config.taxValue;
 
-    const netPay = (employee.salary.basic + employee.salary.hra + employee.salary.allowances) - pf - finesDeduction - tax;
+    const netPay = gross - pf - finesDeduction - tax;
 
     const newPayslip: Payslip = {
       id: "pay-" + Date.now(),
       employeeId,
       month,
-      basic: employee.salary.basic,
-      hra: employee.salary.hra,
-      allowances: employee.salary.allowances,
+      basic,
+      hra,
+      allowances,
       finesDeducted: finesDeduction,
       pfDeduction: pf,
       taxDeduction: tax,
@@ -130,6 +193,7 @@ export async function POST(request: Request) {
       generatedAt: new Date().toISOString(),
       sentToEmail: employee.email
     };
+
 
     // Mark pending fines as deducted
     pendingFines.forEach(f => {

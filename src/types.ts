@@ -232,6 +232,20 @@ export interface SimulatedEmail {
   sentAt: string;
 }
 
+export interface PayrollConfig {
+  companyId: string;
+  hraType: "percentage" | "fixed";
+  hraValue: number;
+  pfType: "percentage" | "fixed";
+  pfValue: number;
+  pfExemptEmployeeIds: string[];
+  allowancesType: "percentage" | "fixed";
+  allowancesValue: number;
+  taxType: "percentage" | "fixed";
+  taxValue: number;
+  updatedAt?: string;
+}
+
 export interface TimingSettings {
   clockInTime: string;
   clockOutTime: string;

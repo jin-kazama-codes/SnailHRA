@@ -4,9 +4,9 @@ import React, { useState } from "react";
 import { 
   IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText, 
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
-  ChevronLeft, ChevronRight, RefreshCw
+  ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X
 } from "lucide-react";
-import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine } from "../types";
+import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig } from "../types";
 
 interface PayrollViewProps {
   employees: Employee[];
@@ -22,6 +22,7 @@ interface PayrollViewProps {
   onPayAllPayslips: (month: string) => void;
   onResetPayslip?: (employeeId: string, month: string) => Promise<void> | void;
   companyName?: string;
+  companyId?: string;
 }
 
 export default function PayrollView({
@@ -37,15 +38,107 @@ export default function PayrollView({
   onGeneratePayslip,
   onPayAllPayslips,
   onResetPayslip,
-  companyName = "Your Company"
+  companyName = "Your Company",
+  companyId = "a1b2c3d4-0001-0001-0001-000000000001"
 }: PayrollViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"payslips" | "designations" | "emailLogs">("payslips");
+  const [activeSubTab, setActiveSubTab] = useState<"payslips" | "config">(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("snailhr_payroll_activeSubTab");
+      if (saved === "payslips" || saved === "config") {
+        return saved;
+      }
+    }
+    return "payslips";
+  });
+
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("snailhr_payroll_activeSubTab", activeSubTab);
+    }
+  }, [activeSubTab]);
+
   const [selectedMonth, setSelectedMonth] = useState("July 2026");
   const [compilingEmpId, setCompilingEmpId] = useState<string | null>(null);
 
-  // Designation state
-  const [newTitle, setNewTitle] = useState("");
-  const [newDept, setNewDept] = useState("Loans");
+  // Payroll Configuration State
+  const [config, setConfig] = useState<PayrollConfig>({
+    companyId,
+    hraType: "percentage",
+    hraValue: 40,
+    pfType: "percentage",
+    pfValue: 12,
+    pfExemptEmployeeIds: [],
+    allowancesType: "percentage",
+    allowancesValue: 20,
+    taxType: "percentage",
+    taxValue: 5,
+  });
+  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
+  const [pfSearchQuery, setPfSearchQuery] = useState("");
+  const [simEmpId, setSimEmpId] = useState<string>(employees[0]?.id || "");
+
+  // Load tenant payroll config from backend API
+  const fetchConfig = React.useCallback(async () => {
+    setLoadingConfig(true);
+    try {
+      const res = await fetch(`/api/payroll/config?companyId=${encodeURIComponent(companyId)}`);
+      const data = await res.json();
+      if (res.ok && data.config) {
+        setConfig(data.config);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch payroll config:", err);
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, [companyId]);
+
+  React.useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
+
+  React.useEffect(() => {
+    if (employees.length > 0 && !simEmpId) {
+      setSimEmpId(employees[0].id);
+    }
+  }, [employees, simEmpId]);
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    setSaveSuccessMsg("");
+    try {
+      const res = await fetch("/api/payroll/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...config, companyId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.config) {
+        setConfig(data.config);
+        setSaveSuccessMsg("Payroll rules and PF exemptions saved successfully for tenant!");
+        setTimeout(() => setSaveSuccessMsg(""), 4000);
+      } else {
+        alert(data.error || "Failed to save payroll rules");
+      }
+    } catch (err) {
+      alert("Error saving payroll configuration");
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const togglePfExempt = (empId: string) => {
+    setConfig(prev => {
+      const current = prev.pfExemptEmployeeIds || [];
+      const exists = current.includes(empId);
+      const next = exists ? current.filter(id => id !== empId) : [...current, empId];
+      return { ...prev, pfExemptEmployeeIds: next };
+    });
+  };
+
 
   // Selected payslip for detailed view modal
   const [activeSlip, setActiveSlip] = useState<Payslip | null>(null);
@@ -72,12 +165,6 @@ export default function PayrollView({
     }
   };
 
-  const handleAddDesg = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle) return;
-    onAddDesignation(newTitle, newDept);
-    setNewTitle("");
-  };
 
   const getDesignationTitle = (id: string) => {
     return designations.find(d => d.id === id)?.title || "Associate";
@@ -113,19 +200,16 @@ export default function PayrollView({
           {(role === "admin" || role === "hr") && (
             <>
               <button
-                onClick={() => setActiveSubTab("designations")}
-                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
+                onClick={() => setActiveSubTab("config")}
+                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center space-x-1.5 ${activeSubTab === "config" ? "bg-white dark:bg-[#1a1a1a] text-emerald-600 dark:text-emerald-400 font-bold shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
               >
-                Designation Manager
+                <Sliders className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Salary & PF Rules</span>
               </button>
-              <button
-                onClick={() => setActiveSubTab("emailLogs")}
-                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "emailLogs" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
-              >
-                Emailed Payslips Ledger
-              </button>
+
             </>
           )}
+
         </div>
 
         {activeSubTab === "payslips" && (
@@ -404,107 +488,494 @@ export default function PayrollView({
       )}
 
       {/* SUBTAB 2: Designation Settings Manager */}
-      {activeSubTab === "designations" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Create Designation Form */}
-          <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Add Corporate Designation</h3>
 
-            <form onSubmit={handleAddDesg} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Designation Title</label>
-                <input 
-                  type="text" 
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="e.g. Senior Insurance Underwriter"
-                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
-                  required
-                />
+
+
+
+      {/* SUBTAB 4: Tenant Salary & PF Configuration */}
+      {activeSubTab === "config" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Banner Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <Sliders className="w-5 h-5 text-emerald-200" />
+                <h3 className="font-display font-bold text-lg">Tenant Salary & PF Configuration</h3>
               </div>
+              <p className="text-xs text-emerald-100 max-w-xl">
+                Set basic-salary-based formulas for HRA, Allowances, PF, and TDS/Tax deductions. Manage employee Provident Fund (PF) exemptions with real-time tenant scoping.
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Functional Department</label>
-                <select
-                  value={newDept}
-                  onChange={(e) => setNewDept(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
-                >
-                  <option value="Loans">Loans Department</option>
-                  <option value="Insurance">Insurance Department</option>
-                  <option value="Risk">Risk Department</option>
-                  <option value="HR">HR Department</option>
-                  <option value="Operations">Operations</option>
-                  <option value="Compliance">Compliance</option>
-                </select>
-              </div>
-
+            <div className="flex items-center space-x-3 shrink-0">
               <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2.5 rounded-xl flex items-center justify-center space-x-1 cursor-pointer"
+                onClick={handleSaveConfig}
+                disabled={savingConfig}
+                className="bg-white text-emerald-700 hover:bg-emerald-50 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center space-x-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
-                <Plus className="w-4 h-4" />
-                <span>Register Designation</span>
+                {savingConfig ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-emerald-600" />}
+                <span>{savingConfig ? "Saving Rules..." : "Save Configuration"}</span>
               </button>
-            </form>
-          </div>
-
-          {/* Designation Listing */}
-          <div className="lg:col-span-2 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Designation Directories</h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {designations.map(desg => (
-                <div key={desg.id} className="p-3 bg-slate-50/50 dark:bg-[#0a0a0a]/40 border border-slate-100/50 dark:border-[#1a1a1a]/50 rounded-xl flex items-center justify-between text-xs">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-700 dark:text-gray-300">{desg.title}</p>
-                    <p className="text-[10px] text-slate-400 dark:text-gray-500 font-medium">Department: {desg.department}</p>
-                    <p className="text-[9px] text-slate-400 font-mono">{desg.id}</p>
-                  </div>
-
-                  {desg.id.startsWith("des-") && desg.id !== "des-1" && desg.id !== "des-2" && desg.id !== "des-3" && (
-                    <button
-                      onClick={() => onRemoveDesignation(desg.id)}
-                      className="p-1 hover:bg-white dark:hover:bg-[#1a1a1a] text-rose-400 hover:text-rose-600 dark:text-rose-500 rounded"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* SUBTAB 3: Simulated Emailed Payslips Logs */}
-      {activeSubTab === "emailLogs" && (
-        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-          <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Emailed Notification Logs</h3>
-            <p className="text-xs text-slate-400 dark:text-gray-500">Live feed of automated email campaigns dispatched during salary runs</p>
-          </div>
-
-          <div className="space-y-4">
-            {emails.slice().reverse().map(email => (
-              <div key={email.id} className="p-4 bg-slate-50/50 dark:bg-[#0a0a0a]/20 border border-slate-100 dark:border-[#1a1a1a] rounded-xl space-y-2 text-xs">
-                <div className="flex items-center justify-between border-b border-slate-100/50 dark:border-[#1a1a1a] pb-2">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-700 dark:text-gray-300 flex items-center">
-                      <Mail className="w-4 h-4 text-emerald-500 mr-2" /> To: {email.recipientName} ({email.recipientEmail})
-                    </p>
-                    <p className="text-[11px] text-slate-500 dark:text-gray-400 font-medium"><b>Subject</b>: {email.subject}</p>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-mono">{new Date(email.sentAt).toLocaleString()}</span>
-                </div>
-                <p className="text-slate-600 dark:text-gray-300 whitespace-pre-wrap font-mono text-[11px] leading-relaxed bg-white dark:bg-[#0a0a0a] p-3 rounded-lg border border-slate-100 dark:border-[#1a1a1a]">
-                  {email.body}
-                </p>
+          {/* Floating Toast Notification on Success */}
+          {saveSuccessMsg && (
+            <div className="fixed top-20 right-6 z-50 bg-slate-900/95 text-white dark:bg-[#0a0a0a]/95 dark:text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center space-x-3 backdrop-blur-md animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle className="w-5 h-5 text-emerald-400" />
               </div>
-            ))}
-            {emails.length === 0 && (
-              <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-8">No emailed dispatches logged yet.</p>
-            )}
+              <div className="pr-2">
+                <p className="font-extrabold text-xs text-white">Payroll Rules Saved!</p>
+                <p className="text-[11px] text-emerald-300 font-medium">{saveSuccessMsg}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSaveSuccessMsg("")}
+                className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+
+          {/* Split View Grid: Left = Formula Settings, Right = Live Simulator & PF Exemption */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Column 1 & 2: Component Calculation Formula Settings */}
+            <div className="lg:col-span-2 space-y-6">
+
+              {/* Earnings Formulas Card */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-emerald-500" />
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">Earnings Component Rules</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Calculated from Basic Salary</span>
+                </div>
+
+                {/* HRA Setting */}
+                <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">House Rent Allowance (HRA)</p>
+                      <p className="text-[11px] text-slate-400">Allowance for accommodation expenses</p>
+                    </div>
+                    
+                    {/* Type Switcher */}
+                    <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, hraType: "percentage" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.hraType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        % of Basic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, hraType: "fixed" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.hraType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        ₹ Fixed
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 pt-1">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={config.hraValue}
+                        onChange={e => setConfig(prev => ({ ...prev, hraValue: Number(e.target.value) || 0 }))}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.hraType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {config.hraType === "percentage" ? `HRA = ${config.hraValue}% of Basic Salary` : `Fixed ₹${config.hraValue.toLocaleString()} per month`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Special Allowances Setting */}
+                <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Special & Other Allowances</p>
+                      <p className="text-[11px] text-slate-400">Medical, conveyance & flexible benefits</p>
+                    </div>
+                    
+                    <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, allowancesType: "percentage" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.allowancesType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        % of Basic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, allowancesType: "fixed" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.allowancesType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        ₹ Fixed
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 pt-1">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={config.allowancesValue}
+                        onChange={e => setConfig(prev => ({ ...prev, allowancesValue: Number(e.target.value) || 0 }))}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.allowancesType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {config.allowancesType === "percentage" ? `Allowances = ${config.allowancesValue}% of Basic` : `Fixed ₹${config.allowancesValue.toLocaleString()} per month`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deductions Rules Card */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-500" />
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">Deduction Rules (PF & TDS/Tax)</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono">Government & Statutory Deductions</span>
+                </div>
+
+                {/* Provident Fund Setting */}
+                <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs flex items-center gap-1.5">
+                        <span>Provident Fund (PF) Contribution</span>
+                        <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-extrabold">Statutory</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400">Employee PF contribution deducted monthly</p>
+                    </div>
+                    
+                    <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, pfType: "percentage" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.pfType === "percentage" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        % of Basic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, pfType: "fixed" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.pfType === "fixed" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        ₹ Fixed
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 pt-1">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={config.pfValue}
+                        onChange={e => setConfig(prev => ({ ...prev, pfValue: Number(e.target.value) || 0 }))}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-rose-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.pfType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {config.pfType === "percentage" ? `PF = ${config.pfValue}% of Basic` : `Fixed ₹${config.pfValue.toLocaleString()} per month`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tax / TDS Setting */}
+                <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Income Tax (TDS) / Profession Tax</p>
+                      <p className="text-[11px] text-slate-400">Calculated on Gross Compensation</p>
+                    </div>
+                    
+                    <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, taxType: "percentage" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.taxType === "percentage" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        % of Gross
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, taxType: "fixed" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.taxType === "fixed" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        ₹ Fixed
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 pt-1">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={config.taxValue}
+                        onChange={e => setConfig(prev => ({ ...prev, taxValue: Number(e.target.value) || 0 }))}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-rose-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.taxType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      {config.taxType === "percentage" ? `Tax = ${config.taxValue}% of Gross Pay` : `Fixed ₹${config.taxValue.toLocaleString()} per month`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Employee PF Exemption Manager */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+                      <UserX className="w-4 h-4 text-amber-500" />
+                      <span>PF Exempted Employees Manager</span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Select employees who are exempted from PF deduction (PF will be set to ₹0)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = employees.map(e => e.id);
+                        setConfig(prev => ({ ...prev, pfExemptEmployeeIds: allIds }));
+                      }}
+                      className="text-[10px] font-bold px-2.5 py-1 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-lg border border-amber-200 dark:border-amber-900/40 hover:bg-amber-100 transition-all cursor-pointer"
+                    >
+                      Exempt All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, pfExemptEmployeeIds: [] }))}
+                      className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-200 transition-all cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Filter */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search employee by name, designation, or department..."
+                    value={pfSearchQuery}
+                    onChange={e => setPfSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-700 dark:text-gray-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {/* Checkbox List */}
+                <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                  {employees
+                    .filter(e => {
+                      const q = pfSearchQuery.toLowerCase();
+                      const dName = getDesignationTitle(e.designationId).toLowerCase();
+                      return e.fullName.toLowerCase().includes(q) || e.department.toLowerCase().includes(q) || dName.includes(q);
+                    })
+                    .map(emp => {
+                      const isExempt = (config.pfExemptEmployeeIds || []).includes(emp.id);
+                      return (
+                        <label
+                          key={emp.id}
+                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${
+                            isExempt
+                              ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/50 shadow-xs"
+                              : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={isExempt}
+                              onChange={() => togglePfExempt(emp.id)}
+                              className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                            />
+                            <div>
+                              <p className="font-bold text-slate-800 dark:text-white leading-tight">{emp.fullName}</p>
+                              <p className="text-[10px] text-slate-400 leading-tight">
+                                {getDesignationTitle(emp.designationId)} • {emp.department}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isExempt ? (
+                            <span className="text-[10px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                              EXEMPTED (₹0 PF)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Standard PF Active
+                            </span>
+                          )}
+                        </label>
+
+                      );
+                    })}
+
+                  {employees.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-6">No active employees found.</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Column 3: Live Simulator & Preview Calculator */}
+            <div className="space-y-6">
+
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs sticky top-[75px] space-y-4">
+                <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <Calculator className="w-5 h-5 text-emerald-500" />
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">Live Salary Simulator</h4>
+                    <p className="text-[10px] text-slate-400">Test formula outputs in real-time</p>
+                  </div>
+                </div>
+
+                {/* Select Sample Employee */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Select Employee for Simulation:</label>
+                  <select
+                    value={simEmpId}
+                    onChange={e => setSimEmpId(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] text-slate-700 dark:text-gray-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
+                  >
+                    {employees.map(e => (
+                      <option key={e.id} value={e.id}>
+                        {e.fullName} ({getDesignationTitle(e.designationId)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Simulation Output Card */}
+                {(() => {
+                  const simEmp = employees.find(e => e.id === simEmpId) || employees[0];
+                  if (!simEmp) return null;
+
+                  const basic = simEmp.salary?.basic || 45000;
+                  const hra = config.hraType === "percentage" ? Math.round(basic * (config.hraValue / 100)) : config.hraValue;
+                  const allowances = config.allowancesType === "percentage" ? Math.round(basic * (config.allowancesValue / 100)) : config.allowancesValue;
+                  const gross = basic + hra + allowances;
+
+                  const isExempt = (config.pfExemptEmployeeIds || []).includes(simEmp.id);
+                  const pf = isExempt ? 0 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue);
+                  const tax = config.taxType === "percentage" ? Math.round(gross * (config.taxValue / 100)) : config.taxValue;
+                  const net = gross - pf - tax;
+
+                  return (
+                    <div className="space-y-3 pt-2">
+                      <div className="bg-slate-50/80 dark:bg-[#0a0a0a]/60 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-2.5 text-xs">
+                        <p className="font-extrabold text-slate-800 dark:text-white border-b border-slate-100 dark:border-[#1a1a1a] pb-1.5 flex justify-between">
+                          <span>Basic Salary</span>
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{basic.toLocaleString()}</span>
+                        </p>
+
+                        <div className="space-y-1.5 pt-1 text-slate-500 dark:text-gray-400">
+                          <div className="flex justify-between">
+                            <span>+ HRA ({config.hraType === "percentage" ? `${config.hraValue}%` : "Fixed"})</span>
+                            <span className="font-mono text-slate-700 dark:text-gray-200">₹{hra.toLocaleString()}</span>
+                          </div>
+
+                          <div className="flex justify-between">
+                            <span>+ Allowances ({config.allowancesType === "percentage" ? `${config.allowancesValue}%` : "Fixed"})</span>
+                            <span className="font-mono text-slate-700 dark:text-gray-200">₹{allowances.toLocaleString()}</span>
+                          </div>
+
+                          <div className="flex justify-between font-bold text-slate-800 dark:text-white pt-1.5 border-t border-slate-100 dark:border-[#1a1a1a]">
+                            <span>Gross Compensation</span>
+                            <span className="font-mono">₹{gross.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Deductions Breakdown */}
+                      <div className="bg-rose-50/40 dark:bg-rose-950/10 p-4 rounded-xl border border-rose-100 dark:border-rose-900/30 space-y-2 text-xs">
+                        <p className="font-bold text-rose-700 dark:text-rose-400 uppercase text-[10px] tracking-wider">Estimated Deductions</p>
+
+                        <div className="flex justify-between items-center text-slate-600 dark:text-gray-300">
+                          <span>- Provident Fund (PF)</span>
+                          {isExempt ? (
+                            <span className="font-mono text-amber-600 dark:text-amber-400 font-bold text-[10px] bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">
+                              ₹0 (EXEMPT)
+                            </span>
+                          ) : (
+                            <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">₹{pf.toLocaleString()}</span>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between text-slate-600 dark:text-gray-300">
+                          <span>- Tax / TDS ({config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
+                          <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">₹{tax.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Net Disbursed Card */}
+                      <div className="bg-gradient-to-br from-emerald-600 to-teal-700 p-4 rounded-xl text-white space-y-1 shadow-md">
+                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-200">Simulated Net Disbursed Pay</p>
+                        <p className="text-2xl font-black font-mono">₹{net.toLocaleString()}</p>
+                        <p className="text-[10px] text-emerald-100 pt-1">
+                          Direct credit to {simEmp.bankDetails?.bankName || "Bank"} (A/C ****{simEmp.bankDetails?.accountNumber?.slice(-4) || "XXXX"})
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Action button */}
+                <button
+                  type="button"
+                  onClick={handleSaveConfig}
+                  disabled={savingConfig}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all cursor-pointer shadow-sm flex items-center justify-center space-x-2 text-xs mt-2"
+                >
+                  {savingConfig ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving Rules & Exemption List...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Save Rules & Exemption List</span>
+                    </>
+                  )}
+                </button>
+
+              </div>
+
+            </div>
+
           </div>
         </div>
       )}

@@ -7,9 +7,10 @@ import {
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
   Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
-  ArrowLeft, History, Clock, User, Check
+  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator
 } from "lucide-react";
-import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord } from "../types";
+import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig } from "../types";
+
 
 interface DirectoryViewProps {
   employees: Employee[];
@@ -471,6 +472,56 @@ export default function DirectoryView({
   const [emergencyRelation, setEmergencyRelation] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
 
+  // Payroll Configuration integration for Onboarding Form
+  const [onboardPayrollConfig, setOnboardPayrollConfig] = useState<PayrollConfig | null>(null);
+  const [onboardIsPfExempt, setOnboardIsPfExempt] = useState<boolean>(false);
+
+  // Fetch tenant payroll rules when onboarding modal opens
+  useEffect(() => {
+    if (showOnboardForm) {
+      fetch(`/api/payroll/config?companyId=${encodeURIComponent(companyId || "")}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.config) {
+            setOnboardPayrollConfig(data.config);
+          }
+        })
+        .catch(err => console.warn("Failed to load payroll config for onboarding:", err));
+    }
+  }, [showOnboardForm, companyId]);
+
+  // Helper to recompute HRA, Allowances, PF, Tax dynamically when Basic salary or PF exemption toggle changes
+  const recomputeOnboardSalaryComponents = (basicStr: string, exemptFlag: boolean) => {
+    const basicVal = Number(basicStr) || 0;
+    if (!onboardPayrollConfig || basicVal <= 0) return;
+
+    const hra = onboardPayrollConfig.hraType === "percentage"
+      ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100))
+      : onboardPayrollConfig.hraValue;
+
+    const allowances = onboardPayrollConfig.allowancesType === "percentage"
+      ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100))
+      : onboardPayrollConfig.allowancesValue;
+
+    const gross = basicVal + hra + allowances;
+
+    const pf = exemptFlag
+      ? 0
+      : onboardPayrollConfig.pfType === "percentage"
+      ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100))
+      : onboardPayrollConfig.pfValue;
+
+    const tax = onboardPayrollConfig.taxType === "percentage"
+      ? Math.round(gross * (onboardPayrollConfig.taxValue / 100))
+      : onboardPayrollConfig.taxValue;
+
+    setSalaryHra(String(hra));
+    setSalaryAllowances(String(allowances));
+    setSalaryPf(String(pf));
+    setSalaryTds(String(tax));
+  };
+
+
   const loggedInUser = employees.find(e => e.id === currentUserId) || employees[0];
   const userBranch = loggedInUser?.branch || "Mumbai Branch";
 
@@ -534,6 +585,8 @@ export default function DirectoryView({
     setSalaryAllowances("");
     setSalaryPf("");
     setSalaryTds("");
+    setOnboardIsPfExempt(false);
+
     setBankAccount("");
     setBankName("");
     setBankIfsc("");
@@ -1727,62 +1780,119 @@ export default function DirectoryView({
                   </div>
                 </div>
 
-                {/* Section 3: Salary structure */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">3. Salary Allocation Break-up (Monthly)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
+                {/* Section 3: Salary Allocation & Tenant Payroll Rules (New Flow) */}
+                <div className="space-y-3.5 bg-slate-50/80 dark:bg-[#0a0a0a]/60 p-4 rounded-2xl border border-slate-100 dark:border-[#1a1a1a]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 dark:border-[#1a1a1a] pb-2.5">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>3. Compensation & Tenant Payroll Rules</span>
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        Components auto-computed based on your active tenant configuration
+                      </p>
+                    </div>
+
+                    {onboardPayrollConfig && (
+                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-900/40 flex items-center gap-1 shrink-0">
+                        <Sparkles className="w-3 h-3 text-emerald-500" />
+                        <span>Tenant Rules Active ({onboardPayrollConfig.hraValue}% HRA, {onboardPayrollConfig.pfValue}% PF)</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Input 1: Basic Salary & Input 2: PF Exemption */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 dark:text-gray-200 mb-1">
+                        Basic Salary (INR) *
+                      </label>
                       <input
                         type="number"
                         value={salaryBasic}
-                        onChange={(e) => setSalaryBasic(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSalaryBasic(val);
+                          recomputeOnboardSalaryComponents(val, onboardIsPfExempt);
+                        }}
                         placeholder="e.g. 45000"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                        className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#1a1a1a] font-mono font-bold focus:outline-none focus:border-emerald-500 shadow-xs"
+                        required
                       />
                     </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
-                      <input
-                        type="number"
-                        value={salaryHra}
-                        onChange={(e) => setSalaryHra(e.target.value)}
-                        placeholder="e.g. 18000"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
-                      <input
-                        type="number"
-                        value={salaryAllowances}
-                        onChange={(e) => setSalaryAllowances(e.target.value)}
-                        placeholder="e.g. 10000"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
-                      <input
-                        type="number"
-                        value={salaryPf}
-                        onChange={(e) => setSalaryPf(e.target.value)}
-                        placeholder="e.g. 3200"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">TDS / Profession Tax (INR)</label>
-                      <input
-                        type="number"
-                        value={salaryTds}
-                        onChange={(e) => setSalaryTds(e.target.value)}
-                        placeholder="e.g. 6150"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
+
+                    {/* PF Exemption Checkbox Toggle */}
+                    <div className="p-3 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] flex items-center justify-between shadow-xs">
+                      <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
+                        <input
+                          type="checkbox"
+                          checked={onboardIsPfExempt}
+                          onChange={e => {
+                            const checked = e.target.checked;
+                            setOnboardIsPfExempt(checked);
+                            recomputeOnboardSalaryComponents(salaryBasic, checked);
+                          }}
+                          className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                        />
+                        <span>Exempt from Provident Fund (PF)</span>
+                      </label>
+
+                      {onboardIsPfExempt ? (
+                        <span className="text-[10px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                          EXEMPTED (₹0 PF)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Standard PF Active
+                        </span>
+                      )}
                     </div>
                   </div>
+
+                  {/* Auto-Computed Breakdown Card */}
+                  {Number(salaryBasic) > 0 && (
+                    <div className="p-3.5 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] space-y-2 text-xs shadow-xs animate-in fade-in">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#252525] pb-1.5 flex justify-between">
+                        <span>Auto-Computed Salary Structure</span>
+                        <span className="text-emerald-500 font-mono">Tenant Rules Applied</span>
+                      </p>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1">
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">HRA Allowance</span>
+                          <span className="font-bold text-slate-700 dark:text-gray-200 font-mono">₹{Number(salaryHra).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">Special Allowances</span>
+                          <span className="font-bold text-slate-700 dark:text-gray-200 font-mono">₹{Number(salaryAllowances).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">PF Deduction</span>
+                          {onboardIsPfExempt ? (
+                            <span className="font-bold text-amber-600 font-mono text-[10px]">₹0 (EXEMPT)</span>
+                          ) : (
+                            <span className="font-bold text-rose-500 font-mono">₹{Number(salaryPf).toLocaleString()}</span>
+                          )}
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">TDS / Tax</span>
+                          <span className="font-bold text-rose-500 font-mono">₹{Number(salaryTds).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-emerald-600/10 dark:bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/20 flex items-center justify-between font-bold text-xs pt-1.5">
+                        <span className="text-slate-700 dark:text-gray-200">
+                          Gross Pay: <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{(Number(salaryBasic) + Number(salaryHra) + Number(salaryAllowances)).toLocaleString()}</span>
+                        </span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                          Est. Net Pay: ₹{((Number(salaryBasic) + Number(salaryHra) + Number(salaryAllowances)) - (Number(salaryPf) + Number(salaryTds))).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+
 
                 {/* Section 4: Bank specs */}
                 <div>
