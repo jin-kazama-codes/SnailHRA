@@ -209,7 +209,7 @@ export function getInitialState(): AppState {
     simulatedEmails: [],
     customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave"],
     customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "IT"],
-    customBranches: ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"],
+    customBranches: [],
     customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],
     timingSettings: {
       clockInTime: "09:00",
@@ -342,8 +342,9 @@ export function saveDatabase(state: AppState): void {
       });
     }
 
-    // Write local db_snailhr.json file to persist database state across restarts and refreshes
-    fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
+    // Per explicit directive: DO NOT write to db_snailhr.json.
+    // State persistence goes directly to database / in-memory cache.
+    // fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
 
   } catch (err) {
     console.warn("Could not save state in memory:", err);

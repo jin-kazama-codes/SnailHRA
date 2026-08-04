@@ -10,6 +10,7 @@ interface OnboardAgentSlideoverProps {
   companyName: string;
   /** role forced at open — "admin" | "hr" | "employee" */
   defaultRole?: "admin" | "hr" | "employee";
+  customBranches?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -18,6 +19,7 @@ export default function OnboardAgentSlideover({
   companyId,
   companyName,
   defaultRole = "admin",
+  customBranches,
   onClose,
   onSuccess,
 }: OnboardAgentSlideoverProps) {
@@ -255,7 +257,7 @@ export default function OnboardAgentSlideover({
               <div>
                 <label className={labelCls}>Branch Office *</label>
                 <select value={branch} onChange={e => setBranch(e.target.value)} className={inputCls} required>
-                  {["Head Office", "Mumbai Branch", "Delhi Branch", "Noida HQ", "Pune Digital Office", "Hyderabad Hub", "Chennai Office"].map(b => (
+                  {(customBranches && customBranches.length > 0 ? customBranches : ["Head Office"]).map(b => (
                     <option key={b} value={b}>{b}</option>
                   ))}
                 </select>

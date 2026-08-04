@@ -89,7 +89,7 @@ export default function DirectoryView({
     e.preventDefault();
     if (!newBranchName.trim() || !onUpdateCollection) return;
     const trimmed = newBranchName.trim();
-    const currentList = customBranches || ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"];
+    const currentList = customBranches || [];
     const newList = currentList.some(b => b.toLowerCase() === trimmed.toLowerCase())
       ? currentList
       : [...currentList, trimmed];
@@ -100,7 +100,7 @@ export default function DirectoryView({
   const handleRemoveBranch = (branchItem: string) => {
     if (!onUpdateCollection) return;
     if (confirm(`Are you sure you want to delete the "${branchItem}" branch?`)) {
-      const currentList = customBranches || ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"];
+      const currentList = customBranches || [];
       onUpdateCollection("branches", currentList.filter(b => b !== branchItem), "remove", branchItem);
     }
   };
@@ -559,7 +559,7 @@ export default function DirectoryView({
 
     const data = {
       fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
-      branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"),
+      branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
       joiningDate, dateOfBirth, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
       bankAccount, bankName, bankIfsc, address, bio, password,
       emergencyName, emergencyRelation, emergencyPhone,
@@ -1160,10 +1160,7 @@ export default function DirectoryView({
                 className="w-full sm:w-auto bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
               >
                 <option value="All">All Branches</option>
-                {(customBranches && customBranches.length > 0
-                  ? customBranches
-                  : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
-                ).map((b) => (
+                {(customBranches || []).map((b) => (
                   <option key={b} value={b}>{b}</option>
                 ))}
               </select>
@@ -1194,7 +1191,7 @@ export default function DirectoryView({
             <button
               onClick={() => {
                 setShowOnboardForm(true);
-                setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : "Noida Field Hub"));
+                setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : ""));
               }}
               className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
             >
@@ -1769,10 +1766,7 @@ export default function DirectoryView({
                         required
                         disabled={role === "hr"}
                       >
-                        {(customBranches && customBranches.length > 0
-                          ? customBranches
-                          : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
-                        ).map((b) => (
+                        {(customBranches || []).map((b) => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
@@ -2180,10 +2174,7 @@ export default function DirectoryView({
                         onChange={(e) => setEditBranch(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                       >
-                        {(customBranches && customBranches.length > 0
-                          ? customBranches
-                          : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
-                        ).map((b) => (
+                        {(customBranches || []).map((b) => (
                           <option key={b} value={b}>{b}</option>
                         ))}
                       </select>
@@ -2961,10 +2952,7 @@ export default function DirectoryView({
               </form>
 
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 custom-scrollbar">
-                {(customBranches && customBranches.length > 0
-                  ? customBranches
-                  : ["Noida HQ", "Mumbai Branch", "Pune Digital Office", "Hyderabad Hub"]
-                ).map((br) => (
+                {(customBranches || []).map((br) => (
                   <div
                     key={br}
                     className="flex items-center space-x-1 px-2.5 py-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-300 border border-slate-100 dark:border-[#1a1a1a] rounded-lg text-xs"

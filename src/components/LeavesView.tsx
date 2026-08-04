@@ -83,21 +83,39 @@ export default function LeavesView({
     }
   };
 
+  const getEmployeeRole = (empId: string) => {
+    return employees.find(e => e.id?.toLowerCase() === empId?.toLowerCase())?.role || "employee";
+  };
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason || !startDate || !endDate || isSubmitting) return;
     setIsSubmitting(true);
+
+    // Leave Approval Rules:
+    // - Employee -> Pending (needs HR / Admin approval)
+    // - HR -> Pending (needs Admin approval)
+    // - Admin -> Approved (no approval required, auto-approved)
+    const initialStatus = role === "admin" ? "Approved" : "Pending";
+
     try {
       await onApplyLeave({
         employeeId: currentEmployeeId,
         leaveType,
         startDate,
         endDate,
-        reason
+        reason,
+        status: initialStatus
       });
       setReason("");
       setShowApplyForm(false);
-      showToast(`Leave request (${leaveType}) submitted successfully!`, "success");
+      if (role === "admin") {
+        showToast(`Leave request (${leaveType}) recorded and auto-approved!`, "success");
+      } else if (role === "hr") {
+        showToast(`Leave request (${leaveType}) submitted to Admin for approval!`, "success");
+      } else {
+        showToast(`Leave request (${leaveType}) submitted successfully!`, "success");
+      }
     } catch (err) {
       console.error("Error applying leave:", err);
       showToast("Failed to submit leave request.", "error");
@@ -148,100 +166,100 @@ export default function LeavesView({
         {/* Left Side: Submit / Approval Boards */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* Apply Leave Card (Employee Persona) */}
-          {role === "employee" ? (
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-                <div>
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Apply for Leave</h3>
-                  <p className="text-xs text-slate-400 dark:text-gray-500">Submit automated leave tracking requests</p>
-                </div>
-                <button
-                  onClick={() => setShowApplyForm(!showApplyForm)}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{showApplyForm ? "Hide Form" : "Request Leave"}</span>
-                </button>
+          {/* Apply Leave Card (Available for Employee, HR & Admin) */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+              <div>
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Apply for Leave</h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500">Submit automated leave tracking requests</p>
               </div>
+              <button
+                onClick={() => setShowApplyForm(!showApplyForm)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{showApplyForm ? "Hide Form" : "Request Leave"}</span>
+              </button>
+            </div>
 
-              {showApplyForm ? (
-                <form onSubmit={handleApplySubmit} className="space-y-4 animate-in fade-in duration-200">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Leave Type</label>
-                      <select
-                        value={leaveType}
-                        onChange={(e) => setLeaveType(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
-                      >
-                        {(customLeaveTypes && customLeaveTypes.length > 0
-                          ? customLeaveTypes
-                          : ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave", "Loss of Pay"]
-                        ).map((lt) => (
-                          <option key={lt} value={lt}>{lt}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Start Date</label>
-                      <input 
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">End Date</label>
-                      <input 
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
-                        required
-                      />
-                    </div>
+            {showApplyForm ? (
+              <form onSubmit={handleApplySubmit} className="space-y-4 animate-in fade-in duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Leave Type</label>
+                    <select
+                      value={leaveType}
+                      onChange={(e) => setLeaveType(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
+                    >
+                      {(customLeaveTypes && customLeaveTypes.length > 0
+                        ? customLeaveTypes
+                        : ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave", "Loss of Pay"]
+                      ).map((lt) => (
+                        <option key={lt} value={lt}>{lt}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Reason / Brief justification</label>
-                    <textarea 
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      placeholder="e.g. Dental appointment and recovery"
-                      rows={2}
-                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Start Date</label>
+                    <input 
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
                       required
                     />
                   </div>
 
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-xs flex items-center space-x-2 disabled:opacity-50"
-                    >
-                      {isSubmitting ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
-                          <span>Submitting Request...</span>
-                        </>
-                      ) : (
-                        <span>Submit Automated Request</span>
-                      )}
-                    </button>
-                </form>
-              ) : (
-                <div className="p-6 text-center bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">
-                  <p className="text-xs text-slate-400 dark:text-gray-500">Need time off? Request medical, casual or earned leaves with instant supervisor routing.</p>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">End Date</label>
+                    <input 
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
+                      required
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
-          ) : (
-            /* Approvals Board for HR & Admin */
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Reason / Brief justification</label>
+                  <textarea 
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="e.g. Dental appointment and recovery"
+                    rows={2}
+                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden"
+                    required
+                  />
+                </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-xs flex items-center space-x-2 disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                        <span>Submitting Request...</span>
+                      </>
+                    ) : (
+                      <span>Submit Automated Request</span>
+                    )}
+                  </button>
+              </form>
+            ) : (
+              <div className="p-6 text-center bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">
+                <p className="text-xs text-slate-400 dark:text-gray-500">Need time off? Request medical, casual or earned leaves with instant supervisor routing.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Approvals Board for HR & Admin */}
+          {(role === "hr" || role === "admin") && (
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
               <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Supervisor Approvals Board</h3>
@@ -250,7 +268,15 @@ export default function LeavesView({
 
               <div className="space-y-3.5">
                 {leaves
-                  .filter(l => l.status === "Pending")
+                  .filter(l => {
+                    if (l.status !== "Pending") return false;
+                    if (l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase()) return false;
+                    if (role === "hr") {
+                      const applicantRole = getEmployeeRole(l.employeeId);
+                      return applicantRole === "employee";
+                    }
+                    return true;
+                  })
                   .slice()
                   .sort((a, b) => new Date(b.appliedDate || b.startDate || 0).getTime() - new Date(a.appliedDate || a.startDate || 0).getTime())
                   .map(leave => (
@@ -299,7 +325,15 @@ export default function LeavesView({
                     </div>
                   </div>
                 ))}
-                {leaves.filter(l => l.status === "Pending").length === 0 && (
+                {leaves.filter(l => {
+                  if (l.status !== "Pending") return false;
+                  if (l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase()) return false;
+                  if (role === "hr") {
+                    const applicantRole = getEmployeeRole(l.employeeId);
+                    return applicantRole === "employee";
+                  }
+                  return true;
+                }).length === 0 && (
                   <div className="p-6 text-center bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">
                     <p className="text-xs text-slate-400 dark:text-gray-500">Perfect! No pending leave requests to review.</p>
                   </div>

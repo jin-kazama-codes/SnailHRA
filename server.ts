@@ -97,7 +97,7 @@ const initialData: AppState = {
   meetings: [],
   customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity/Paternity", "Loss of Pay"],
   customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "Marketing"],
-  customBranches: ["Snail Mumbai HQ", "Noida Field Hub", "Pune Branch Office", "Hyderabad Insurance Center", "Bangalore Tech Hub"],
+  customBranches: [],
   customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],
   timingSettings: {
     clockInTime: "09:00",
@@ -1602,7 +1602,7 @@ async function startServer() {
 
   // 11. Create Leave Request
   app.post("/api/leaves", async (req, res) => {
-    const { employeeId, leaveType, startDate, endDate, reason } = req.body;
+    const { employeeId, leaveType, startDate, endDate, reason, status } = req.body;
     if (!employeeId || !leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({ error: "All leave fields are required" });
     }
@@ -1621,7 +1621,7 @@ async function startServer() {
       startDate,
       endDate,
       reason,
-      status: "Pending",
+      status: status || "Pending",
       appliedDate: new Date().toISOString().split('T')[0]
     };
 
