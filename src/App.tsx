@@ -410,7 +410,7 @@ export default function App() {
     if (typeof window !== "undefined") {
       const newCompanyName = localStorage.getItem("snailhr_companyName") || "";
       const newCompanyId = localStorage.getItem("snailhr_companyId") || "";
-      const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "1") as 1|2|3|4;
+      const newSubModel = parseInt(localStorage.getItem("snailhr_subscriptionModel") || "1") as 1 | 2 | 3 | 4;
       const newLogoUrl = localStorage.getItem("snailhr_companyLogoUrl") || "";
       setCompanyName(newCompanyName);
       setCompanyId(newCompanyId);
@@ -693,7 +693,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, type })
       });
-      
+
       let data: any = {};
       try {
         data = await res.json();
@@ -968,6 +968,26 @@ export default function App() {
     }
   };
 
+  // 11b. Delete hardware asset
+  const handleDeleteAsset = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this asset? This action cannot be undone.")) return;
+    try {
+      // Optimistic update
+      setInventory(prev => prev.filter(i => i.id !== id));
+      const res = await fetch(`/api/inventory?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Asset deleted from inventory.", "info");
+      } else {
+        await refreshDatabase();
+        showToast("Failed to delete asset.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting asset.", "error");
+    }
+  };
+
   // 12. Submit asset request
   const handleApplyAssetRequest = async (reqData: any) => {
     try {
@@ -1193,13 +1213,20 @@ export default function App() {
 
   // 20. Update custom collections (Departments, Branches, Leave Policies)
   const handleUpdateCollection = async (
-    type: "leaveTypes" | "departments" | "branches" | "amenities", 
+    type: "leaveTypes" | "departments" | "branches" | "amenities",
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
   ) => {
     // 1. INSTANT OPTIMISTIC UI UPDATE: Immediate display updates in state
-    if (type === "leaveTypes") setCustomLeaveTypes(updatedList);
+    if (type === "leaveTypes") {
+      const map = new Map<string, string>();
+      updatedList.forEach(item => {
+        const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+        map.set(name, item);
+      });
+      setCustomLeaveTypes(Array.from(map.values()));
+    }
     if (type === "departments") setCustomDepartments(updatedList);
     if (type === "branches") setCustomBranches(updatedList);
     if (type === "amenities") setCustomAmenities(updatedList);
@@ -1208,8 +1235,8 @@ export default function App() {
       const res = await fetch("/api/config-collections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          type, 
+        body: JSON.stringify({
+          type,
           updatedList,
           addedItem: action === "add" ? item : undefined,
           removedItem: action === "remove" ? item : undefined,
@@ -1544,10 +1571,10 @@ export default function App() {
   if (isSuperAdminMode) {
     if (!isSuperAdminLoggedIn) {
       return (
-        <SuperAdminLoginView 
+        <SuperAdminLoginView
           onLoginSuccess={(sa) => {
             setIsSuperAdminLoggedIn(true);
-          }} 
+          }}
           onBackToEmployeeLogin={() => {
             setIsSuperAdminMode(false);
           }}
@@ -1555,7 +1582,7 @@ export default function App() {
       );
     }
     return (
-      <SuperAdminDashboard 
+      <SuperAdminDashboard
         onLogout={() => {
           setIsSuperAdminLoggedIn(false);
         }}
@@ -1574,13 +1601,13 @@ export default function App() {
 
   if (!isLoggedIn) {
     return (
-      <LoginView 
+      <LoginView
         onLoginSuccess={(emp) => {
           handleLoginSuccess(emp);
           setLoading(true);
           // reload DB so it gets company-scoped data
           refreshDatabase();
-        }} 
+        }}
         onSuperAdminLink={() => {
           setIsSuperAdminMode(true);
         }}
@@ -1726,8 +1753,8 @@ export default function App() {
                   key={link.id}
                   onClick={() => setCurrentView(link.id)}
                   className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${isActive
-                      ? "bg-emerald-600 text-white font-bold shadow-xs shadow-emerald-600/10 dark:neon-glow dark:bg-emerald-500"
-                      : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/50"
+                    ? "bg-emerald-600 text-white font-bold shadow-xs shadow-emerald-600/10 dark:neon-glow dark:bg-emerald-500"
+                    : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/50"
                     }`}
                 >
                   {link.icon}
@@ -1788,8 +1815,8 @@ export default function App() {
                           setMobileMenuOpen(false);
                         }}
                         className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all ${isActive
-                            ? "bg-emerald-600 text-white font-bold"
-                            : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]"
+                          ? "bg-emerald-600 text-white font-bold"
+                          : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]"
                           }`}
                       >
                         {link.icon}
@@ -1963,6 +1990,7 @@ export default function App() {
               currentEmployeeId={currentEmployeeId}
               customBranches={customBranches}
               onAddAsset={handleAddAsset}
+              onDeleteAsset={handleDeleteAsset}
               onApplyAssetRequest={handleApplyAssetRequest}
               onReviewAssetRequest={handleReviewAssetRequest}
             />
@@ -2054,13 +2082,12 @@ export default function App() {
       {/* Floating Global Toast Notification */}
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className={`flex items-center space-x-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md transition-all ${
-            toast.type === "success" 
-              ? "bg-emerald-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-900/30" 
+          <div className={`flex items-center space-x-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md transition-all ${toast.type === "success"
+              ? "bg-emerald-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-900/30"
               : toast.type === "error"
-              ? "bg-rose-900/95 text-rose-100 border-rose-500/40 shadow-rose-900/30"
-              : "bg-slate-900/95 text-slate-100 border-slate-700/40 shadow-slate-900/30"
-          }`}>
+                ? "bg-rose-900/95 text-rose-100 border-rose-500/40 shadow-rose-900/30"
+                : "bg-slate-900/95 text-slate-100 border-slate-700/40 shadow-slate-900/30"
+            }`}>
             {toast.type === "success" && <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />}
             {toast.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
             {toast.type === "info" && <Sparkles className="w-4 h-4 text-sky-400 shrink-0" />}

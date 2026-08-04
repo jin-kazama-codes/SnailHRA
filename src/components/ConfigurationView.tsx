@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
+import {
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
   Snowflake, Phone, Lightbulb, Mic
@@ -61,7 +61,7 @@ interface ConfigurationViewProps {
   onAddDesignation: (title: string, department: string) => void;
   onRemoveDesignation: (id: string) => void;
   onUpdateCollection: (
-    type: "leaveTypes" | "departments" | "branches" | "amenities", 
+    type: "leaveTypes" | "departments" | "branches" | "amenities",
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
@@ -106,24 +106,35 @@ export default function ConfigurationView({
   // Local Form States
   const [newDesignationTitle, setNewDesignationTitle] = useState("");
   const [newDesignationDept, setNewDesignationDept] = useState("");
-  
+
   const [newLeaveType, setNewLeaveType] = useState("");
+  const [newLeaveDays, setNewLeaveDays] = useState("12");
   const [newDepartment, setNewDepartment] = useState("");
   const [newBranch, setNewBranch] = useState("");
   const [newAmenity, setNewAmenity] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("Star");
 
+  // Expense Categories Form State
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
 
+  const handleSubmitExpenseCat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
+    setNewCatName("");
+    setNewCatDesc("");
+  };
+
+  // Corporate Allowance FAQ Form State
+  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
   const [newFaqTitle, setNewFaqTitle] = useState("");
   const [newFaqDescription, setNewFaqDescription] = useState("");
-  const [editingFaqId, setEditingFaqId] = useState<string | null>(null);
 
   const handleSubmitFaq = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFaqTitle.trim() || !newFaqDescription.trim()) return;
-    onAddCorporateAllowanceFaq?.(newFaqTitle.trim(), newFaqDescription.trim(), editingFaqId || undefined);
+    if (!newFaqTitle.trim() || !onAddCorporateAllowanceFaq) return;
+    onAddCorporateAllowanceFaq(newFaqTitle.trim(), newFaqDescription.trim(), editingFaqId || undefined);
     setNewFaqTitle("");
     setNewFaqDescription("");
     setEditingFaqId(null);
@@ -141,37 +152,67 @@ export default function ConfigurationView({
     setNewFaqDescription("");
   };
 
-  const handleSubmitExpenseCat = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatName.trim()) return;
-    onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
-    setNewCatName("");
-    setNewCatDesc("");
-  };
+  const [localQuotas, setLocalQuotas] = useState<Record<string, string>>({});
 
-  const handleAddDesignation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDesignationTitle || !newDesignationDept) return;
-    onAddDesignation(newDesignationTitle, newDesignationDept);
-    setNewDesignationTitle("");
-    setNewDesignationDept("");
+  const parseLeaveType = (leaveStr: string) => {
+    if (leaveStr.includes("|")) {
+      const [name, quotaStr] = leaveStr.split("|");
+      const quota = parseInt(quotaStr, 10);
+      return { name: name.trim(), quota: isNaN(quota) ? 0 : quota };
+    }
+    return { name: leaveStr.trim(), quota: 12 };
   };
 
   const handleAddLeaveType = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeaveType.trim()) return;
     const trimmed = newLeaveType.trim();
-    const newList = customLeaveTypes.some(l => l.toLowerCase() === trimmed.toLowerCase())
-      ? customLeaveTypes
-      : [...customLeaveTypes, trimmed];
-    onUpdateCollection("leaveTypes", newList, "add", trimmed);
+    const quota = newLeaveDays ? parseInt(newLeaveDays, 10) : 12;
+    const itemStr = `${trimmed}|${isNaN(quota) ? 12 : quota}`;
+
+    const map = new Map<string, string>();
+    customLeaveTypes.forEach(l => {
+      const name = (l.includes("|") ? l.split("|")[0] : l).trim().toLowerCase();
+      map.set(name, l);
+    });
+    map.set(trimmed.toLowerCase(), itemStr);
+    const newList = Array.from(map.values());
+
+    onUpdateCollection("leaveTypes", newList, "add", itemStr);
     setNewLeaveType("");
+    setNewLeaveDays("12");
+  };
+
+  const handleUpdateLeaveQuota = (targetItemStr: string, newQuotaVal: number) => {
+    const targetName = targetItemStr.includes("|") ? targetItemStr.split("|")[0].trim() : targetItemStr.trim();
+    const updatedItemStr = `${targetName}|${newQuotaVal}`;
+    const map = new Map<string, string>();
+    customLeaveTypes.forEach(l => {
+      const name = (l.includes("|") ? l.split("|")[0] : l).trim().toLowerCase();
+      map.set(name, l);
+    });
+    map.set(targetName.toLowerCase(), updatedItemStr);
+    const newList = Array.from(map.values());
+    onUpdateCollection("leaveTypes", newList);
   };
 
   const handleRemoveLeaveType = (leave: string) => {
-    if (confirm(`Are you sure you want to delete "${leave}"?`)) {
-      onUpdateCollection("leaveTypes", customLeaveTypes.filter(l => l !== leave), "remove", leave);
+    const targetName = (leave.includes("|") ? leave.split("|")[0] : leave).trim().toLowerCase();
+    if (confirm(`Are you sure you want to delete "${leave.includes("|") ? leave.split("|")[0] : leave}"?`)) {
+      const filtered = customLeaveTypes.filter(l => {
+        const name = (l.includes("|") ? l.split("|")[0] : l).trim().toLowerCase();
+        return name !== targetName;
+      });
+      onUpdateCollection("leaveTypes", filtered, "remove", leave);
     }
+  };
+
+  const handleAddDesignation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDesignationTitle.trim() || !newDesignationDept.trim()) return;
+    onAddDesignation(newDesignationTitle.trim(), newDesignationDept.trim());
+    setNewDesignationTitle("");
+    setNewDesignationDept("");
   };
 
   const handleAddDepartment = (e: React.FormEvent) => {
@@ -238,41 +279,40 @@ export default function ConfigurationView({
         <div>
           <div className="flex items-center space-x-2">
             <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
-            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${
-              subscriptionModel === 4 ? "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900/50" :
-              subscriptionModel === 3 ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50" :
-              subscriptionModel === 2 ? "bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/50" :
-              "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
-            }`}>
-              {subscriptionModel === 4 ? "Full Suite Plan" : 
-               subscriptionModel === 3 ? "Chatbot Only Plan" : 
-               subscriptionModel === 2 ? "WhatsApp Only Plan" : 
-               "Basic Plan"}
+            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${subscriptionModel === 4 ? "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900/50" :
+                subscriptionModel === 3 ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50" :
+                  subscriptionModel === 2 ? "bg-green-50 text-green-600 border-green-200 dark:bg-green-950/40 dark:text-green-400 dark:border-green-900/50" :
+                    "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700"
+              }`}>
+              {subscriptionModel === 4 ? "Full Suite Plan" :
+                subscriptionModel === 3 ? "Chatbot Only Plan" :
+                  subscriptionModel === 2 ? "WhatsApp Only Plan" :
+                    "Basic Plan"}
             </span>
           </div>
           <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, and leave policies</p>
         </div>
 
         <div className="flex items-center bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
-          <button 
+          <button
             onClick={() => setActiveSubTab("general")}
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "general" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             General Variables
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab("designations")}
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "designations" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Designations Matrix
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab("expenses")}
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "expenses" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Expense Categories
           </button>
-          <button 
+          <button
             onClick={() => setActiveSubTab("allowancesFaq")}
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "allowancesFaq" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
@@ -291,7 +331,7 @@ export default function ConfigurationView({
                 <Landmark className="w-4.5 h-4.5 text-emerald-500" />
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Company Departments</h3>
               </div>
-              
+
               <form onSubmit={handleAddDepartment} className="flex gap-2 mb-4">
                 <input
                   type="text"
@@ -333,7 +373,7 @@ export default function ConfigurationView({
                 <MapPin className="w-4.5 h-4.5 text-blue-500" />
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Corporate Branches</h3>
               </div>
-              
+
               <form onSubmit={handleAddBranch} className="flex gap-2 mb-4">
                 <input
                   type="text"
@@ -375,18 +415,30 @@ export default function ConfigurationView({
                 <Calendar className="w-4.5 h-4.5 text-indigo-500" />
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
               </div>
-              
+
               <form onSubmit={handleAddLeaveType} className="flex gap-2 mb-4">
                 <input
                   type="text"
-                  placeholder="e.g. Sabbatical Leave"
+                  placeholder="Policy Name (e.g. Sabbatical)"
                   value={newLeaveType}
                   onChange={(e) => setNewLeaveType(e.target.value)}
                   className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                  required
+                />
+                <input
+                  type="number"
+                  min="0"
+                  max="365"
+                  placeholder="Days"
+                  value={newLeaveDays}
+                  onChange={(e) => setNewLeaveDays(e.target.value)}
+                  className="w-16 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-2 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden font-mono text-center"
+                  title="Annual Days Quota"
+                  required
                 />
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl cursor-pointer transition-all"
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl cursor-pointer transition-all shrink-0"
                   title="Add Leave Policy Type"
                 >
                   <Plus className="w-4 h-4" />
@@ -394,17 +446,51 @@ export default function ConfigurationView({
               </form>
 
               <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                {customLeaveTypes.map((leave) => (
-                  <div key={leave} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
-                    <span className="font-semibold text-slate-700 dark:text-gray-300">{leave}</span>
-                    <button
-                      onClick={() => handleRemoveLeaveType(leave)}
-                      className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                {customLeaveTypes.map((leave) => {
+                  const parsed = parseLeaveType(leave);
+                  return (
+                    <div key={leave} className="flex items-center justify-between text-xs p-2 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl gap-2">
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 truncate flex-1">{parsed.name}</span>
+                      <div className="flex items-center space-x-1 shrink-0">
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          value={localQuotas[leave] !== undefined ? localQuotas[leave] : parsed.quota}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLocalQuotas(prev => ({ ...prev, [leave]: val }));
+                          }}
+                          onBlur={() => {
+                            const raw = localQuotas[leave];
+                            if (raw !== undefined) {
+                              const val = parseInt(raw, 10);
+                              handleUpdateLeaveQuota(leave, isNaN(val) ? 0 : val);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              const raw = localQuotas[leave];
+                              if (raw !== undefined) {
+                                const val = parseInt(raw, 10);
+                                handleUpdateLeaveQuota(leave, isNaN(val) ? 0 : val);
+                              }
+                            }
+                          }}
+                          className="w-12 bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-lg px-1.5 py-0.5 text-[11px] font-mono text-center text-indigo-600 dark:text-indigo-400 font-bold focus:outline-hidden"
+                          title="Click to edit annual quota days (Press Enter or click away to save)"
+                        />
+                        <span className="text-[10px] text-slate-400 font-mono">Days</span>
+                        <button
+                          onClick={() => handleRemoveLeaveType(leave)}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer ml-0.5"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customLeaveTypes.length} Leave types configured</p>
@@ -417,7 +503,7 @@ export default function ConfigurationView({
                 <Star className="w-4.5 h-4.5 text-amber-500" />
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Room Amenities</h3>
               </div>
-              
+
               <form onSubmit={handleAddAmenity} className="space-y-3 mb-4">
                 <div className="flex gap-2">
                   <input
@@ -444,11 +530,10 @@ export default function ConfigurationView({
                         key={opt.name}
                         type="button"
                         onClick={() => setSelectedIcon(opt.name)}
-                        className={`p-2 rounded-lg cursor-pointer transition-all border ${
-                          selectedIcon === opt.name
+                        className={`p-2 rounded-lg cursor-pointer transition-all border ${selectedIcon === opt.name
                             ? "bg-amber-600 text-white border-amber-600 shadow-sm"
                             : "bg-white dark:bg-[#0f0f0f] text-slate-500 border-slate-100 dark:border-[#1a1a1a] hover:border-amber-300"
-                        }`}
+                          }`}
                         title={opt.name}
                       >
                         {opt.icon}
@@ -497,7 +582,7 @@ export default function ConfigurationView({
             {/* Add Designation form */}
             <div className="lg:col-span-1 p-4 bg-slate-50 dark:bg-[#0a0a0a]/50 border border-slate-100/50 dark:border-[#1a1a1a] rounded-xl space-y-4 h-fit">
               <h4 className="font-display font-semibold text-slate-700 dark:text-gray-300 text-xs">Register New Designation</h4>
-              
+
               <form onSubmit={handleAddDesignation} className="space-y-3 text-xs">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Job Title</label>
@@ -588,7 +673,7 @@ export default function ConfigurationView({
             {/* Add Category form */}
             <div className="lg:col-span-1 p-4 bg-slate-50 dark:bg-[#0a0a0a]/50 border border-slate-100/50 dark:border-[#1a1a1a] rounded-xl space-y-4 h-fit">
               <h4 className="font-display font-semibold text-slate-700 dark:text-gray-300 text-xs">Register Expense Category</h4>
-              
+
               <form onSubmit={handleSubmitExpenseCat} className="space-y-3 text-xs">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category Name</label>
@@ -686,7 +771,7 @@ export default function ConfigurationView({
                     {editingFaqId ? "Edit Allowance FAQ" : "Add Allowance FAQ"}
                   </h4>
                   {editingFaqId && (
-                    <button 
+                    <button
                       onClick={handleCancelFaqEdit}
                       className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer"
                     >

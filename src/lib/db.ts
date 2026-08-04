@@ -207,7 +207,7 @@ export function getInitialState(): AppState {
     reimbursements: [],
     payslips: [],
     simulatedEmails: [],
-    customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave"],
+    customLeaveTypes: ["Casual Leave|18", "Medical Leave|12", "Earned Leave|15", "Maternity/Paternity|30", "Loss of Pay|0"],
     customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "IT"],
     customBranches: [],
     customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],

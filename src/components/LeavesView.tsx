@@ -135,31 +135,76 @@ export default function LeavesView({
     return employees.find(e => e.id === empId)?.department || "Loans";
   };
 
-  // Leave Balances (Dynamic)
-  const getConsumedCount = (leaveType: string) => {
-    return leaves.filter(l => l.employeeId?.toLowerCase() === currentEmployeeId?.toLowerCase() && l.leaveType === leaveType && l.status === "Approved").length;
+  // Leave Balances (100% Dynamic)
+  const getConsumedCount = (leaveTypeStr: string) => {
+    const cleanType = leaveTypeStr.toLowerCase().replace(/s$/, "");
+    return leaves.filter(l => {
+      if (l.employeeId?.toLowerCase() !== currentEmployeeId?.toLowerCase()) return false;
+      if (l.status !== "Approved") return false;
+      const lType = (l.leaveType || "").toLowerCase().replace(/s$/, "");
+      return lType === cleanType || lType.includes(cleanType) || cleanType.includes(lType);
+    }).length;
   };
-  const leaveBalances = [
-    { type: "Casual Leaves", allocated: 18, consumed: getConsumedCount("Casual Leave"), color: "border-l-emerald-500 text-emerald-600 bg-emerald-500/5" },
-    { type: "Medical Leaves", allocated: 12, consumed: getConsumedCount("Medical Leave"), color: "border-l-teal-500 text-teal-600 bg-teal-500/5" },
-    { type: "Earned Leaves", allocated: 15, consumed: getConsumedCount("Earned Leave"), color: "border-l-indigo-500 text-indigo-600 bg-indigo-500/5" },
-    { type: "Maternity/Paternity", allocated: 30, consumed: getConsumedCount("Maternity/Paternity"), color: "border-l-purple-500 text-purple-600 bg-purple-500/5" }
-  ];
+
+  const availableTypes = (customLeaveTypes && customLeaveTypes.length > 0)
+    ? customLeaveTypes
+    : ["Casual Leave|18", "Medical Leave|12", "Earned Leave|15", "Maternity/Paternity|30", "Loss of Pay|0"];
+
+  const getBorderColor = (index: number) => {
+    const colors = [
+      "border-l-emerald-500 text-emerald-600 bg-emerald-500/5",
+      "border-l-teal-500 text-teal-600 bg-teal-500/5",
+      "border-l-indigo-500 text-indigo-600 bg-indigo-500/5",
+      "border-l-purple-500 text-purple-600 bg-purple-500/5",
+      "border-l-amber-500 text-amber-600 bg-amber-500/5",
+      "border-l-rose-500 text-rose-600 bg-rose-500/5",
+    ];
+    return colors[index % colors.length];
+  };
+
+  const leaveBalances = availableTypes.map((typeStr, idx) => {
+    const name = typeStr.includes("|") ? typeStr.split("|")[0].trim() : typeStr.trim();
+    let allocated = 12;
+    if (typeStr.includes("|")) {
+      const parsed = parseInt(typeStr.split("|")[1], 10);
+      allocated = !isNaN(parsed) ? parsed : 12;
+    }
+
+    const consumed = getConsumedCount(name);
+    
+    return {
+      type: name.toUpperCase().endsWith("S") || name.toLowerCase().includes("pay") ? name : `${name}s`,
+      typeName: name,
+      allocated,
+      consumed,
+      color: getBorderColor(idx)
+    };
+  });
 
   return (
     <div className="space-y-6">
-      {/* Leave balance grid */}
+      {/* Leave balance grid (100% Dynamic) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {leaveBalances.map((bal, idx) => (
-          <div key={idx} className={`border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] rounded-xl p-4 shadow-xs dark:neon-glow border-l-3 ${bal.color}`}>
-            <h4 className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider">{bal.type}</h4>
-            <div className="flex items-baseline space-x-1.5 mt-2">
-              <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">{bal.allocated - bal.consumed}</span>
-              <span className="text-xs text-slate-400">/ {bal.allocated} Available</span>
+        {leaveBalances.map((bal, idx) => {
+          const isUnpaid = bal.allocated === 0;
+          const availableCount = Math.max(0, bal.allocated - bal.consumed);
+          return (
+            <div key={idx} className={`border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] rounded-xl p-4 shadow-xs dark:neon-glow border-l-3 ${bal.color}`}>
+              <h4 className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider">{bal.type}</h4>
+              <div className="flex items-baseline space-x-1.5 mt-2">
+                {isUnpaid ? (
+                  <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">Unpaid</span>
+                ) : (
+                  <>
+                    <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">{availableCount}</span>
+                    <span className="text-xs text-slate-400">/ {bal.allocated} Available</span>
+                  </>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">{bal.consumed} Days consumed this year</p>
             </div>
-            <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">{bal.consumed} Days consumed this year</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -195,9 +240,10 @@ export default function LeavesView({
                       {(customLeaveTypes && customLeaveTypes.length > 0
                         ? customLeaveTypes
                         : ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity Leave", "Paternity Leave", "Loss of Pay"]
-                      ).map((lt) => (
-                        <option key={lt} value={lt}>{lt}</option>
-                      ))}
+                      ).map((lt) => {
+                        const name = lt.includes("|") ? lt.split("|")[0].trim() : lt.trim();
+                        return <option key={name} value={name}>{name}</option>;
+                      })}
                     </select>
                   </div>
 

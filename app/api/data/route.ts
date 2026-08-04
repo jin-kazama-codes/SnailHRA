@@ -530,7 +530,27 @@ export async function GET(request: Request) {
       }
 
       const rawLeaveTypes = leaveTypesRes.data || customLeavesRes.data || [];
-      db.customLeaveTypes = rawLeaveTypes.map((l: any) => capitalizeName(l.name)).filter(Boolean);
+      const leaveMap = new Map<string, string>();
+      const safeCapitalizeLeave = (str: string) => {
+        if (!str) return "";
+        if (str.includes("|")) {
+          const [name, quota] = str.split("|");
+          return `${capitalizeName(name)}|${quota}`;
+        }
+        return capitalizeName(str);
+      };
+      
+      const listToProcess = rawLeaveTypes.length > 0
+        ? rawLeaveTypes.map((l: any) => safeCapitalizeLeave(l.name)).filter(Boolean)
+        : (db.customLeaveTypes || []);
+
+      listToProcess.forEach((item: string) => {
+        const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+        if (!leaveMap.has(name) || item.includes("|")) {
+          leaveMap.set(name, item);
+        }
+      });
+      db.customLeaveTypes = Array.from(leaveMap.values());
 
       if (customAmenitiesRes && customAmenitiesRes.data && customAmenitiesRes.data.length > 0) {
         db.customAmenities = customAmenitiesRes.data.map((a: any) => {

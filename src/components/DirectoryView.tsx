@@ -54,7 +54,9 @@ export default function DirectoryView({
 }: DirectoryViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
-  const [activeEmpId, setActiveEmpId] = useState<string | null>(employees[0]?.id || null);
+  const [selectedBranch, setSelectedBranch] = useState("All");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended">("All");
+  const [activeEmpId, setActiveEmpId] = useState<string | null>(() => currentUserId || employees[0]?.id || null);
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -452,7 +454,6 @@ export default function DirectoryView({
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
   const [department, setDepartment] = useState("Loans");
   const [onboardBranch, setOnboardBranch] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("All");
   const [joiningDate, setJoiningDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -508,8 +509,8 @@ export default function DirectoryView({
     const pf = exemptFlag
       ? 0
       : onboardPayrollConfig.pfType === "percentage"
-      ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100))
-      : onboardPayrollConfig.pfValue;
+        ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100))
+        : onboardPayrollConfig.pfValue;
 
     const tax = onboardPayrollConfig.taxType === "percentage"
       ? Math.round(gross * (onboardPayrollConfig.taxValue / 100))
@@ -531,16 +532,41 @@ export default function DirectoryView({
       ? employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin")
       : employees.filter(e => e.id === currentUserId);
 
-  const activeEmployee = accessibleEmployees.find(e => e.id === activeEmpId) || accessibleEmployees[0];
+  const filteredEmployees = accessibleEmployees
+    .filter(emp => {
+      const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesDept = selectedDept === "All" || emp.department === selectedDept;
+      const matchesBranch = selectedBranch === "All" || (emp.branch || "Mumbai Branch") === selectedBranch;
+      const matchesStatus = selectedStatusFilter === "All" || (emp.status || "Active") === selectedStatusFilter;
+      return matchesSearch && matchesDept && matchesBranch && matchesStatus;
+    })
+    .sort((a, b) => {
+      // Current logged-in user (Me) remains at top
+      const aIsSelf = a.id === currentUserId;
+      const bIsSelf = b.id === currentUserId;
+      if (aIsSelf && !bIsSelf) return -1;
+      if (!aIsSelf && bIsSelf) return 1;
 
-  const filteredEmployees = accessibleEmployees.filter(emp => {
-    const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDept = selectedDept === "All" || emp.department === selectedDept;
-    const matchesBranch = selectedBranch === "All" || (emp.branch || "Mumbai Branch") === selectedBranch;
-    return matchesSearch && matchesDept && matchesBranch;
-  });
+      // Hierarchy: Admin (1) -> HR (2) -> Employee (3)
+      const roleRank = (roleStr: string) => {
+        if (roleStr === "admin") return 1;
+        if (roleStr === "hr") return 2;
+        return 3;
+      };
+
+      const rankA = roleRank(a.role);
+      const rankB = roleRank(b.role);
+
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
+      return a.fullName.localeCompare(b.fullName);
+    });
+
+  const activeEmployee = filteredEmployees.find(e => e.id === activeEmpId) || filteredEmployees[0] || null;
 
   const getDesignationTitle = (id: string) => {
     return designations.find(d => d.id === id)?.title || "Specialist";
@@ -1165,6 +1191,18 @@ export default function DirectoryView({
                 ))}
               </select>
             )}
+            {(role === "admin" || role === "hr") && (
+              <select
+                value={selectedStatusFilter}
+                onChange={(e) => setSelectedStatusFilter(e.target.value as any)}
+                className="w-full sm:w-auto bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-semibold focus:outline-hidden"
+              >
+                <option value="All">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Probation">Probation</option>
+                <option value="Suspended">Suspended</option>
+              </select>
+            )}
           </div>
         </div>
 
@@ -1203,18 +1241,69 @@ export default function DirectoryView({
       </div>
 
       {/* Main Grid: Directory List and Detail Profile Pane */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Employee List */}
-        <div className="lg:col-span-1 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex flex-col h-[650px]">
-          <div className="mb-4">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Active Employees Roster</h3>
-            <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} employees matching criteria</p>
+        <div className="lg:col-span-5 xl:col-span-5 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[650px] min-w-0">
+          <div className="mb-3">
+            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md sm:text-lg">
+              {selectedStatusFilter === "All" ? "Employees Roster" : `${selectedStatusFilter} Employees Roster`}
+            </h3>
+            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} employees matching criteria</p>
           </div>
+
+          {/* Segmented Status Filter Tabs */}
+          {(role === "admin" || role === "hr") && (
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 dark:bg-[#141414] rounded-xl mb-3.5 border border-slate-200/60 dark:border-[#222] w-full box-border overflow-hidden">
+              {(["All", "Active", "Probation", "Suspended"] as const).map((st) => {
+                const isSelected = selectedStatusFilter === st;
+                const count = accessibleEmployees.filter(e => {
+                  const matchesSearch = e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    e.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    e.id.toLowerCase().includes(searchTerm.toLowerCase());
+                  const matchesDept = selectedDept === "All" || e.department === selectedDept;
+                  const matchesBranch = selectedBranch === "All" || (e.branch || "Mumbai Branch") === selectedBranch;
+                  const matchesStatus = st === "All" || (e.status || "Active") === st;
+                  return matchesSearch && matchesDept && matchesBranch && matchesStatus;
+                }).length;
+
+                const dotColors = {
+                  All: "bg-slate-400 dark:bg-gray-400",
+                  Active: "bg-emerald-500",
+                  Probation: "bg-amber-500",
+                  Suspended: "bg-rose-500",
+                };
+
+                const activeStyles = {
+                  All: "bg-white dark:bg-[#222] text-slate-800 dark:text-white shadow-xs border-slate-200 dark:border-[#333] font-bold",
+                  Active: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/50 shadow-xs font-bold",
+                  Probation: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/50 shadow-xs font-bold",
+                  Suspended: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/50 shadow-xs font-bold",
+                };
+
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setSelectedStatusFilter(st)}
+                    className={`w-full flex items-center justify-center space-x-0.5 sm:space-x-1 py-1.5 px-0.5 sm:px-1 rounded-lg text-[10px] xl:text-[11px] transition-all cursor-pointer border whitespace-nowrap overflow-hidden ${
+                      isSelected
+                        ? activeStyles[st]
+                        : "border-transparent text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-[#1a1a1a]"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColors[st]}`}></span>
+                    <span className="font-semibold">{st}</span>
+                    <span className="text-[9px] sm:text-[10px] opacity-80 font-mono">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
             {filteredEmployees.map(emp => {
               const isActive = activeEmployee?.id === emp.id;
               const isSelf = emp.id === currentUserId;
+              const empStatus = emp.status || "Active";
               return (
                 <div
                   key={emp.id}
@@ -1230,16 +1319,36 @@ export default function DirectoryView({
                       alt={emp.fullName}
                       className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-gray-700"
                     />
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${emp.status === "Active" ? "bg-emerald-500" : "bg-amber-500"
-                      }`}></span>
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${
+                      empStatus === "Active" ? "bg-emerald-500" : empStatus === "Suspended" ? "bg-rose-500" : "bg-amber-500"
+                    }`}></span>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-slate-700 dark:text-gray-300 text-xs truncate">
-                        {emp.fullName} {isSelf && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 font-bold px-1.5 py-0.2 rounded">Me</span>}
-                      </p>
-                      <span className="text-[9px] text-slate-400 dark:text-gray-500 font-mono">{emp.id}</span>
+                      <div className="flex items-center space-x-1.5 min-w-0">
+                        <p className="font-semibold text-slate-700 dark:text-gray-300 text-xs truncate">
+                          {emp.fullName} {isSelf && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 font-bold px-1.5 py-0.2 rounded">Me</span>}
+                        </p>
+                        {empStatus !== "Active" && (
+                          <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase tracking-wider shrink-0 ${
+                            empStatus === "Suspended"
+                              ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"
+                          }`}>
+                            {empStatus}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 font-sans ${
+                        emp.role === "admin"
+                          ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 border border-violet-200/60 dark:border-violet-800/40"
+                          : emp.role === "hr"
+                          ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40"
+                          : "bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-400"
+                      }`}>
+                        {emp.role === "admin" ? "Admin" : emp.role === "hr" ? "HR Manager" : "Employee"}
+                      </span>
                     </div>
                     <p className="text-[10px] text-slate-400 dark:text-gray-500 font-medium truncate mt-0.5">
                       {getDesignationTitle(emp.designationId)} • {emp.department}
@@ -1257,7 +1366,7 @@ export default function DirectoryView({
         </div>
 
         {/* Right Side: Tabular Profile Details */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
           {activeEmployee ? (
             <>
               {/* Profile Card Header */}
@@ -1492,9 +1601,16 @@ export default function DirectoryView({
               </div>
             </>
           ) : (
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-12 text-center shadow-xs dark:neon-glow">
-              <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs text-slate-500 dark:text-gray-400">Select an employee from the active roster list to load their comprehensive profile.</p>
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-12 text-center shadow-xs dark:neon-glow flex flex-col items-center justify-center min-h-[450px]">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-2xl mb-3 border border-amber-100 dark:border-amber-900/30">
+                <UserX className="w-8 h-8 text-amber-500" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800 dark:text-white mb-1">
+                No {selectedStatusFilter === "All" ? "" : selectedStatusFilter} Employees Found
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-gray-500 max-w-sm leading-relaxed">
+                There are currently no employees with <span className="font-semibold text-slate-600 dark:text-gray-300">{selectedStatusFilter === "All" ? "matching criteria" : `status "${selectedStatusFilter}"`}</span> in the selected department and branch filters.
+              </p>
             </div>
           )}
         </div>
@@ -2870,7 +2986,7 @@ export default function DirectoryView({
       {showManageCollections && role === "admin" && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            
+
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
               <div>
@@ -2879,8 +2995,8 @@ export default function DirectoryView({
                 </h3>
                 <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">Customize your company's departments and branches</p>
               </div>
-              <button 
-                onClick={() => setShowManageCollections(false)} 
+              <button
+                onClick={() => setShowManageCollections(false)}
                 className="p-1.5 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-lg text-slate-400 cursor-pointer"
               >
                 <X className="w-4 h-4" />

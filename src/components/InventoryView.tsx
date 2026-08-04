@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Laptop, Tablet, Radio, Layers, Plus, Check, X, 
+  Laptop, Tablet, Radio, Layers, Plus, Check, X, Trash2,
   HelpCircle, AlertCircle, FileText, User, Calendar
 } from "lucide-react";
 import { InventoryItem, InventoryRequest, Employee, UserRole } from "../types";
@@ -13,6 +13,7 @@ interface InventoryViewProps {
   currentEmployeeId: string;
   customBranches?: string[];
   onAddAsset: (assetData: any) => void;
+  onDeleteAsset: (id: string) => void;
   onApplyAssetRequest: (reqData: any) => void;
   onReviewAssetRequest: (id: string, status: "Approved" | "Rejected", assetId?: string) => void;
 }
@@ -25,6 +26,7 @@ export default function InventoryView({
   currentEmployeeId,
   customBranches,
   onAddAsset,
+  onDeleteAsset,
   onApplyAssetRequest,
   onReviewAssetRequest
 }: InventoryViewProps) {
@@ -331,9 +333,20 @@ export default function InventoryView({
                     <span className="text-slate-400 text-[11px] italic">No active allocation logs</span>
                   )}
 
-                  {item.assignedDate && (
-                    <span className="text-[10px] text-slate-400 font-mono">On {item.assignedDate}</span>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {item.assignedDate && (
+                      <span className="text-[10px] text-slate-400 font-mono">On {item.assignedDate}</span>
+                    )}
+                    {(role === "admin" || role === "hr") && (
+                      <button
+                        onClick={() => onDeleteAsset(item.id)}
+                        title="Delete Asset"
+                        className="p-1.5 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

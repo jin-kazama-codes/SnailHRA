@@ -95,7 +95,7 @@ const initialData: AppState = {
   payslips: initialPayslips,
   simulatedEmails: initialSimulatedEmails,
   meetings: [],
-  customLeaveTypes: ["Casual Leave", "Medical Leave", "Earned Leave", "Maternity/Paternity", "Loss of Pay"],
+  customLeaveTypes: ["Casual Leave|18", "Medical Leave|12", "Earned Leave|15", "Maternity/Paternity|30", "Loss of Pay|0"],
   customDepartments: ["Executive", "Risk", "HR", "Loans", "Insurance", "Sales", "Operations", "Compliance", "Marketing"],
   customBranches: [],
   customAmenities: ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"],
@@ -2012,7 +2012,12 @@ async function startServer() {
     }
 
     if (type === "leaveTypes") {
-      db.customLeaveTypes = updatedList;
+      const map = new Map<string, string>();
+      updatedList.forEach((item: string) => {
+        const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+        map.set(name, item);
+      });
+      db.customLeaveTypes = Array.from(map.values());
     } else if (type === "departments") {
       db.customDepartments = updatedList;
     } else if (type === "branches") {

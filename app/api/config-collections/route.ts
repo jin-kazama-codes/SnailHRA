@@ -30,8 +30,16 @@ export async function POST(request: Request) {
     let previousList: string[] = [];
     if (type === "leaveTypes") {
       previousList = db.customLeaveTypes || [];
-      if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
-      db.customLeaveTypes = capitalizedList;
+      const map = new Map<string, string>();
+      capitalizedList.forEach((item: string) => {
+        const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+        map.set(name, item);
+      });
+      if (capitalizedAdded) {
+        const addedName = (capitalizedAdded.includes("|") ? capitalizedAdded.split("|")[0] : capitalizedAdded).trim().toLowerCase();
+        map.set(addedName, capitalizedAdded);
+      }
+      db.customLeaveTypes = Array.from(map.values());
     } else if (type === "departments") {
       previousList = db.customDepartments || [];
       if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
