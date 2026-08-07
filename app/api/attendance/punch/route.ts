@@ -9,11 +9,15 @@ import { supabaseAdmin } from "@/src/lib/supabase-admin";
 // Helper: extract and normalize client IP from request headers
 function getClientIp(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
-  let ip = forwarded ? forwarded.split(",")[0].trim() : (request.headers.get("x-real-ip") || "");
-  if (!ip) {
-    ip = "127.0.0.1";
+  const realIp = request.headers.get("x-real-ip");
+  const cfIp = request.headers.get("cf-connecting-ip");
+  const vercelIp = request.headers.get("x-vercel-forwarded-for");
+
+  let raw = cfIp || vercelIp || (forwarded ? forwarded.split(",")[0].trim() : (realIp || ""));
+  if (!raw) {
+    raw = "127.0.0.1";
   }
-  return ip;
+  return normalizeIp(raw);
 }
 
 function normalizeIp(ip: string): string {
@@ -57,7 +61,7 @@ function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
   }
 
   // 2. Localhost requests (localhost:3000):
-  // clientIp evaluates to 127.0.0.1. We check if ANY active IPv4 network interface IP of the machine (e.g. 192.168.1.11)
+  // clientIp evaluates to 127.0.0.1. We check if ANY active IPv4 network interface IP of the machine
   // or 127.0.0.1 is in the allowed list!
   if (clientIp === "127.0.0.1") {
     const machineIps = getLocalMachineIps();
@@ -124,7 +128,7 @@ export async function POST(request: Request) {
       if (!isAllowed) {
         return NextResponse.json(
           {
-            error: "WiFi restriction active. You must be connected to an authorized office WiFi network to punch attendance.",
+            error: `WiFi Restriction: You must be connected to authorized office WiFi network. (Your current IP: ${clientIp})`,
             wifiRestricted: true,
             allowedIps: allowedIpsList,
             yourIp: clientIp

@@ -581,12 +581,27 @@ export default function ConfigurationView({
                   ))}
                 </div>
 
+                {/* Local IP Notice for Vercel/Cloud Deployments */}
+                {wifiIpList.some(ip => ip.startsWith("192.168.") || ip.startsWith("10.") || (ip.startsWith("172.") && parseInt(ip.split(".")[1] || "0", 10) >= 16 && parseInt(ip.split(".")[1] || "0", 10) <= 31)) && (
+                  <div className="p-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-[11px] text-amber-800 dark:text-amber-300 leading-normal space-y-1">
+                    <p className="font-semibold flex items-center gap-1">
+                      <span>💡 Important for Deployed Web App:</span>
+                    </p>
+                    <p>
+                      <code>192.168.x.x</code> / <code>10.x.x.x</code> are internal router IPs. Cloud servers (e.g. Vercel) receive your Wi-Fi network&apos;s <strong>Public IP Address</strong> when employees punch in over Wi-Fi.
+                    </p>
+                    <p className="font-medium text-amber-900 dark:text-amber-200">
+                      Click <strong>&quot;Fetch My IP&quot;</strong> above while connected to office Wi-Fi to automatically detect &amp; add your Public Wi-Fi IP.
+                    </p>
+                  </div>
+                )}
+
                 {/* Detected IP Banner & Notifications */}
                 {detectedIp && (
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/50 text-xs">
                     <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                      <span>Your Current IP: <strong className="font-mono text-emerald-800 dark:text-emerald-200">{detectedIp}</strong></span>
+                      <span>Your Current Public IP: <strong className="font-mono text-emerald-800 dark:text-emerald-200">{detectedIp}</strong></span>
                     </div>
                     <button
                       type="button"

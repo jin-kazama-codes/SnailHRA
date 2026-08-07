@@ -729,7 +729,7 @@ export default function App() {
       if (!res.ok) {
         // Special handling for WiFi restriction (403)
         if (res.status === 403 && data?.wifiRestricted) {
-          showToast("📶 WiFi Restriction: You must be connected to the office WiFi to punch attendance.", "error");
+          showToast(data?.error || "📶 WiFi Restriction: You must be connected to the office WiFi to punch attendance.", "error");
         } else {
           showToast(data?.error || `Punch action failed (HTTP ${res.status})`, "error");
         }

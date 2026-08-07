@@ -13,6 +13,20 @@ function normalizeIp(ip: string): string {
   return clean;
 }
 
+function isPrivateIp(ip: string): boolean {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") return true;
+  if (ip.startsWith("10.")) return true;
+  if (ip.startsWith("192.168.")) return true;
+  if (ip.startsWith("172.")) {
+    const parts = ip.split(".");
+    if (parts.length >= 2) {
+      const second = parseInt(parts[1], 10);
+      if (second >= 16 && second <= 31) return true;
+    }
+  }
+  return false;
+}
+
 function getLocalMachineIps(): string[] {
   const ips: string[] = [];
   try {
@@ -35,25 +49,43 @@ export async function GET(request: Request) {
     const forwarded = request.headers.get("x-forwarded-for");
     const realIp = request.headers.get("x-real-ip");
     const cfIp = request.headers.get("cf-connecting-ip");
+    const vercelIp = request.headers.get("x-vercel-forwarded-for");
 
-    let rawClientIp = cfIp || (forwarded ? forwarded.split(",")[0].trim() : (realIp || ""));
+    let rawClientIp = cfIp || vercelIp || (forwarded ? forwarded.split(",")[0].trim() : (realIp || ""));
     let clientIp = normalizeIp(rawClientIp);
 
     const localIps = getLocalMachineIps();
+    let publicIp = "";
 
-    if (!clientIp || clientIp === "127.0.0.1") {
-      if (localIps.length > 0) {
-        clientIp = localIps[0];
-      } else {
-        clientIp = "127.0.0.1";
+    // If client IP from header is public, use it directly as publicIp
+    if (clientIp && !isPrivateIp(clientIp)) {
+      publicIp = clientIp;
+    } else {
+      // Fallback: fetch public WAN IP from ipify if running locally or behind private proxy
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const res = await fetch("https://api.ipify.org?format=json", { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ip) {
+            publicIp = normalizeIp(data.ip);
+          }
+        }
+      } catch (e) {
+        // Ignore fallback errors
       }
     }
 
+    const finalPrimaryIp = publicIp || clientIp || (localIps.length > 0 ? localIps[0] : "127.0.0.1");
+
     return NextResponse.json({
-      ip: clientIp,
-      rawIp: rawClientIp || "127.0.0.1",
+      ip: finalPrimaryIp,
+      publicIp: publicIp || finalPrimaryIp,
+      localIp: localIps.length > 0 ? localIps[0] : "127.0.0.1",
       networkIps: localIps,
-      isLocalhost: clientIp === "127.0.0.1"
+      isPrivate: isPrivateIp(clientIp)
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Failed to detect IP" }, { status: 500 });
