@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
-  Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight
+  Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2
 } from "lucide-react";
 import { Designation, ExpenseCategory, CorporateAllowanceFaq } from "../types";
 
@@ -174,6 +174,70 @@ export default function ConfigurationView({
     return [""];
   });
   const [wifiSaving, setWifiSaving] = useState(false);
+
+  // IP Fetching State
+  const [fetchingIp, setFetchingIp] = useState(false);
+  const [detectedIp, setDetectedIp] = useState<string | null>(null);
+  const [ipNotice, setIpNotice] = useState<string | null>(null);
+
+  const handleUseDetectedIp = (ipToAdd: string) => {
+    setWifiIpList(prev => {
+      // If list currently has 1 empty input, replace it
+      if (prev.length === 1 && (!prev[0] || !prev[0].trim())) {
+        return [ipToAdd];
+      }
+      // If already in list, notify and don't duplicate
+      if (prev.some(item => item.trim() === ipToAdd)) {
+        setIpNotice(`IP ${ipToAdd} is already in the list.`);
+        return prev;
+      }
+      setIpNotice(`Added IP ${ipToAdd} to allowed list!`);
+      return [...prev.filter(i => i.trim()), ipToAdd];
+    });
+  };
+
+  const handleFetchMyIp = async () => {
+    setFetchingIp(true);
+    setIpNotice(null);
+    try {
+      let foundIp = "";
+      // 1. Fetch from our API endpoint
+      const res = await fetch("/api/get-my-ip");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ip && data.ip !== "127.0.0.1") {
+          foundIp = data.ip;
+        }
+      }
+
+      // 2. Fallback to public IP service if local or loopback
+      if (!foundIp || foundIp === "127.0.0.1") {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const pubRes = await fetch("https://api.ipify.org?format=json", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (pubRes.ok) {
+            const pubData = await pubRes.json();
+            if (pubData.ip) foundIp = pubData.ip;
+          }
+        } catch (e) {
+          // Ignore public lookup failure
+        }
+      }
+
+      if (foundIp) {
+        setDetectedIp(foundIp);
+        handleUseDetectedIp(foundIp);
+      } else {
+        setIpNotice("Could not detect IP automatically. Please enter your IP manually.");
+      }
+    } catch (err: any) {
+      setIpNotice("Failed to fetch IP address.");
+    } finally {
+      setFetchingIp(false);
+    }
+  };
 
   useEffect(() => {
     if (wifiRestrictionSettings) {
@@ -453,20 +517,36 @@ export default function ConfigurationView({
 
               {/* Multi IP Address List Input */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Allowed Office WiFi IP Addresses ({wifiIpList.filter(ip => ip.trim()).length})
                   </label>
-                  {wifiEnabled && (
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={handleAddIpField}
-                      className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 flex items-center gap-1 cursor-pointer"
+                      onClick={handleFetchMyIp}
+                      disabled={fetchingIp}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-1 rounded-lg border border-emerald-200/70 dark:border-emerald-800/60 flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-60"
+                      title="Automatically detect your current IP address and add it to the allowed list"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add IP</span>
+                      {fetchingIp ? (
+                        <span className="w-3.5 h-3.5 border-2 border-emerald-600/40 border-t-emerald-600 rounded-full animate-spin" />
+                      ) : (
+                        <Globe className="w-3.5 h-3.5" />
+                      )}
+                      <span>{fetchingIp ? "Fetching..." : "Fetch My IP"}</span>
                     </button>
-                  )}
+                    {wifiEnabled && (
+                      <button
+                        type="button"
+                        onClick={handleAddIpField}
+                        className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add IP</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
@@ -500,6 +580,30 @@ export default function ConfigurationView({
                     </div>
                   ))}
                 </div>
+
+                {/* Detected IP Banner & Notifications */}
+                {detectedIp && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/50 text-xs">
+                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>Your Current IP: <strong className="font-mono text-emerald-800 dark:text-emerald-200">{detectedIp}</strong></span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleUseDetectedIp(detectedIp)}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 shadow-xs"
+                    >
+                      + Put in List
+                    </button>
+                  </div>
+                )}
+
+                {ipNotice && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{ipNotice}</span>
+                  </p>
+                )}
 
                 <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">
                   Add multiple IPs (e.g. main office, branch router, VPN gateway)
