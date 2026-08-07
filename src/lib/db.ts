@@ -5,7 +5,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking, PayrollConfig
+  SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings
 } from "../types";
 
 export interface AppState {
@@ -37,6 +37,7 @@ export interface AppState {
   rooms?: Room[];
   roomBookings?: RoomBooking[];
   customAmenities?: string[];
+  wifiRestrictionSettings?: WifiRestrictionSettings;
 }
 
 
@@ -218,6 +219,11 @@ export function getInitialState(): AppState {
       breakStartTime: "13:00",
       breakEndTime: "14:00"
     },
+    wifiRestrictionSettings: {
+      enabled: false,
+      allowedIp: "",
+      allowedIps: []
+    },
     attendanceBreaks: [],
     excelUploads: [],
     meetings: [],
@@ -285,7 +291,8 @@ export function loadDatabase(): AppState {
         seatLayouts: parsed.seatLayouts || [],
         rooms: parsed.rooms || [],
         roomBookings: parsed.roomBookings || [],
-        customAmenities: parsed.customAmenities || getInitialState().customAmenities
+        customAmenities: parsed.customAmenities || getInitialState().customAmenities,
+        wifiRestrictionSettings: parsed.wifiRestrictionSettings || getInitialState().wifiRestrictionSettings
       };
       return cachedState;
     }

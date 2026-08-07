@@ -254,6 +254,13 @@ export interface TimingSettings {
   breakEndTime: string;
 }
 
+export interface WifiRestrictionSettings {
+  enabled: boolean;
+  allowedIp?: string;
+  allowedIps: string[];
+  companyId?: string;
+}
+
 export interface ExcelUploadRecord {
   id: string;
   filename: string;

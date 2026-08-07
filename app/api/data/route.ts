@@ -585,6 +585,31 @@ export async function GET(request: Request) {
       } catch (err) {
         console.warn("Supabase timing_settings hydration error:", err);
       }
+
+      // Load wifi_restriction_settings from Supabase
+      try {
+        let wifiData = null;
+        if (companyId) {
+          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("company_id", companyId).maybeSingle();
+          if (data) wifiData = data;
+        }
+        if (!wifiData) {
+          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("id", "default").maybeSingle();
+          if (data) wifiData = data;
+        }
+        if (wifiData) {
+          const rawIpStr = wifiData.allowed_ip || "";
+          const parsedIps = rawIpStr.split(",").map((i: string) => i.trim()).filter(Boolean);
+          db.wifiRestrictionSettings = {
+            enabled: wifiData.enabled ?? false,
+            allowedIp: rawIpStr,
+            allowedIps: parsedIps,
+            companyId: wifiData.company_id || undefined
+          };
+        }
+      } catch (err) {
+        console.warn("Supabase wifi_restriction_settings hydration error:", err);
+      }
     } catch (err) {
       console.warn("Supabase hydration error in GET /api/data:", err);
     }

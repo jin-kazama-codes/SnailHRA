@@ -200,6 +200,17 @@ export default function App() {
     breakEndTime: "14:00"
   });
 
+  const [wifiRestrictionSettings, setWifiRestrictionSettings] = useState<{
+    enabled: boolean;
+    allowedIp?: string;
+    allowedIps: string[];
+    companyId?: string;
+  }>({
+    enabled: false,
+    allowedIp: "",
+    allowedIps: []
+  });
+
   // Global Toast State
   const [toast, setToast] = useState<{ id: string; message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -350,6 +361,9 @@ export default function App() {
       setCustomAmenities(data.customAmenities || []);
       setExpenseCategories(data.expenseCategories || []);
       setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
+      if (data.wifiRestrictionSettings) {
+        setWifiRestrictionSettings(data.wifiRestrictionSettings);
+      }
 
       // Check Supabase Synchronization Status
       try {
@@ -702,7 +716,12 @@ export default function App() {
       }
 
       if (!res.ok) {
-        showToast(data?.error || `Punch action failed (HTTP ${res.status})`, "error");
+        // Special handling for WiFi restriction (403)
+        if (res.status === 403 && data?.wifiRestricted) {
+          showToast("📶 WiFi Restriction: You must be connected to the office WiFi to punch attendance.", "error");
+        } else {
+          showToast(data?.error || `Punch action failed (HTTP ${res.status})`, "error");
+        }
         return;
       }
       if (data && data.id) {
@@ -1285,6 +1304,31 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast("Error updating timing settings.", "error");
+    }
+  };
+
+  const handleSaveWifiSettings = async (settings: { enabled: boolean; allowedIp?: string; allowedIps: string[] }) => {
+    try {
+      const changedBy = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
+      const res = await fetch("/api/attendance/wifi-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...settings, changedBy, companyId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.wifiRestrictionSettings) {
+          setWifiRestrictionSettings(data.wifiRestrictionSettings);
+        }
+        showToast("WiFi restriction settings saved successfully!", "success");
+        await refreshDatabase();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`Failed to save WiFi settings: ${errData.error || "Unknown error"}`, "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error saving WiFi restriction settings.", "error");
     }
   };
 
@@ -2061,6 +2105,7 @@ export default function App() {
               corporateAllowancesFaqs={corporateAllowancesFaqs}
               supabaseStatus={supabaseStatus}
               subscriptionModel={subscriptionModel}
+              wifiRestrictionSettings={wifiRestrictionSettings}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onUpdateCollection={handleUpdateCollection}
@@ -2068,6 +2113,7 @@ export default function App() {
               onRemoveExpenseCategory={handleRemoveExpenseCategory}
               onAddCorporateAllowanceFaq={handleAddCorporateAllowanceFaq}
               onRemoveCorporateAllowanceFaq={handleRemoveCorporateAllowanceFaq}
+              onSaveWifiSettings={handleSaveWifiSettings}
             />
           )}
 

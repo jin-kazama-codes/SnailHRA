@@ -305,6 +305,21 @@ export async function POST() {
       }
     }
 
+    // 11. Sync WiFi restriction settings
+    if (db.wifiRestrictionSettings) {
+      const wifiRecord = {
+        id: db.wifiRestrictionSettings.companyId || "default",
+        company_id: (db.wifiRestrictionSettings.companyId && db.wifiRestrictionSettings.companyId.length === 36) ? db.wifiRestrictionSettings.companyId : null,
+        enabled: db.wifiRestrictionSettings.enabled ?? false,
+        allowed_ip: db.wifiRestrictionSettings.allowedIp || "",
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from("wifi_restriction_settings").upsert(wifiRecord, { onConflict: "id" });
+      if (error) {
+        console.warn("Sync: wifi_restriction_settings upsert warning:", error.message);
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Successfully synced all local dataset elements directly to Supabase cloud instance." });
   } catch (error: any) {
     console.error("Database sync exception:", error);

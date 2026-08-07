@@ -3,6 +3,73 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { AttendancePunch } from "@/src/types";
 import { supabase, syncPunchToSupabase, getCompanyIdForEmployee } from "@/src/lib/supabase";
 
+import os from "os";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
+
+// Helper: extract and normalize client IP from request headers
+function getClientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  let ip = forwarded ? forwarded.split(",")[0].trim() : (request.headers.get("x-real-ip") || "");
+  if (!ip) {
+    ip = "127.0.0.1";
+  }
+  return ip;
+}
+
+function normalizeIp(ip: string): string {
+  if (!ip) return "";
+  let clean = ip.trim();
+  if (clean.startsWith("::ffff:")) {
+    clean = clean.replace("::ffff:", "");
+  }
+  if (clean === "::1" || clean === "localhost") {
+    clean = "127.0.0.1";
+  }
+  return clean;
+}
+
+function getLocalMachineIps(): string[] {
+  const ips: string[] = ["127.0.0.1"];
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === "IPv4" && !net.internal && net.address) {
+          ips.push(net.address);
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore OS network errors
+  }
+  return ips;
+}
+
+function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
+  const clientIp = normalizeIp(rawClientIp);
+  if (!clientIp) return false;
+
+  const normalizedAllowed = allowedIpsList.map(normalizeIp).filter(Boolean);
+
+  // 1. Direct exact match
+  if (normalizedAllowed.includes(clientIp)) {
+    return true;
+  }
+
+  // 2. Localhost requests (localhost:3000):
+  // clientIp evaluates to 127.0.0.1. We check if ANY active IPv4 network interface IP of the machine (e.g. 192.168.1.11)
+  // or 127.0.0.1 is in the allowed list!
+  if (clientIp === "127.0.0.1") {
+    const machineIps = getLocalMachineIps();
+    const hasMatch = machineIps.some(mIp => normalizedAllowed.includes(mIp));
+    if (hasMatch) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export async function POST(request: Request) {
   try {
     let body: any = {};
@@ -19,6 +86,55 @@ export async function POST(request: Request) {
     }
 
     const db = loadDatabase();
+    const companyId = await getCompanyIdForEmployee(employeeId);
+    const dbClient = supabaseAdmin || supabase;
+
+    // ─── WiFi Restriction Check ───────────────────────────────────────────────
+    let enabled = db.wifiRestrictionSettings?.enabled ?? false;
+    let allowedIpsList: string[] = db.wifiRestrictionSettings?.allowedIps && db.wifiRestrictionSettings.allowedIps.length > 0
+      ? db.wifiRestrictionSettings.allowedIps
+      : (db.wifiRestrictionSettings?.allowedIp ? db.wifiRestrictionSettings.allowedIp.split(",").map(s => s.trim()).filter(Boolean) : []);
+
+    // Always query dynamic WiFi restriction settings directly from Supabase DB first
+    if (dbClient) {
+      try {
+        let wifiData = null;
+        if (companyId) {
+          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("company_id", companyId).maybeSingle();
+          if (data) wifiData = data;
+        }
+        if (!wifiData) {
+          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("id", "default").maybeSingle();
+          if (data) wifiData = data;
+        }
+        if (wifiData) {
+          enabled = wifiData.enabled ?? false;
+          const rawStr = wifiData.allowed_ip || "";
+          allowedIpsList = rawStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+        }
+      } catch (e) {
+        console.warn("Error reading wifi_restriction_settings from Supabase:", e);
+      }
+    }
+
+    if (enabled && allowedIpsList.length > 0) {
+      const clientIp = getClientIp(request);
+      const isAllowed = isIpMatched(clientIp, allowedIpsList);
+
+      if (!isAllowed) {
+        return NextResponse.json(
+          {
+            error: "WiFi restriction active. You must be connected to an authorized office WiFi network to punch attendance.",
+            wifiRestricted: true,
+            allowedIps: allowedIpsList,
+            yourIp: clientIp
+          },
+          { status: 403 }
+        );
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     if (!db.attendance) db.attendance = [];
 
     const getLocalDateString = (d: Date = new Date()) => {

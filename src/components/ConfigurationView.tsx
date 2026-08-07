@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
-  Snowflake, Phone, Lightbulb, Mic
+  Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight
 } from "lucide-react";
 import { Designation, ExpenseCategory, CorporateAllowanceFaq } from "../types";
 
@@ -70,6 +70,13 @@ interface ConfigurationViewProps {
   onRemoveExpenseCategory: (id: string) => void;
   onAddCorporateAllowanceFaq?: (title: string, description: string, id?: string) => void;
   onRemoveCorporateAllowanceFaq?: (id: string) => void;
+  wifiRestrictionSettings?: {
+    enabled: boolean;
+    allowedIp?: string;
+    allowedIps?: string[];
+    companyId?: string;
+  };
+  onSaveWifiSettings?: (settings: { enabled: boolean; allowedIp?: string; allowedIps: string[] }) => void;
 }
 
 export default function ConfigurationView({
@@ -88,7 +95,9 @@ export default function ConfigurationView({
   onAddExpenseCategory,
   onRemoveExpenseCategory,
   onAddCorporateAllowanceFaq,
-  onRemoveCorporateAllowanceFaq
+  onRemoveCorporateAllowanceFaq,
+  wifiRestrictionSettings,
+  onSaveWifiSettings
 }: ConfigurationViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "allowancesFaq">(() => {
     if (typeof window !== "undefined") {
@@ -150,6 +159,69 @@ export default function ConfigurationView({
     setEditingFaqId(null);
     setNewFaqTitle("");
     setNewFaqDescription("");
+  };
+
+  // WiFi Restriction Settings Local State
+  const [wifiEnabled, setWifiEnabled] = useState(wifiRestrictionSettings?.enabled ?? false);
+  const [wifiIpList, setWifiIpList] = useState<string[]>(() => {
+    if (wifiRestrictionSettings?.allowedIps && wifiRestrictionSettings.allowedIps.length > 0) {
+      return wifiRestrictionSettings.allowedIps;
+    }
+    if (wifiRestrictionSettings?.allowedIp) {
+      const parsed = wifiRestrictionSettings.allowedIp.split(",").map(s => s.trim()).filter(Boolean);
+      return parsed.length > 0 ? parsed : [""];
+    }
+    return [""];
+  });
+  const [wifiSaving, setWifiSaving] = useState(false);
+
+  useEffect(() => {
+    if (wifiRestrictionSettings) {
+      setWifiEnabled(wifiRestrictionSettings.enabled);
+      if (wifiRestrictionSettings.allowedIps && wifiRestrictionSettings.allowedIps.length > 0) {
+        setWifiIpList(wifiRestrictionSettings.allowedIps);
+      } else if (wifiRestrictionSettings.allowedIp) {
+        const parsed = wifiRestrictionSettings.allowedIp.split(",").map(s => s.trim()).filter(Boolean);
+        setWifiIpList(parsed.length > 0 ? parsed : [""]);
+      } else {
+        setWifiIpList([""]);
+      }
+    }
+  }, [wifiRestrictionSettings]);
+
+  const handleAddIpField = () => {
+    setWifiIpList(prev => [...prev, ""]);
+  };
+
+  const handleRemoveIpField = (index: number) => {
+    setWifiIpList(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
+  };
+
+  const handleIpChange = (index: number, val: string) => {
+    setWifiIpList(prev => {
+      const next = [...prev];
+      next[index] = val;
+      return next;
+    });
+  };
+
+  const handleSaveWifi = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onSaveWifiSettings) return;
+    setWifiSaving(true);
+    try {
+      const cleanedIps = wifiIpList.map(ip => ip.trim()).filter(Boolean);
+      await onSaveWifiSettings({
+        enabled: wifiEnabled,
+        allowedIps: cleanedIps,
+        allowedIp: cleanedIps.join(", ")
+      });
+    } finally {
+      setWifiSaving(false);
+    }
   };
 
   const [localQuotas, setLocalQuotas] = useState<Record<string, string>>({});
@@ -323,7 +395,154 @@ export default function ConfigurationView({
 
       {/* Sub Tab 1: General (Departments, Branches, Leave Types) */}
       {activeSubTab === "general" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {/* WiFi Attendance Restriction — Prominent Top Card */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-4">
+              <div className="p-2 bg-violet-50 dark:bg-violet-950/30 rounded-xl">
+                <Router className="w-4.5 h-4.5 text-violet-500" />
+              </div>
+              <div>
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">WiFi Attendance Restriction</h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">Restrict punch-in/out to employees connected to the designated office WiFi network only</p>
+              </div>
+              {/* Live status badge */}
+              <div className="ml-auto shrink-0">
+                {wifiEnabled ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                    Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block" />
+                    Disabled
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveWifi} className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              {/* Toggle */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enable WiFi Restriction</label>
+                <button
+                  type="button"
+                  onClick={() => setWifiEnabled(prev => !prev)}
+                  className={`flex items-center gap-3 w-full p-3 rounded-xl border transition-all cursor-pointer ${
+                    wifiEnabled
+                      ? "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800/50"
+                      : "bg-slate-50 dark:bg-[#0a0a0a] border-slate-100 dark:border-[#2a2a2a]"
+                  }`}
+                >
+                  {wifiEnabled ? (
+                    <ToggleRight className="w-8 h-8 text-violet-500 shrink-0" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-400 shrink-0" />
+                  )}
+                  <div className="text-left">
+                    <p className={`text-xs font-bold ${wifiEnabled ? "text-violet-600 dark:text-violet-400" : "text-slate-500 dark:text-gray-400"}`}>
+                      {wifiEnabled ? "Restriction Enabled" : "Restriction Disabled"}
+                    </p>
+                    <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">
+                      {wifiEnabled ? "Employees must be on office WiFi to punch" : "All IPs allowed for attendance punch"}
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Multi IP Address List Input */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Allowed Office WiFi IP Addresses ({wifiIpList.filter(ip => ip.trim()).length})
+                  </label>
+                  {wifiEnabled && (
+                    <button
+                      type="button"
+                      onClick={handleAddIpField}
+                      className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add IP</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+                  {wifiIpList.map((ip, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Wifi className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="e.g. 192.168.1.11"
+                          value={ip}
+                          onChange={(e) => handleIpChange(idx, e.target.value)}
+                          disabled={!wifiEnabled}
+                          className={`w-full bg-slate-50 dark:bg-[#0a0a0a] border rounded-xl pl-9 pr-3 py-2.5 text-xs font-mono transition-all focus:outline-hidden ${
+                            wifiEnabled
+                              ? "border-slate-200 dark:border-[#2a2a2a] text-slate-800 dark:text-white focus:border-violet-400 dark:focus:border-violet-600"
+                              : "border-slate-100 dark:border-[#1a1a1a] text-slate-400 cursor-not-allowed opacity-60"
+                          }`}
+                        />
+                      </div>
+                      {wifiIpList.length > 1 && wifiEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveIpField(idx)}
+                          className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Remove IP"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">
+                  Add multiple IPs (e.g. main office, branch router, VPN gateway)
+                </p>
+              </div>
+
+              {/* Save Button & Active Badges */}
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="submit"
+                  disabled={wifiSaving || !onSaveWifiSettings}
+                  className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer text-xs"
+                >
+                  {wifiSaving ? (
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{wifiSaving ? "Saving..." : "Save WiFi Settings"}</span>
+                </button>
+
+                {wifiEnabled && wifiIpList.filter(ip => ip.trim()).length > 0 && (
+                  <div className="p-2.5 rounded-xl bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/30 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                      <span className="text-[10px] font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wider">
+                        Active Allowed Networks ({wifiIpList.filter(ip => ip.trim()).length})
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {wifiIpList.filter(ip => ip.trim()).map((ip, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-md bg-white dark:bg-[#1a1a1a] border border-violet-200 dark:border-violet-800 text-[10px] font-mono text-violet-600 dark:text-violet-400 font-bold">
+                          {ip.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Departments block */}
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
             <div>
@@ -566,6 +785,7 @@ export default function ConfigurationView({
             <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customAmenities.length} Room amenities active</p>
           </div>
         </div>
+      </div>
       )}
 
       {/* Sub Tab 2: Designations */}
