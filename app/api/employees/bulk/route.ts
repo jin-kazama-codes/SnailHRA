@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       db.employees.unshift({
         id: "EMP-1001",
         fullName: "Ratul Mohindra",
-        email: "ratul.mohindra@mgmfinanciers.com",
+        email: "ratul.mohindra@company.com",
         phone: "+91 98765 43210",
         role: "admin",
         designationId: "des-1",
@@ -56,14 +56,14 @@ export async function POST(request: Request) {
         documents: [],
         onboardingTasks: [],
         avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
-        bio: "Managing Director leading MGM FINANCIERS PRIV LIMITED.",
+        bio: "Managing Director leading corporate operations.",
         branch: "Mumbai Branch"
       });
     }
 
     const createdEmployees: Employee[] = [];
     const todayStr = new Date().toISOString().split("T")[0];
-    const defaultPasswordHash = bcrypt.hashSync("MGM@1234", bcrypt.genSaltSync(10));
+    const defaultPasswordHash = bcrypt.hashSync("Pass@1234", bcrypt.genSaltSync(10));
 
     // Determine highest existing ID number
     let maxNum = 1000;
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         id: empId,
         companyId: resolvedCompanyId,
         fullName: item.fullName || item.name || `Employee ${maxNum}`,
-        email: item.email || `emp_${maxNum}_${Date.now().toString().slice(-4)}@mgmfinanciers.com`,
+        email: item.email || `emp_${maxNum}_${Date.now().toString().slice(-4)}@company.com`,
         phone: item.phone || "+91 99999 00000",
         role: item.role === "admin" || item.role === "hr" ? item.role : "employee",
         designationId: desgId,

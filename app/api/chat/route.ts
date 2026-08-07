@@ -523,11 +523,11 @@ function getSmartRuleResponse(message: string, dbState: any, employee: any): str
     }
 
     const allPolicies = (dbState.policies || []).map((p: any) => `• **${p.title}** (${p.category})`).join("\n");
-    return `### 📖 Company Policies Overview\n\n${allPolicies || "Standard MGM FINANCIERS PRIV LIMITED compliance rules apply."}`;
+    return `### 📖 Company Policies Overview\n\n${allPolicies || `Standard ${tenantName} compliance rules apply.`}`;
   }
 
   // 6. General query fallback
-  return `Hello! I am your MGM FINANCIERS PRIV LIMITED AI Assistant.\n\n` +
+  return `Hello! I am your ${tenantName} AI Assistant.\n\n` +
     `Live status summary:\n` +
     `• **Active Employees**: ${(dbState.employees || []).length}\n` +
     `• **Upcoming Holidays**: ${(dbState.holidays || []).length} scheduled\n` +

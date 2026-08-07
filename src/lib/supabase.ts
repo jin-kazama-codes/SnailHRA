@@ -5,7 +5,8 @@ import { loadDatabase } from "./db";
 
 import { initWhatsappScheduler } from "./whatsappScheduler";
 
-export const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
+export const DEFAULT_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
+export const MGM_COMPANY_ID = DEFAULT_COMPANY_ID;
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config();

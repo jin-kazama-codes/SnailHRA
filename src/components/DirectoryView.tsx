@@ -20,6 +20,7 @@ interface DirectoryViewProps {
   customDepartments?: string[];
   customBranches?: string[];
   companyId?: string;
+  companyName?: string;
   subscriptionModel?: number;
   onOnboardEmployee: (empData: any) => void;
   onBulkOnboardEmployee?: (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => Promise<void> | void;
@@ -43,6 +44,7 @@ export default function DirectoryView({
   customDepartments,
   customBranches,
   companyId = "",
+  companyName = "SnailHRA Tenant",
   subscriptionModel = 1,
   onOnboardEmployee,
   onBulkOnboardEmployee,
@@ -191,7 +193,7 @@ export default function DirectoryView({
 
     const sampleRow1 = {
       "Full Name": "Vikramaditya Rao",
-      "Email": "vikramaditya.rao@mgmfinanciers.com",
+      "Email": "vikramaditya.rao@company.com",
       "Phone": "+91 98111 22334",
       "Role": "employee",
       "Department": "Loans",
@@ -210,13 +212,13 @@ export default function DirectoryView({
       "Emergency Contact Name": "Pooja Rao",
       "Emergency Contact Relation": "Spouse",
       "Emergency Contact Phone": "+91 98111 99999",
-      "Password": "MGM@2026",
+      "Password": "Pass@2026",
       "Bio": "Senior Credit & Loan Evaluation Specialist."
     };
 
     const sampleRow2 = {
       "Full Name": "Neha Saxena",
-      "Email": "neha.saxena@mgmfinanciers.com",
+      "Email": "neha.saxena@company.com",
       "Phone": "+91 97222 33445",
       "Role": "employee",
       "Department": "Risk",
@@ -235,13 +237,13 @@ export default function DirectoryView({
       "Emergency Contact Name": "Rohan Saxena",
       "Emergency Contact Relation": "Brother",
       "Emergency Contact Phone": "+91 97222 88888",
-      "Password": "MGM@2026",
+      "Password": "Pass@2026",
       "Bio": "Fraud Risk & Portfolio Compliance Officer."
     };
 
     const sampleRow3 = {
       "Full Name": "Tarun Deshmukh",
-      "Email": "tarun.deshmukh@mgmfinanciers.com",
+      "Email": "tarun.deshmukh@company.com",
       "Phone": "+91 96333 44556",
       "Role": "employee",
       "Department": "Operations",
@@ -260,14 +262,14 @@ export default function DirectoryView({
       "Emergency Contact Name": "Meenal Deshmukh",
       "Emergency Contact Relation": "Spouse",
       "Emergency Contact Phone": "+91 96333 77777",
-      "Password": "MGM@2026",
+      "Password": "Pass@2026",
       "Bio": "Field Operations & Collections Management Lead."
     };
 
     const worksheet = XLSX.utils.json_to_sheet([sampleRow1, sampleRow2, sampleRow3], { header: headers });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import Template");
-    XLSX.writeFile(workbook, "MGM_Employee_Import_Template.xlsx");
+    XLSX.writeFile(workbook, `${companyName ? companyName.replace(/\s+/g, '_') : 'Company'}_Employee_Import_Template.xlsx`);
   };
 
   // Download Past Uploaded Excel File
@@ -1737,7 +1739,7 @@ export default function DirectoryView({
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="e.g. vikram@mgmfinanciers.com"
+                        placeholder="e.g. vikram@company.com"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                         required
                       />
@@ -2663,10 +2665,10 @@ export default function DirectoryView({
                     <div className="border-b-2 border-slate-800 pb-4 mb-6 flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-emerald-700 text-white rounded-lg flex items-center justify-center font-bold text-lg">
-                          M
+                          {companyName ? companyName.charAt(0).toUpperCase() : "C"}
                         </div>
                         <div>
-                          <h2 className="font-bold text-slate-900 text-base tracking-wide uppercase">MGM FINANCIERS PRIV LIMITED</h2>
+                          <h2 className="font-bold text-slate-900 text-base tracking-wide uppercase">{companyName || "Corporate Operations"}</h2>
                           <p className="text-[10px] text-slate-500 font-medium">Compliance & Verification Vault • Official Document Record</p>
                         </div>
                       </div>
@@ -2723,7 +2725,7 @@ export default function DirectoryView({
 
                             <div>
                               <span className="text-[10px] text-slate-400 block uppercase font-bold">Registered Branch</span>
-                              <span className="text-slate-700 font-medium text-[11px]">{activeEmployee?.branch || "MGM Mumbai HQ"}</span>
+                              <span className="text-slate-700 font-medium text-[11px]">{activeEmployee?.branch || "Main Branch"}</span>
                             </div>
                           </div>
                         </div>
@@ -2741,13 +2743,13 @@ export default function DirectoryView({
                     ) : (
                       <div className="space-y-5 text-xs text-slate-700 leading-relaxed">
                         <p className="font-serif italic text-slate-600">
-                          This document certifies that <strong className="text-slate-900">"{previewDoc.name}"</strong> has been executed and deposited into the official MGM FINANCIERS PRIV LIMITED Compliance Vault for employee <strong className="text-slate-900">{activeEmployee?.fullName || "Employee"}</strong> ({activeEmployee?.id || "EMP-1001"}).
+                          This document certifies that <strong className="text-slate-900">"{previewDoc.name}"</strong> has been executed and deposited into the official {companyName || "Corporate"} Compliance Vault for employee <strong className="text-slate-900">{activeEmployee?.fullName || "Employee"}</strong> ({activeEmployee?.id || "EMP-1001"}).
                         </p>
 
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-2">
                           <div className="flex justify-between border-b border-slate-200 pb-1.5">
                             <span className="text-slate-500">Executing Entity:</span>
-                            <span className="font-semibold text-slate-900">MGM FINANCIERS PRIV LIMITED</span>
+                            <span className="font-semibold text-slate-900">{companyName || "Corporate Entity"}</span>
                           </div>
                           <div className="flex justify-between border-b border-slate-200 pb-1.5">
                             <span className="text-slate-500">Assigned Employee:</span>
@@ -2766,7 +2768,7 @@ export default function DirectoryView({
                         <div className="pt-4 flex items-center justify-between border-t border-slate-200">
                           <div>
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Digital Signature</p>
-                            <p className="font-serif italic text-emerald-800 text-sm font-semibold mt-1">MGM FINANCIERS PRIV LIMITED Operations Bot</p>
+                            <p className="font-serif italic text-emerald-800 text-sm font-semibold mt-1">{companyName || "Corporate"} Operations Bot</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Date of Archive</p>

@@ -59,28 +59,28 @@ const initialPolicies: Policy[] = [
     id: "pol-1",
     title: "Code of Conduct & Ethics",
     category: "Conduct & Ethics",
-    content: "MGM FINANCIERS PRIV LIMITED and our NBFC parent organisation are committed to maintaining strict professional ethics, workplace integrity, and regulatory compliance. Employees must uphold confidentiality, prevent conflicts of interest, and treat clients and team members with respect.",
+    content: "Our organization and parent enterprise are committed to maintaining strict professional ethics, workplace integrity, and regulatory compliance. Employees must uphold confidentiality, prevent conflicts of interest, and treat clients and team members with respect.",
     lastUpdated: "2026-01-15"
   },
   {
     id: "pol-2",
     title: "Annual Leave & Attendance Policy",
     category: "Employee Benefits",
-    content: "Every active employee receives annual leave allowances including Casual Leave, Medical Leave, and Earned Leave. Daily attendance punches must be logged via MGM FINANCIERS PRIV LIMITED. Leaves must be applied in advance and approved by HR or reporting managers.",
+    content: "Every active employee receives annual leave allowances including Casual Leave, Medical Leave, and Earned Leave. Daily attendance punches must be logged via the SnailHRA portal. Leaves must be applied in advance and approved by HR or reporting managers.",
     lastUpdated: "2026-02-01"
   },
   {
     id: "pol-3",
     title: "Data Protection & Information Security",
     category: "Compliance & Security",
-    content: "NBFC employees handle sensitive customer financial and personal information (PII). All company devices must be secured with multi-factor authentication and passwords. Sharing customer credit info externally without authorization is strictly prohibited.",
+    content: "Employees handle sensitive customer financial and personal information (PII). All company devices must be secured with multi-factor authentication and passwords. Sharing customer credit info externally without authorization is strictly prohibited.",
     lastUpdated: "2026-03-10"
   },
   {
     id: "pol-4",
     title: "Sales Commission & Agent Incentives Framework",
-    category: "NBFC Sales & Commissions",
-    content: "Relationship managers and field sales agents earn monthly incentive commissions based on verified loan disbursements and loan portfolio performance. All deal documentations must pass audit before commission release.",
+    category: "Sales & Commissions",
+    content: "Relationship managers and field sales agents earn monthly incentive commissions based on verified performance and portfolio metrics. All deal documentations must pass audit before commission release.",
     lastUpdated: "2026-04-05"
   }
 ];
@@ -110,7 +110,7 @@ const initialEmployees: Employee[] = [
   {
     id: "EMP-1001",
     fullName: "Ratul Mohindra",
-    email: "ratul.mohindra@mgmfinanciers.com",
+    email: "ratul.mohindra@company.com",
     phone: "+91 98765 43210",
     role: "admin",
     designationId: "des-1",
@@ -124,14 +124,14 @@ const initialEmployees: Employee[] = [
     documents: [],
     onboardingTasks: [],
     avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
-    bio: "Managing Director leading MGM FINANCIERS PRIV LIMITED.",
+    bio: "Managing Director leading corporate operations.",
     branch: "Mumbai Branch",
     password: "$2a$10$e8w.gT60J12F0z1m8dC.e.a3x5z3y7w2x1v0"
   },
   {
     id: "EMP-1002",
     fullName: "Priya Patel",
-    email: "priya.patel@mgmfinanciers.com",
+    email: "priya.patel@company.com",
     phone: "+91 87654 32109",
     role: "hr",
     designationId: "des-3",
@@ -151,7 +151,7 @@ const initialEmployees: Employee[] = [
   {
     id: "EMP-1003",
     fullName: "Rahul Verma",
-    email: "rahul.verma@mgmfinanciers.com",
+    email: "rahul.verma@company.com",
     phone: "+91 76543 21098",
     role: "employee",
     designationId: "des-4",
@@ -171,7 +171,7 @@ const initialEmployees: Employee[] = [
   {
     id: "EMP-1004",
     fullName: "Sneha Iyer",
-    email: "sneha.iyer@mgmfinanciers.com",
+    email: "sneha.iyer@company.com",
     phone: "+91 65432 10987",
     role: "employee",
     designationId: "des-5",

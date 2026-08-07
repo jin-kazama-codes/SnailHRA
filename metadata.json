@@ -1,6 +1,6 @@
 {
-  "name": "MGM FINANCIERS PRIV LIMITED",
-  "description": "Premium full-stack HRMS suite for NBFC financial services with role-based access, automated payroll, onboarding, attendance, and document management.",
+  "name": "SnailHRA",
+  "description": "Next-gen enterprise HR platform for attendance, payroll, leaves, expenses, and AI automation.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GROQ_API"]
 }

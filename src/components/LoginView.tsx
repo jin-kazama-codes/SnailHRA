@@ -97,7 +97,7 @@ export default function LoginView({ onLoginSuccess, onSuperAdminLink }: LoginVie
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. amit.sharma@mgmfinanciers.com"
+                placeholder="e.g. amit.sharma@company.com"
                 className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-11 pr-4 py-3 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium transition-colors"
                 required
                 disabled={loading}

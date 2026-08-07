@@ -197,7 +197,8 @@ export async function GET(request: Request) {
           sentToEmail: row.sent_to_email || row.sentToEmail || ""
         }));
         const slipMap = new Map();
-        sbPayslips.forEach((p: any) => { if (p.id) slipMap.set(p.id, p); });
+        (db.payslips || []).forEach((p: any) => { if (p && p.id) slipMap.set(p.id, p); });
+        sbPayslips.forEach((p: any) => { if (p && p.id) slipMap.set(p.id, p); });
         db.payslips = Array.from(slipMap.values());
       }
 

@@ -109,8 +109,8 @@ const initialData: AppState = {
   companies: [
     {
       id: MGM_COMPANY_ID,
-      name: "MGM Financiers Priv Limited",
-      slug: "mgm-financiers",
+      name: "Corporate Enterprise",
+      slug: "corporate-enterprise",
       subscriptionModel: 1,
       createdAt: new Date().toISOString(),
       isActive: true
@@ -662,7 +662,7 @@ async function startServer() {
     // Resolve company info for this employee
     const empCompanyId = employee.companyId || MGM_COMPANY_ID;
     let subscriptionModel: 1 | 2 | 3 | 4 = 1; // default Basic (features must be purchased)
-    let companyName = "MGM Financiers Priv Limited";
+    let companyName = "Corporate Enterprise";
     if (supabase) {
       try {
         const { data: compData } = await supabase
@@ -990,7 +990,7 @@ async function startServer() {
       const model = comp?.subscriptionModel || 1;
       res.json({
         subscriptionModel: model,
-        companyName: comp?.name || "MGM Financiers Priv Limited",
+        companyName: comp?.name || "Corporate Enterprise",
         isActive: comp?.isActive ?? true,
         features: { whatsapp: [2,4].includes(model), chatbot: [3,4].includes(model) }
       });
@@ -1128,7 +1128,7 @@ async function startServer() {
       const customFieldsSet = new Set<string>();
 
       const salt = bcrypt.genSaltSync(10);
-      const defaultHashedPassword = bcrypt.hashSync("MGM@1234", salt);
+      const defaultHashedPassword = bcrypt.hashSync("Pass@1234", salt);
 
       for (let i = 0; i < incomingEmployees.length; i++) {
         const empData = incomingEmployees[i];
@@ -1160,7 +1160,7 @@ async function startServer() {
           id: newEmpId,
           companyId: targetCompanyId,
           fullName: empData.fullName || `Agent ${newEmpId}`,
-          email: empData.email || `agent.${newEmpId.toLowerCase()}@mgmfinanciers.com`,
+          email: empData.email || `agent.${newEmpId.toLowerCase()}@company.com`,
           phone: empData.phone || "+91 98765 00000",
           role: (empData.role?.toLowerCase() === "admin" || empData.role?.toLowerCase() === "hr") ? empData.role.toLowerCase() : "employee",
           designationId: desigId,
@@ -2123,9 +2123,9 @@ Your primary job is to assist HR managers, Admins, and Employees with their quer
 
 Scope and Safety Guidelines (CRITICAL):
 - You have full access and the right to read the entire database. You can query and display information, salary details, and personal/professional records of any employee when asked.
-- You must ONLY answer questions directly related to MGM FINANCIERS PRIV LIMITED, SnailHR, or the provided database context (e.g. employee details, policies, holidays, company metrics, etc.).
-- If the user asks general knowledge questions, coding/technical help, personal questions, creative writing, or anything unrelated to the MGM FINANCIERS PRIV LIMITED company, policies, or database context, you MUST politely refuse to answer and return ONLY this exact message, and ABSOLUTELY NOTHING ELSE (do not add any greetings, intro, follow-up help, or extra text):
-  "I am only authorized to answer questions related to MGM FINANCIERS PRIV LIMITED company, policies, and its HR database. Please keep your queries relevant to the company."
+- You must ONLY answer questions directly related to the user's company, SnailHR, or the provided database context (e.g. employee details, policies, holidays, company metrics, etc.).
+- If the user asks general knowledge questions, coding/technical help, personal questions, creative writing, or anything unrelated to the company, policies, or database context, you MUST politely refuse to answer and return ONLY this exact message, and ABSOLUTELY NOTHING ELSE (do not add any greetings, intro, follow-up help, or extra text):
+  "I am only authorized to answer questions related to the company, policies, and its HR database. Please keep your queries relevant to the company."
 
 Context Guidelines:
 - Today's date is strictly Monday, July 20, 2026. SnailHR is based in India.

@@ -133,6 +133,17 @@ export default function App() {
     }
   }, [isLoggedIn]);
 
+  // Dynamically update document title based on logged in user's company
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (isLoggedIn && companyName && companyName.trim()) {
+        document.title = `${companyName} - SnailHRA`;
+      } else {
+        document.title = "SnailHRA - Dynamic Workforce & HR Tech Platform";
+      }
+    }
+  }, [companyName, isLoggedIn]);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       if (isSuperAdminLoggedIn) {
@@ -1179,22 +1190,35 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, month, companyId })
-
       });
       const data = await res.json();
       if (!res.ok) {
         showToast(data.error || "Payslip generation failed", "error");
         return;
       }
-      await refreshDatabase();
+      
+      // INSTANT OPTIMISTIC STATE UPDATE: Immediately update payslips, emails, and fines in React state!
+      if (data.payslip) {
+        setPayslips(prev => [data.payslip, ...(prev || []).filter(p => !(p.employeeId === employeeId && p.month === month))]);
+      }
+      if (data.email) {
+        setEmails(prev => [data.email, ...(prev || []).filter(e => e.id !== data.email.id)]);
+      }
+      setFines(prev => (prev || []).map(f => f.employeeId === employeeId && (f.status === "Pending" || f.status === "Deducted From Payroll") ? { ...f, status: "Deducted" } : f));
+      
       showToast("Payslip Generated & Dispatched to employee email inbox successfully!", "success");
+      await refreshDatabase();
     } catch (err) {
       console.error(err);
+      showToast("Payslip generation error", "error");
     }
   };
 
   const handleResetPayslip = async (employeeId: string, month: string) => {
     try {
+      // INSTANT OPTIMISTIC STATE UPDATE: Immediately clear payslip from state!
+      setPayslips(prev => (prev || []).filter(p => !(p.employeeId === employeeId && p.month === month)));
+
       const res = await fetch("/api/payroll/generate", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -1202,10 +1226,11 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        await refreshDatabase();
         showToast("Payslip has been reset successfully.", "success");
+        await refreshDatabase();
       } else {
         showToast(data.error || "Failed to reset payslip", "error");
+        await refreshDatabase();
       }
     } catch (err) {
       console.error(err);
@@ -1216,14 +1241,15 @@ export default function App() {
   // 19. Disburse payslips
   const handlePayAllPayslips = async (month: string) => {
     try {
+      setPayslips(prev => (prev || []).map(p => p.month === month ? { ...p, status: "Paid" } : p));
       const res = await fetch("/api/payroll/pay-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month })
       });
       if (res.ok) {
-        await refreshDatabase();
         showToast("All monthly salary payouts finalized and marked as Paid.", "success");
+        await refreshDatabase();
       }
     } catch (err) {
       console.error(err);
@@ -1930,6 +1956,7 @@ export default function App() {
               customDepartments={customDepartments}
               customBranches={customBranches}
               companyId={companyId}
+              companyName={companyName}
               subscriptionModel={subscriptionModel}
               onOnboardEmployee={handleOnboardEmployee}
               onBulkOnboardEmployee={handleBulkOnboardEmployee}
