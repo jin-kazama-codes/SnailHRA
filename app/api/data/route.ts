@@ -278,7 +278,7 @@ export async function GET(request: Request) {
         db.expenses = Array.from(expMap.values());
       }
 
-      if (holidaysRes.data && holidaysRes.data.length > 0) {
+      if (holidaysRes && !holidaysRes.error && Array.isArray(holidaysRes.data)) {
         db.holidays = holidaysRes.data.map((row: any) => ({
           id: row.id,
           name: capitalizeName(row.name),
@@ -287,8 +287,8 @@ export async function GET(request: Request) {
         })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
       }
 
-      if (leavesRes.data && leavesRes.data.length > 0) {
-        const sbLeaves = leavesRes.data.map((row: any) => ({
+      if (leavesRes && !leavesRes.error && Array.isArray(leavesRes.data)) {
+        db.leaves = leavesRes.data.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
           employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
@@ -299,13 +299,9 @@ export async function GET(request: Request) {
           status: row.status || "Pending",
           appliedDate: row.applied_date || row.appliedDate || ""
         }));
-        const leaveMap = new Map();
-        (db.leaves || []).forEach((l: any) => { if (l.id) leaveMap.set(l.id, l); });
-        sbLeaves.forEach((l: any) => { leaveMap.set(l.id, l); });
-        db.leaves = Array.from(leaveMap.values());
       }
 
-      if (attendanceRes.data && attendanceRes.data.length > 0) {
+      if (attendanceRes && !attendanceRes.error && Array.isArray(attendanceRes.data)) {
         const sbAttendance = attendanceRes.data.map((row: any) => {
           const relatedBreaks = (breaksRes && breaksRes.data)
             ? breaksRes.data
@@ -327,29 +323,7 @@ export async function GET(request: Request) {
             notes: row.notes || ""
           };
         });
-        const attMap = new Map<string, any>();
-        (db.attendance || []).forEach((a: any) => {
-          if (a.id) attMap.set(a.id, a);
-        });
-
-        sbAttendance.forEach((sb: any) => {
-          if (!sb.id) return;
-          const local = attMap.get(sb.id);
-          if (!local) {
-            attMap.set(sb.id, sb);
-          } else {
-            attMap.set(sb.id, {
-              ...sb,
-              ...local,
-              clockIn: local.clockIn || sb.clockIn,
-              clockOut: local.clockOut || sb.clockOut,
-              breaks: (local.breaks && local.breaks.length > 0) ? local.breaks : sb.breaks,
-              workFromHome: local.workFromHome ?? sb.workFromHome
-            });
-          }
-        });
-
-        db.attendance = Array.from(attMap.values());
+        db.attendance = sbAttendance;
       }
 
       if (employeesRes.data && employeesRes.data.length > 0) {
@@ -628,6 +602,7 @@ export async function GET(request: Request) {
     });
   }
 
+  saveDatabase(db);
   return NextResponse.json(db);
 }
 
