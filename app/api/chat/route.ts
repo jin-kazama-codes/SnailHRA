@@ -428,7 +428,7 @@ ${policiesContext}
       return NextResponse.json({ text });
     } catch (apiErr: any) {
       console.error("Groq API call failed error details:", apiErr);
-      const fallbackText = getSmartRuleResponse(message, dbState, employee);
+      const fallbackText = getSmartRuleResponse(message, dbState, employee, tenantName);
       return NextResponse.json({ text: fallbackText });
     }
   } catch (err: any) {
@@ -439,7 +439,7 @@ ${policiesContext}
   }
 }
 
-function getSmartRuleResponse(message: string, dbState: any, employee: any): string {
+function getSmartRuleResponse(message: string, dbState: any, employee: any, tenantName: string = "Corporate"): string {
   const msgLower = message.toLowerCase();
   const userRole = employee ? employee.role : "employee";
 

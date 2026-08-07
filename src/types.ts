@@ -137,7 +137,7 @@ export interface Holiday {
 export interface Policy {
   id: string;
   title: string;
-  category: "Conduct & Ethics" | "Employee Benefits" | "Compliance & Security" | "NBFC Sales & Commissions";
+  category: "Conduct & Ethics" | "Employee Benefits" | "Compliance & Security" | "Sales & Commissions" | "NBFC Sales & Commissions";
   content: string;
   lastUpdated: string;
   companyId?: string;
