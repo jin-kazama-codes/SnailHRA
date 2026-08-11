@@ -186,11 +186,19 @@ export interface InventoryRequest {
   status: "Pending" | "Approved" | "Rejected";
 }
 
+export interface InfractionType {
+  id: string;
+  name: string;
+  description?: string;
+  defaultAmount?: number;
+  companyId?: string;
+}
+
 export interface Fine {
   id: string;
   employeeId: string;
   employeeName: string;
-  reason: "Late Coming" | "Compliance Violation" | "Unprofessional Conduct" | "Lost Asset";
+  reason: string; // dynamic — loaded from InfractionType list
   amount: number;
   date: string; // YYYY-MM-DD
   status: "Pending" | "Paid" | "Deducted From Payroll" | "Deducted";

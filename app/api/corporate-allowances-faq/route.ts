@@ -7,7 +7,6 @@ import { MGM_COMPANY_ID } from "@/src/lib/supabase";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const companyId = searchParams.get("companyId") || "";
-  const db = loadDatabase();
   
   const dbClient = supabaseAdmin || supabase;
 
@@ -18,7 +17,7 @@ export async function GET(request: Request) {
         : dbClient.from("corporate_allowances_faq").select("*");
       
       const { data, error } = await query;
-      if (data && data.length > 0) {
+      if (!error && data) {
         return NextResponse.json(data.map((row: any) => ({
           id: row.id,
           title: row.title || "",
@@ -32,16 +31,10 @@ export async function GET(request: Request) {
     }
   }
   
+  const db = loadDatabase();
   let faqs = db.corporateAllowancesFaqs || [];
   if (companyId) {
-    const filtered = faqs.filter(f => f.companyId === companyId);
-    if (filtered.length > 0) {
-      return NextResponse.json(filtered);
-    }
-    // Fallback seed defaults for company if no faqs exist for this companyId
-    if (companyId === MGM_COMPANY_ID || companyId === "a1b2c3d4-0001-0001-0001-000000000001") {
-      return NextResponse.json(initialCorporateAllowanceFaqs);
-    }
+    return NextResponse.json(faqs.filter(f => f.companyId === companyId));
   }
   
   return NextResponse.json(faqs);
@@ -55,7 +48,6 @@ export async function POST(request: Request) {
     }
     
     const targetCompanyId = companyId || MGM_COMPANY_ID;
-    const db = loadDatabase();
     const newFaq = {
       id: id || "faq-" + Date.now(),
       title: title.trim(),
@@ -64,24 +56,28 @@ export async function POST(request: Request) {
       createdAt: new Date().toISOString()
     };
     
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      const { error } = await dbClient.from("corporate_allowances_faq").upsert({
+        id: newFaq.id,
+        title: newFaq.title,
+        description: newFaq.description,
+        company_id: newFaq.companyId,
+        created_at: newFaq.createdAt
+      }, { onConflict: "id" });
+
+      if (!error) {
+        return NextResponse.json({ success: true, faq: newFaq });
+      } else {
+        console.warn("Supabase corporate_allowances_faq upsert warning:", error);
+      }
+    }
+
+    // Local fallback only if Supabase is unavailable or errored out
+    const db = loadDatabase();
     if (!db.corporateAllowancesFaqs) db.corporateAllowancesFaqs = [];
     db.corporateAllowancesFaqs = [newFaq, ...db.corporateAllowancesFaqs.filter(f => f.id !== newFaq.id)];
     saveDatabase(db);
-    
-    const dbClient = supabaseAdmin || supabase;
-    if (dbClient) {
-      try {
-        await dbClient.from("corporate_allowances_faq").upsert({
-          id: newFaq.id,
-          title: newFaq.title,
-          description: newFaq.description,
-          company_id: newFaq.companyId,
-          created_at: newFaq.createdAt
-        }, { onConflict: "id" });
-      } catch (e) {
-        console.warn("Supabase corporate_allowances_faq upsert warning:", e);
-      }
-    }
     
     return NextResponse.json({ success: true, faq: newFaq });
   } catch (error) {
@@ -97,19 +93,21 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Id is required." }, { status: 400 });
     }
     
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      const { error } = await dbClient.from("corporate_allowances_faq").delete().eq("id", id);
+      if (!error) {
+        return NextResponse.json({ success: true });
+      } else {
+        console.warn("Supabase corporate_allowances_faq delete warning:", error);
+      }
+    }
+    
+    // Local fallback only if Supabase is unavailable or errored out
     const db = loadDatabase();
     if (!db.corporateAllowancesFaqs) db.corporateAllowancesFaqs = [];
     db.corporateAllowancesFaqs = db.corporateAllowancesFaqs.filter(f => f.id !== id);
     saveDatabase(db);
-    
-    const dbClient = supabaseAdmin || supabase;
-    if (dbClient) {
-      try {
-        await dbClient.from("corporate_allowances_faq").delete().eq("id", id);
-      } catch (e) {
-        console.warn("Supabase corporate_allowances_faq delete warning:", e);
-      }
-    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

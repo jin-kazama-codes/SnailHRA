@@ -30,7 +30,7 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
 
     if (match[2] !== undefined) {
       parts.push(
-        <strong key={match.index} className="font-semibold text-slate-900 dark:text-emerald-300">
+        <strong key={match.index} className="font-semibold text-slate-900 dark:text-rose-400">
           {match[2]}
         </strong>
       );
@@ -67,7 +67,7 @@ function FormattedMessage({ text }: { text: string }) {
         if (trimmed.startsWith("### ") || trimmed.startsWith("#### ") || trimmed.startsWith("# ")) {
           const headingText = trimmed.replace(/^#+\s*/, "");
           return (
-            <h4 key={i} className="font-semibold text-[12px] text-emerald-700 dark:text-emerald-400 mt-1 mb-1">
+            <h4 key={i} className="font-semibold text-[12px] text-[#ec003f] dark:text-rose-400 mt-1 mb-1">
               {parseInlineMarkdown(headingText)}
             </h4>
           );
@@ -77,7 +77,7 @@ function FormattedMessage({ text }: { text: string }) {
           const bulletText = trimmed.replace(/^[•\-\*]\s*/, "");
           return (
             <div key={i} className="flex items-start space-x-1.5 pl-0.5 my-0.5">
-              <span className="text-emerald-500 font-bold text-[10px] leading-relaxed select-none">•</span>
+              <span className="text-[#ec003f] font-bold text-[10px] leading-relaxed select-none">•</span>
               <span className="flex-1 leading-relaxed">{parseInlineMarkdown(bulletText)}</span>
             </div>
           );
@@ -213,7 +213,7 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
       {/* Floating Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 bg-emerald-600 hover:bg-emerald-500 text-white p-3.5 rounded-full shadow-lg hover:shadow-emerald-950/20 hover:scale-105 transition-all flex items-center justify-center cursor-pointer border border-emerald-500/20"
+        className="fixed bottom-6 right-6 z-50 bg-[#ec003f] hover:bg-[#c90035] text-white p-3.5 rounded-full shadow-lg hover:shadow-rose-950/20 hover:scale-105 transition-all flex items-center justify-center cursor-pointer border border-[#ec003f]/20"
         title={`Chat with ${companyName} AI`}
       >
         {isOpen ? <X className="w-5 h-5" /> : <MessageSquare className="w-5 h-5 fill-white" />}
@@ -224,14 +224,14 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
         <div className="fixed bottom-20 right-3 sm:right-6 z-50 w-[calc(100vw-24px)] sm:w-[380px] h-[520px] max-h-[calc(100vh-95px)] bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all dark:neon-glow animate-fade-in">
           
           {/* Chat Header */}
-          <div className="bg-linear-to-r from-emerald-600 to-teal-800 p-4 text-white flex items-center justify-between shrink-0">
+          <div className="bg-[#ec003f] p-4 text-white flex items-center justify-between shrink-0">
             <div className="flex items-center space-x-2">
               <div className="bg-white/10 p-1.5 rounded-lg">
-                <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
+                <Sparkles className="w-4 h-4 text-rose-200 animate-pulse" />
               </div>
               <div>
                 <h3 className="font-display font-semibold text-xs text-white">{companyName} Assistant</h3>
-                <span className="text-[10px] text-emerald-200">Groq Llama 3.3 Core • Live</span>
+                <span className="text-[10px] text-rose-100">Groq Llama 3.3 Core • Live</span>
               </div>
             </div>
             <button 
@@ -252,7 +252,7 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
                 <div
                   className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
                     msg.sender === "user"
-                      ? "bg-emerald-600 text-white rounded-tr-xs"
+                      ? "bg-[#ec003f] text-white rounded-tr-xs"
                       : "bg-white dark:bg-[#1a1a1a] border border-slate-100/50 dark:border-[#222]/80 text-slate-800 dark:text-gray-200 rounded-tl-xs shadow-xs"
                   }`}
                 >
@@ -266,7 +266,7 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
 
             {isLoading && (
               <div className="flex items-center space-x-1.5 text-slate-400 dark:text-gray-500 text-[11px] font-medium font-mono pl-1">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-500" />
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#ec003f]" />
                 <span>Assistant is thinking...</span>
               </div>
             )}
@@ -280,7 +280,7 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
               <button
                 key={idx}
                 onClick={() => handleQuickChipClick(chip)}
-                className="text-[10px] font-semibold text-slate-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] border border-slate-100 dark:border-[#222] px-2.5 py-1 rounded-full transition-colors cursor-pointer shrink-0"
+                className="text-[10px] font-semibold text-slate-500 hover:text-[#ec003f] dark:text-gray-400 dark:hover:text-rose-400 bg-slate-50 hover:bg-slate-100 dark:bg-[#1a1a1a] dark:hover:bg-[#222] border border-slate-100 dark:border-[#222] px-2.5 py-1 rounded-full transition-colors cursor-pointer shrink-0"
               >
                 {chip}
               </button>
@@ -303,7 +303,7 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
             <button
               type="submit"
               disabled={isLoading || !inputValue.trim()}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white p-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center cursor-pointer"
+              className="bg-[#ec003f] hover:bg-[#c90035] disabled:opacity-50 text-white p-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center cursor-pointer"
             >
               <Send className="w-4 h-4 fill-white" />
             </button>
@@ -313,3 +313,4 @@ export default function ChatbotWidget({ currentEmployeeId, role, companyId = "",
     </>
   );
 }
+

@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
         payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
-        seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes
+        seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -135,7 +135,10 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("room_bookings").select("*")),
           companyId
             ? safeQuery(dbClient.from("custom_amenities").select("*").eq("company_id", companyId))
-            : safeQuery(dbClient.from("custom_amenities").select("*"))
+            : safeQuery(dbClient.from("custom_amenities").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("infraction_types").select("*").eq("company_id", companyId))
+            : safeQuery(dbClient.from("infraction_types").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -166,18 +169,14 @@ export async function GET(request: Request) {
         db.expenseCategories = Array.from(catMap.values());
       }
 
-      if (corporateAllowancesFaqRes && corporateAllowancesFaqRes.data && corporateAllowancesFaqRes.data.length > 0) {
-        const sbFaqs = corporateAllowancesFaqRes.data.map((row: any) => ({
+      if (corporateAllowancesFaqRes && !corporateAllowancesFaqRes.error && Array.isArray(corporateAllowancesFaqRes.data)) {
+        db.corporateAllowancesFaqs = corporateAllowancesFaqRes.data.map((row: any) => ({
           id: row.id,
           title: row.title || "",
           description: row.description || "",
           companyId: row.company_id || row.companyId || null,
           createdAt: row.created_at || row.createdAt || new Date().toISOString()
         }));
-        const faqMap = new Map();
-        (db.corporateAllowancesFaqs || []).forEach((f: any) => { if (f.id) faqMap.set(f.id, f); });
-        sbFaqs.forEach((f: any) => { faqMap.set(f.id, f); });
-        db.corporateAllowancesFaqs = Array.from(faqMap.values());
       }
 
       if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
@@ -531,6 +530,20 @@ export async function GET(request: Request) {
         db.customAmenities = customAmenitiesRes.data.map((a: any) => {
           return a.icon ? `${capitalizeName(a.name)}|${a.icon}` : capitalizeName(a.name);
         }).filter(Boolean);
+      }
+
+      if (infractionTypesRes && infractionTypesRes.data && infractionTypesRes.data.length > 0) {
+        const sbInfractionTypes = infractionTypesRes.data.map((row: any) => ({
+          id: row.id,
+          name: row.name || "",
+          description: row.description || "",
+          defaultAmount: Number(row.default_amount ?? row.defaultAmount ?? 0),
+          companyId: row.company_id || row.companyId || null,
+        }));
+        const typeMap = new Map();
+        (db.infractionTypes || []).forEach((t: any) => { if (t.id) typeMap.set(t.id, t); });
+        sbInfractionTypes.forEach((t: any) => { typeMap.set(t.id, t); });
+        db.infractionTypes = Array.from(typeMap.values());
       }
 
       // Load local tenant specific timing setting if available

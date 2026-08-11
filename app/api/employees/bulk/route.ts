@@ -37,29 +37,7 @@ export async function POST(request: Request) {
     const db = loadDatabase();
     if (!db.employees) db.employees = [];
 
-    // Ensure EMP-1001 (Ratul Mohindra Admin) is preserved
-    if (!db.employees.find(e => e.id === "EMP-1001")) {
-      db.employees.unshift({
-        id: "EMP-1001",
-        fullName: "Ratul Mohindra",
-        email: "ratul.mohindra@company.com",
-        phone: "+91 98765 43210",
-        role: "admin",
-        designationId: "des-1",
-        department: "Executive",
-        joiningDate: "2024-03-15",
-        status: "Active",
-        salary: { basic: 95000, hra: 18000, allowances: 10000, pfDeduction: 6500 },
-        bankDetails: { accountNumber: "**** (BFHL)", bankName: "HDFC Bank", ifsc: "HDFC0000104" },
-        address: "B-402, Skyline Residency, Sector 62, Noida, UP - 201301",
-        emergencyContact: { name: "Suman Sharma", relation: "Spouse", phone: "+91 98765 43211" },
-        documents: [],
-        onboardingTasks: [],
-        avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=256&auto=format&fit=crop",
-        bio: "Managing Director leading corporate operations.",
-        branch: "Mumbai Branch"
-      });
-    }
+
 
     const createdEmployees: Employee[] = [];
     const todayStr = new Date().toISOString().split("T")[0];

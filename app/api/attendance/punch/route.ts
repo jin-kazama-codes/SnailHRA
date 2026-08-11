@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { AttendancePunch } from "@/src/types";
-import { supabase, syncPunchToSupabase, getCompanyIdForEmployee } from "@/src/lib/supabase";
+import { AttendancePunch, Fine } from "@/src/types";
+import { supabase, syncPunchToSupabase, syncFineToSupabase, getCompanyIdForEmployee } from "@/src/lib/supabase";
 
 import os from "os";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
@@ -202,52 +202,54 @@ export async function POST(request: Request) {
     let punch: AttendancePunch;
 
     if (type === "clockin" || (!type && body.clockIn)) {
+      const now = new Date();
+      const clockInTimeStr = body.clockIn || now.toISOString();
+      const clockInObj = new Date(clockInTimeStr);
+      const hours = clockInObj.getHours();
+      const minutes = clockInObj.getMinutes();
+
+      const companyId = await getCompanyIdForEmployee(employeeId);
+      let lateTime = "09:30";
+      if (supabase) {
+        try {
+          let settingsData = null;
+          if (companyId) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (settingsData && settingsData.late_threshold) {
+            lateTime = settingsData.late_threshold;
+          }
+        } catch (e) {}
+      } else {
+        const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
+        lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
+      }
+
+      const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
+      const isLate = hours > lateHours || (hours === lateHours && minutes > lateMinutes);
+
       if (existingIndex >= 0) {
         // If punch already exists for today, update or return existing active punch
         const existing = db.attendance[existingIndex];
         punch = {
           ...existing,
-          clockIn: body.clockIn || existing.clockIn || new Date().toISOString(),
-          status: body.status || existing.status || "Present",
+          clockIn: body.clockIn || existing.clockIn || now.toISOString(),
+          status: body.status || existing.status || (isLate ? "Late" : "Present"),
           workFromHome: body.workFromHome ?? existing.workFromHome ?? false
         };
         delete (punch as any).type;
         db.attendance[existingIndex] = punch;
       } else {
-        const now = new Date();
-        const hours = now.getHours();
-        const minutes = now.getMinutes();
-        
-        const companyId = await getCompanyIdForEmployee(employeeId);
-        let lateTime = "09:30";
-        if (supabase) {
-          try {
-            let settingsData = null;
-            if (companyId) {
-              const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
-              if (data) settingsData = data;
-            }
-            if (!settingsData) {
-              const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
-              if (data) settingsData = data;
-            }
-            if (settingsData && settingsData.late_threshold) {
-              lateTime = settingsData.late_threshold;
-            }
-          } catch (e) {}
-        } else {
-          const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
-          lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
-        }
-        
-        const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
-        const isLate = hours > lateHours || (hours === lateHours && minutes > lateMinutes);
-
         punch = {
           id: body.id || `pun-${Date.now()}`,
           employeeId,
           date: body.date || todayStr,
-          clockIn: body.clockIn || now.toISOString(),
+          clockIn: clockInTimeStr,
           clockOut: body.clockOut || null,
           breaks: body.breaks || [],
           status: body.status || (isLate ? "Late" : "Present"),
@@ -255,6 +257,70 @@ export async function POST(request: Request) {
         };
 
         db.attendance.push(punch);
+      }
+
+      // Auto-issue fine if employee clock in is late (past Late Buffer time)
+      if (isLate || punch.status === "Late") {
+        const punchDate = punch.date || todayStr;
+        if (!db.fines) db.fines = [];
+
+        // Check if fine already logged for this employee and date for Late Coming
+        const alreadyFined = db.fines.some(
+          (f: any) => f.employeeId === employeeId && f.date === punchDate && (
+            (f.reason || "").toLowerCase().includes("late") || (f.reason || "").toLowerCase().includes("tardiness")
+          )
+        );
+
+        if (!alreadyFined) {
+          let sbAlreadyFined = false;
+          if (supabase) {
+            try {
+              const { data: sbFines } = await supabase
+                .from("fines")
+                .select("id, reason")
+                .eq("employee_id", employeeId)
+                .eq("date", punchDate);
+              if (sbFines && sbFines.some((f: any) => (f.reason || "").toLowerCase().includes("late"))) {
+                sbAlreadyFined = true;
+              }
+            } catch (e) {}
+          }
+
+          if (!sbAlreadyFined) {
+            let lateInfr = (db.infractionTypes || []).find(
+              (t: any) => (t.name || "").toLowerCase().includes("late") || (t.name || "").toLowerCase().includes("tardiness")
+            );
+            if (!lateInfr && db.infractionTypes && db.infractionTypes.length > 0) {
+              lateInfr = db.infractionTypes[0];
+            }
+
+            const reason = lateInfr?.name || "Late Coming";
+            const amount = Number(lateInfr?.defaultAmount) > 0 ? Number(lateInfr.defaultAmount) : 500;
+
+            const emp = (db.employees || []).find((e: any) => e.id === employeeId);
+            const empName = emp ? emp.fullName : `Employee ${employeeId}`;
+
+            const autoFine: Fine = {
+              id: `fin-auto-${Date.now()}`,
+              employeeId,
+              employeeName: empName,
+              reason,
+              amount,
+              date: punchDate,
+              status: "Pending"
+            };
+
+            db.fines.unshift(autoFine);
+
+            if (supabase) {
+              try {
+                await syncFineToSupabase(autoFine);
+              } catch (e) {
+                console.warn("Auto-fine Supabase sync warning:", e);
+              }
+            }
+          }
+        }
       }
     } else if (type === "clockout") {
       const now = new Date();

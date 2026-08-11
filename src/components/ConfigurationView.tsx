@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star,
+  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star, Scale,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
   Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2
 } from "lucide-react";
-import { Designation, ExpenseCategory, CorporateAllowanceFaq } from "../types";
+import { Designation, ExpenseCategory, CorporateAllowanceFaq, InfractionType } from "../types";
 
 const AMENITY_ICONS: Record<string, React.ReactNode> = {
   "Monitor": <Monitor className="w-3.5 h-3.5 text-slate-400" />,
@@ -51,6 +51,7 @@ interface ConfigurationViewProps {
   customBranches: string[];
   customAmenities: string[];
   expenseCategories: ExpenseCategory[];
+  infractionTypes?: InfractionType[];
   corporateAllowancesFaqs?: CorporateAllowanceFaq[];
   supabaseStatus: {
     connected: boolean;
@@ -68,6 +69,9 @@ interface ConfigurationViewProps {
   ) => void;
   onAddExpenseCategory: (name: string, description: string) => void;
   onRemoveExpenseCategory: (id: string) => void;
+  onAddInfractionType?: (name: string, description: string, defaultAmount: number) => void;
+  onRemoveInfractionType?: (id: string) => void;
+  onUpdateInfractionType?: (id: string, name: string, description: string, defaultAmount: number) => void;
   onAddCorporateAllowanceFaq?: (title: string, description: string, id?: string) => void;
   onRemoveCorporateAllowanceFaq?: (id: string) => void;
   wifiRestrictionSettings?: {
@@ -86,6 +90,7 @@ export default function ConfigurationView({
   customBranches,
   customAmenities = [],
   expenseCategories,
+  infractionTypes = [],
   corporateAllowancesFaqs = [],
   supabaseStatus,
   subscriptionModel = 1,
@@ -94,12 +99,15 @@ export default function ConfigurationView({
   onUpdateCollection,
   onAddExpenseCategory,
   onRemoveExpenseCategory,
+  onAddInfractionType,
+  onRemoveInfractionType,
+  onUpdateInfractionType,
   onAddCorporateAllowanceFaq,
   onRemoveCorporateAllowanceFaq,
   wifiRestrictionSettings,
   onSaveWifiSettings
 }: ConfigurationViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "allowancesFaq">(() => {
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "infractions" | "allowancesFaq">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("snailhr_configSubTab") as any) || "general";
     }
@@ -133,6 +141,46 @@ export default function ConfigurationView({
     onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
     setNewCatName("");
     setNewCatDesc("");
+  };
+
+  // Infraction Types Form State
+  const [editingInfrId, setEditingInfrId] = useState<string | null>(null);
+  const [newInfrName, setNewInfrName] = useState("");
+  const [newInfrDesc, setNewInfrDesc] = useState("");
+  const [newInfrAmount, setNewInfrAmount] = useState("500");
+
+  const handleSubmitInfractionType = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newInfrName.trim()) return;
+
+    if (editingInfrId) {
+      if (onUpdateInfractionType) {
+        onUpdateInfractionType(editingInfrId, newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
+      }
+    } else {
+      if (onAddInfractionType) {
+        onAddInfractionType(newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
+      }
+    }
+
+    setEditingInfrId(null);
+    setNewInfrName("");
+    setNewInfrDesc("");
+    setNewInfrAmount("500");
+  };
+
+  const handleEditInfractionType = (type: InfractionType) => {
+    setEditingInfrId(type.id);
+    setNewInfrName(type.name);
+    setNewInfrDesc(type.description || "");
+    setNewInfrAmount(String(type.defaultAmount ?? 500));
+  };
+
+  const handleCancelInfrEdit = () => {
+    setEditingInfrId(null);
+    setNewInfrName("");
+    setNewInfrDesc("");
+    setNewInfrAmount("500");
   };
 
   // Corporate Allowance FAQ Form State
@@ -447,6 +495,12 @@ export default function ConfigurationView({
             className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "expenses" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
           >
             Expense Categories
+          </button>
+          <button
+            onClick={() => setActiveSubTab("infractions")}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "infractions" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            Infraction Types
           </button>
           <button
             onClick={() => setActiveSubTab("allowancesFaq")}
@@ -1083,6 +1137,132 @@ export default function ConfigurationView({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub Tab: Infraction Types */}
+      {activeSubTab === "infractions" && (
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-6">
+            <div className="flex items-center space-x-2 border-b border-slate-50 dark:border-[#1a1a1a] pb-3">
+              <Scale className="w-5 h-5 text-rose-500" />
+              <div>
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base">Infraction Type Management</h3>
+                <p className="text-xs text-slate-400">Define the types of disciplinary infractions that can be logged against employees</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form */}
+              <div className="bg-slate-50/50 dark:bg-[#1a1a1a]/30 p-4 border border-slate-100 dark:border-[#1a1a1a] rounded-xl space-y-4 h-fit">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-display font-semibold text-slate-700 dark:text-gray-200 text-xs uppercase tracking-wider">
+                    {editingInfrId ? "Edit Infraction Type" : "Add New Infraction Type"}
+                  </h4>
+                  {editingInfrId && (
+                    <button
+                      onClick={handleCancelInfrEdit}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Cancel</span>
+                    </button>
+                  )}
+                </div>
+                <form onSubmit={handleSubmitInfractionType} className="space-y-3 text-xs">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Type Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Tardiness, Misconduct"
+                      value={newInfrName}
+                      onChange={(e) => setNewInfrName(e.target.value)}
+                      className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-800 dark:text-white focus:outline-hidden"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Description (optional)</label>
+                    <textarea
+                      placeholder="e.g. Arriving late without prior notice"
+                      value={newInfrDesc}
+                      onChange={(e) => setNewInfrDesc(e.target.value)}
+                      rows={2}
+                      className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-800 dark:text-white focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Default Fine Amount (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 500"
+                      value={newInfrAmount}
+                      onChange={(e) => setNewInfrAmount(e.target.value)}
+                      className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-800 dark:text-white font-mono font-bold focus:outline-hidden"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {editingInfrId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    <span>{editingInfrId ? "Save Changes" : "Add Infraction Type"}</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Table */}
+              <div className="lg:col-span-2 overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
+                      <th className="py-2 px-3">Infraction Type</th>
+                      <th className="py-2 px-3">Description</th>
+                      <th className="py-2 px-3">Default Fine (₹)</th>
+                      <th className="py-2 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
+                    {infractionTypes.map((type) => (
+                      <tr key={type.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/40 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-300">{type.name}</td>
+                        <td className="py-2.5 px-3 text-slate-500 dark:text-gray-400 font-medium">{type.description || "-"}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-rose-500">₹{(type.defaultAmount || 0).toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <div className="flex items-center justify-end space-x-1">
+                            <button
+                              onClick={() => handleEditInfractionType(type)}
+                              className="text-slate-400 hover:text-indigo-500 transition-colors p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-950/20 cursor-pointer"
+                              title="Edit Infraction Type"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Remove infraction type "${type.name}"?`)) {
+                                  onRemoveInfractionType?.(type.id);
+                                }
+                              }}
+                              className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                              title="Delete Infraction Type"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {infractionTypes.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="text-center py-4 text-slate-400">No infraction types defined yet. Add your first type above.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

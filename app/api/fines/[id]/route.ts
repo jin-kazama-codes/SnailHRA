@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { updateFineStatusInSupabase } from "@/src/lib/supabase";
+import { updateFineStatusInSupabase, deleteFineFromSupabase } from "@/src/lib/supabase";
 
 export async function PUT(
   request: Request,
@@ -29,4 +29,27 @@ export async function PUT(
     return NextResponse.json({ error: error?.message || "Failed to update fine" }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> | { id: string } }
+) {
+  try {
+    const resolvedParams = await params;
+    const fineId = resolvedParams.id;
+    const db = loadDatabase();
+
+    if (!db.fines) db.fines = [];
+    db.fines = db.fines.filter(f => f.id !== fineId);
+
+    saveDatabase(db);
+
+    await deleteFineFromSupabase(fineId);
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "Failed to delete fine" }, { status: 500 });
+  }
+}
+
 

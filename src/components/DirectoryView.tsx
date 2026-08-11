@@ -479,9 +479,9 @@ export default function DirectoryView({
   const [onboardPayrollConfig, setOnboardPayrollConfig] = useState<PayrollConfig | null>(null);
   const [onboardIsPfExempt, setOnboardIsPfExempt] = useState<boolean>(false);
 
-  // Fetch tenant payroll rules when onboarding modal opens
+  // Fetch tenant payroll rules when onboarding or editing modal opens
   useEffect(() => {
-    if (showOnboardForm) {
+    if (showOnboardForm || showEditModal) {
       fetch(`/api/payroll/config?companyId=${encodeURIComponent(companyId || "")}`)
         .then(res => res.json())
         .then(data => {
@@ -489,9 +489,9 @@ export default function DirectoryView({
             setOnboardPayrollConfig(data.config);
           }
         })
-        .catch(err => console.warn("Failed to load payroll config for onboarding:", err));
+        .catch(err => console.warn("Failed to load payroll config for employee modal:", err));
     }
-  }, [showOnboardForm, companyId]);
+  }, [showOnboardForm, showEditModal, companyId]);
 
   // Helper to recompute HRA, Allowances, PF, Tax dynamically when Basic salary or PF exemption toggle changes
   const recomputeOnboardSalaryComponents = (basicStr: string, exemptFlag: boolean) => {
@@ -748,13 +748,33 @@ export default function DirectoryView({
         bio: editBio,
         avatarUrl: avatarUrl,
         dateOfBirth: editDateOfBirth,
-        salary: {
-          basic: Number(editSalaryBasic),
-          hra: Number(editSalaryHra),
-          allowances: Number(editSalaryAllowances),
-          pfDeduction: Number(editSalaryPf),
-          tdsDeduction: Number(editSalaryTds),
-        },
+        salary: (() => {
+          const basicVal = Number(editSalaryBasic) || 0;
+          const hraVal = onboardPayrollConfig
+            ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
+            : Math.round(basicVal * 0.4);
+          const allowancesVal = onboardPayrollConfig
+            ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
+            : Math.round(basicVal * 0.2);
+          const grossVal = basicVal + hraVal + allowancesVal;
+          const isPfExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee.id);
+          const pfVal = isPfExempt
+            ? 0
+            : (onboardPayrollConfig
+              ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+              : Math.round(basicVal * 0.12));
+          const tdsVal = onboardPayrollConfig
+            ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(grossVal * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
+            : Math.round(grossVal * 0.05);
+
+          return {
+            basic: basicVal,
+            hra: hraVal,
+            allowances: allowancesVal,
+            pfDeduction: pfVal,
+            tdsDeduction: tdsVal,
+          };
+        })(),
         bankDetails: {
           accountNumber: editBankAccount,
           bankName: editBankName,
@@ -1210,24 +1230,6 @@ export default function DirectoryView({
 
         {(role === "admin" || role === "hr") && (
           <div className="flex items-center gap-2 shrink-0">
-            {role === "admin" && (
-              <button
-                onClick={() => setShowManageCollections(true)}
-                className="bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-900/50 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
-                title="Manage company departments and branch offices"
-              >
-                <Plus className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                <span>+ Add Dept / Branch</span>
-              </button>
-            )}
-            <button
-              onClick={() => setViewMode("bulk_upload")}
-              className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
-              title="Bulk upload employees via Excel spreadsheet"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Upload Excel / Bulk Import</span>
-            </button>
             <button
               onClick={() => {
                 setShowOnboardForm(true);
@@ -1699,8 +1701,14 @@ export default function DirectoryView({
 
       {/* Onboard New Employee Slideover */}
       {showOnboardForm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end">
-          <div className="bg-white dark:bg-[#0f0f0f] border-l border-slate-100 dark:border-[#1a1a1a] w-full max-w-2xl h-full p-6 overflow-y-auto custom-scrollbar flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end"
+          onClick={() => setShowOnboardForm(false)}
+        >
+          <div 
+            className="bg-white dark:bg-[#0f0f0f] border-l border-slate-100 dark:border-[#1a1a1a] w-full max-w-2xl h-full p-6 overflow-y-auto custom-scrollbar flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
                 <div>
@@ -2130,8 +2138,14 @@ export default function DirectoryView({
       )}
       {/* Edit Employee Slideover */}
       {showEditModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end">
-          <div className="bg-white dark:bg-[#0f0f0f] border-l border-slate-100 dark:border-[#1a1a1a] w-full max-w-2xl h-full p-6 overflow-y-auto custom-scrollbar flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300">
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div 
+            className="bg-white dark:bg-[#0f0f0f] border-l border-slate-100 dark:border-[#1a1a1a] w-full max-w-2xl h-full p-6 overflow-y-auto custom-scrollbar flex flex-col justify-between shadow-2xl animate-in slide-in-from-right duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
                 <div>
@@ -2301,53 +2315,67 @@ export default function DirectoryView({
                 </div>
 
                 {/* Section 3: Salary structure */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">3. Salary Allocation Break-up (Monthly)</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Basic Salary (INR)</label>
+                <div className="p-4 rounded-2xl bg-emerald-50/40 dark:bg-emerald-950/20 border-2 border-emerald-500/40 dark:border-emerald-500/30 ring-4 ring-emerald-500/10 shadow-xs">
+                  <h4 className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>3. SALARY ALLOCATION (MONTHLY)</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-gray-300 mb-1">Basic Salary (INR) *</label>
                       <input
                         type="number"
                         value={editSalaryBasic}
                         onChange={(e) => setEditSalaryBasic(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                        className="w-full bg-white dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-emerald-300 dark:border-emerald-700/50 font-mono font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs"
+                        placeholder="e.g. 50000"
                       />
                     </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">HRA (INR)</label>
-                      <input
-                        type="number"
-                        value={editSalaryHra}
-                        onChange={(e) => setEditSalaryHra(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Allowances (INR)</label>
-                      <input
-                        type="number"
-                        value={editSalaryAllowances}
-                        onChange={(e) => setEditSalaryAllowances(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">PF Deduction (INR)</label>
-                      <input
-                        type="number"
-                        value={editSalaryPf}
-                        onChange={(e) => setEditSalaryPf(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div className="flex flex-col justify-end">
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">TDS / Profession Tax (INR)</label>
-                      <input
-                        type="number"
-                        value={editSalaryTds}
-                        onChange={(e) => setEditSalaryTds(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
+                    
+                    <div className="text-[11px] text-slate-700 dark:text-gray-200 bg-white dark:bg-[#0d1612] p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs space-y-2">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                        <span className="flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-emerald-500" />
+                          Calculated via Salary &amp; PF Rules
+                        </span>
+                      </div>
+                      {(() => {
+                        const basicVal = Number(editSalaryBasic) || 0;
+                        const hra = onboardPayrollConfig
+                          ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
+                          : Math.round(basicVal * 0.4);
+                        const allowances = onboardPayrollConfig
+                          ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
+                          : Math.round(basicVal * 0.2);
+                        const gross = basicVal + hra + allowances;
+                        const isExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee?.id);
+                        const pf = isExempt
+                          ? 0
+                          : (onboardPayrollConfig
+                            ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+                            : Math.round(basicVal * 0.12));
+                        const tax = onboardPayrollConfig
+                          ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(gross * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
+                          : Math.round(gross * 0.05);
+                        const net = Math.max(0, gross - pf - tax);
+
+                        return (
+                          <div className="space-y-1.5 text-[11px]">
+                            <div className="flex justify-between">
+                              <span className="text-slate-600 dark:text-gray-400">HRA: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{hra.toLocaleString()}</strong></span>
+                              <span className="text-slate-600 dark:text-gray-400">Allowances: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{allowances.toLocaleString()}</strong></span>
+                            </div>
+                            <div className="flex justify-between border-t border-emerald-100 dark:border-emerald-900/50 pt-1.5">
+                              <span className="text-slate-600 dark:text-gray-400">PF: <strong className="font-mono text-slate-800 dark:text-gray-200">{isExempt ? "Exempt (₹0)" : `₹${pf.toLocaleString()}`}</strong></span>
+                              <span className="text-slate-600 dark:text-gray-400">Tax/TDS: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{tax.toLocaleString()}</strong></span>
+                            </div>
+                            <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-400 pt-1.5 border-t border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-lg">
+                              <span>Est. Gross: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{gross.toLocaleString()}</span></span>
+                              <span>Est. Net: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{net.toLocaleString()}</span></span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

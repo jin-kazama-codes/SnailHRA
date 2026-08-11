@@ -11,7 +11,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking
+  SeatLayout, Room, RoomBooking, InfractionType
 } from "./types";
 
 // Import Modular Views
@@ -191,6 +191,7 @@ export default function App() {
   const [customBranches, setCustomBranches] = useState<string[]>([]);
   const [customAmenities, setCustomAmenities] = useState<string[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [infractionTypes, setInfractionTypes] = useState<InfractionType[]>([]);
   const [corporateAllowancesFaqs, setCorporateAllowancesFaqs] = useState<CorporateAllowanceFaq[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; synced: boolean; error?: string }>({
     connected: false,
@@ -371,6 +372,7 @@ export default function App() {
       setCustomBranches(data.customBranches || []);
       setCustomAmenities(data.customAmenities || []);
       setExpenseCategories(data.expenseCategories || []);
+      setInfractionTypes(data.infractionTypes || []);
       setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
       if (data.wifiRestrictionSettings) {
         setWifiRestrictionSettings(data.wifiRestrictionSettings);
@@ -1152,6 +1154,26 @@ export default function App() {
     }
   };
 
+  const handleDeleteFine = async (id: string) => {
+    try {
+      setFines(prev => (prev || []).filter(f => f.id !== id));
+      const res = await fetch(`/api/fines/${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Fine record deleted/revoked successfully.", "info");
+      } else {
+        showToast("Failed to delete fine record.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting fine record.", "error");
+      await refreshDatabase();
+    }
+  };
+
   // 16. Admin create designation
   const handleAddDesignation = async (title: string, department: string) => {
     try {
@@ -1355,6 +1377,73 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast("Error saving WiFi restriction settings.", "error");
+    }
+  };
+
+  const handleAddInfractionType = async (name: string, description: string, defaultAmount: number = 0) => {
+    try {
+      const tempId = `infr-${Date.now()}`;
+      const newType: InfractionType = { id: tempId, name, companyId, description, defaultAmount };
+      setInfractionTypes(prev => [newType, ...prev]);
+
+      const res = await fetch("/api/infraction-types", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newType)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Infraction Type created successfully!", "success");
+      } else {
+        showToast("Failed to create infraction type.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error creating infraction type.", "error");
+      await refreshDatabase();
+    }
+  };
+
+  const handleUpdateInfractionType = async (id: string, name: string, description: string, defaultAmount: number) => {
+    try {
+      const updated: InfractionType = { id, name, description, defaultAmount, companyId };
+      setInfractionTypes(prev => prev.map(t => t.id === id ? updated : t));
+
+      const res = await fetch("/api/infraction-types", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Infraction Type updated successfully!", "success");
+      } else {
+        showToast("Failed to update infraction type.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error updating infraction type.", "error");
+      await refreshDatabase();
+    }
+  };
+
+  const handleRemoveInfractionType = async (id: string) => {
+    try {
+      setInfractionTypes(prev => prev.filter(t => t.id !== id));
+      const res = await fetch(`/api/infraction-types?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Infraction Type deleted.", "info");
+      } else {
+        showToast("Failed to delete infraction type.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting infraction type.", "error");
+      await refreshDatabase();
     }
   };
 
@@ -2077,14 +2166,16 @@ export default function App() {
           )}
 
           {currentView === "fines" && (
-            <FinesView
+          <FinesView
               fines={fines}
               employees={employees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               companyName={companyName}
+              infractionTypes={infractionTypes}
               onAddFine={handleAddFine}
               onUpdateFineStatus={handleUpdateFineStatus}
+              onDeleteFine={handleDeleteFine}
             />
           )}
 
@@ -2129,6 +2220,7 @@ export default function App() {
               customBranches={customBranches}
               customAmenities={customAmenities}
               expenseCategories={expenseCategories}
+              infractionTypes={infractionTypes}
               corporateAllowancesFaqs={corporateAllowancesFaqs}
               supabaseStatus={supabaseStatus}
               subscriptionModel={subscriptionModel}
@@ -2138,6 +2230,9 @@ export default function App() {
               onUpdateCollection={handleUpdateCollection}
               onAddExpenseCategory={handleAddExpenseCategory}
               onRemoveExpenseCategory={handleRemoveExpenseCategory}
+              onAddInfractionType={handleAddInfractionType}
+              onRemoveInfractionType={handleRemoveInfractionType}
+              onUpdateInfractionType={handleUpdateInfractionType}
               onAddCorporateAllowanceFaq={handleAddCorporateAllowanceFaq}
               onRemoveCorporateAllowanceFaq={handleRemoveCorporateAllowanceFaq}
               onSaveWifiSettings={handleSaveWifiSettings}
