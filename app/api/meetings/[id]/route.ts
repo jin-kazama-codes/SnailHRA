@@ -14,14 +14,20 @@ export async function PUT(
 
     if (!db.meetings) db.meetings = [];
     const index = db.meetings.findIndex(m => m.id === meetingId);
-    
+
     if (index >= 0) {
+      // Update existing meeting
       db.meetings[index] = { ...db.meetings[index], ...body };
       saveDatabase(db);
       await syncMeetingToSupabase(db.meetings[index]);
       return NextResponse.json({ success: true, meeting: db.meetings[index] });
     } else {
-      return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
+      // Meeting not in DB (created before persistence was active) — upsert it
+      const upserted = { id: meetingId, ...body };
+      db.meetings = [upserted, ...db.meetings];
+      saveDatabase(db);
+      await syncMeetingToSupabase(upserted);
+      return NextResponse.json({ success: true, meeting: upserted });
     }
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "Failed to update meeting" }, { status: 500 });

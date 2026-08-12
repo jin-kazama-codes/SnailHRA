@@ -1591,6 +1591,35 @@ export default function App() {
     }
   };
 
+  const handleEditMeeting = async (id: string, updateData: any) => {
+    try {
+      // Find the existing meeting in client state to build a full upsert body
+      const existingMeeting = meetings.find(m => m.id === id);
+      const fullPayload = existingMeeting
+        ? { ...existingMeeting, ...updateData }
+        : updateData;
+
+      const res = await fetch(`/api/meetings/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fullPayload)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Meeting updated successfully!", "success");
+        return true;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(`Failed to update meeting: ${errData.error || "Server error"}`, "error");
+        return false;
+      }
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Error updating meeting: ${err?.message || err}`, "error");
+      return false;
+    }
+  };
+
   // Workspace: Save seat layout
   const handleSaveSeatLayout = async (layout: SeatLayout): Promise<boolean> => {
     try {
@@ -2188,6 +2217,7 @@ export default function App() {
               customDepartments={customDepartments}
               onAddMeeting={handleAddMeeting}
               onCancelMeeting={handleCancelMeeting}
+              onEditMeeting={handleEditMeeting}
               companyName={companyName}
             />
           )}

@@ -210,9 +210,8 @@ export function saveDatabase(state: AppState): void {
       });
     }
 
-    // Per explicit directive: DO NOT write to db_snailhr.json.
-    // State persistence goes directly to database / in-memory cache.
-    // fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
+    // Write state to disk so API routes can find records by ID
+    fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
 
   } catch (err) {
     console.warn("Could not save state in memory:", err);

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react";
 import {
   Video, Calendar, Clock, Plus, Search, Users, Check, X,
   Trash2, MapPin, Link2, UserCheck, Sparkles, Filter, Info, ShieldAlert,
-  ChevronLeft, ChevronRight, List
+  ChevronLeft, ChevronRight, List, Pencil, Lock
 } from "lucide-react";
 import { Meeting, Employee, UserRole } from "../types";
 
@@ -16,6 +16,7 @@ interface MeetingsViewProps {
   customDepartments: string[];
   onAddMeeting: (meetingData: any) => Promise<boolean>;
   onCancelMeeting: (id: string) => Promise<boolean>;
+  onEditMeeting?: (id: string, updateData: any) => Promise<boolean>;
   companyName?: string;
 }
 
@@ -27,6 +28,7 @@ export default function MeetingsView({
   customDepartments = [],
   onAddMeeting,
   onCancelMeeting,
+  onEditMeeting,
   companyName = "SnailHR"
 }: MeetingsViewProps) {
   const todayStr = new Date().toISOString().split("T")[0];
@@ -45,6 +47,13 @@ export default function MeetingsView({
   const [calendarView, setCalendarView] = useState<"month" | "workweek" | "week" | "day">("workweek");
   const [selectedDetailMeeting, setSelectedDetailMeeting] = useState<Meeting | null>(null);
 
+  // Edit Meeting Modal state
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
+
   // Active Jitsi Meeting Call room state
   const [activeCallRoom, setActiveCallRoom] = useState<{ id: string; title: string; link: string } | null>(null);
 
@@ -59,8 +68,15 @@ export default function MeetingsView({
   const [meetingDepartment, setMeetingDepartment] = useState("");
   const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
   const [date, setDate] = useState(todayStr);
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("10:30");
+  const [startTime, setStartTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  });
+  const [endTime, setEndTime] = useState(() => {
+    const now = new Date();
+    const end = new Date(now.getTime() + 30 * 60000);
+    return `${String(end.getHours()).padStart(2, "0")}:${String(end.getMinutes()).padStart(2, "0")}`;
+  });
   const [timezone, setTimezone] = useState("IST (UTC+5:30)");
   const [location, setLocation] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
@@ -119,6 +135,73 @@ export default function MeetingsView({
     }
   };
 
+  // Helper to check if a meeting is closed (end time has passed)
+  // Parses date parts explicitly to avoid UTC vs local time ambiguity
+  const isMeetingClosed = (meet: Meeting): boolean => {
+    try {
+      const [year, month, day] = meet.date.split("-").map(Number);
+      const [hours, minutes] = meet.endTime.split(":").map(Number);
+      const endDateTime = new Date(year, month - 1, day, hours, minutes, 0);
+      return endDateTime < new Date();
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper to check if a meeting is currently live (started but not ended)
+  const isMeetingLive = (meet: Meeting): boolean => {
+    try {
+      const [year, month, day] = meet.date.split("-").map(Number);
+      const [sh, sm] = meet.startTime.split(":").map(Number);
+      const [eh, em] = meet.endTime.split(":").map(Number);
+      const startDateTime = new Date(year, month - 1, day, sh, sm, 0);
+      const endDateTime = new Date(year, month - 1, day, eh, em, 0);
+      const now = new Date();
+      return now >= startDateTime && now < endDateTime;
+    } catch {
+      return false;
+    }
+  };
+
+  // Open edit modal for a meeting
+  const openEditModal = (meet: Meeting) => {
+    setEditingMeeting(meet);
+    setEditDate(meet.date);
+    setEditStartTime(meet.startTime);
+    setEditEndTime(meet.endTime);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMeeting || !onEditMeeting) return;
+    if (!editDate || !editStartTime || !editEndTime) return;
+
+    const [sh, sm] = editStartTime.split(":").map(Number);
+    const [eh, em] = editEndTime.split(":").map(Number);
+    const diffMins = (eh * 60 + em) - (sh * 60 + sm);
+    if (diffMins <= 0) return;
+
+    const hrs = Math.floor(diffMins / 60);
+    const mins = diffMins % 60;
+    const newDuration = hrs > 0 && mins > 0 ? `${hrs}h ${mins}m` : hrs > 0 ? `${hrs}h` : `${diffMins}m`;
+
+    setIsEditSubmitting(true);
+    try {
+      const success = await onEditMeeting(editingMeeting.id, {
+        date: editDate,
+        startTime: editStartTime,
+        endTime: editEndTime,
+        duration: newDuration
+      });
+      if (success) {
+        setEditingMeeting(null);
+        setSelectedDetailMeeting(null);
+      }
+    } finally {
+      setIsEditSubmitting(false);
+    }
+  };
+
   const toggleParticipant = (empId: string) => {
     if (selectedParticipants.includes(empId)) {
       setSelectedParticipants(selectedParticipants.filter(id => id !== empId));
@@ -131,7 +214,13 @@ export default function MeetingsView({
     e.preventDefault();
     if (!title || !description || !reason || !date || !startTime || !endTime) return;
 
-    setIsSubmitting(true);
+    // Guard: prevent scheduling in the past
+    const startDateTime = new Date(`${date}T${startTime}:00`);
+    if (startDateTime < new Date()) {
+      alert("Cannot schedule a meeting in the past. Please select a future date and time.");
+      return;
+    }
+
     try {
       const finalOrganizerId = role === "admin" || role === "hr" ? organizerId : currentEmployeeId;
 
@@ -189,6 +278,12 @@ export default function MeetingsView({
         emp.id.toLowerCase().includes(searchLower) ||
         emp.department.toLowerCase().includes(searchLower)
       );
+    }).sort((a, b) => {
+      const rolePriority = { admin: 0, hr: 1, employee: 2, super_admin: 3 };
+      const pa = rolePriority[a.role] ?? 2;
+      const pb = rolePriority[b.role] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return a.fullName.localeCompare(b.fullName);
     });
   }, [employees, participantSearch, organizerId, currentEmployeeId, role]);
 
@@ -683,8 +778,25 @@ export default function MeetingsView({
                       <input
                         type="date"
                         required
+                        min={todayStr}
                         value={date}
-                        onChange={(e) => setDate(e.target.value)}
+                        onChange={(e) => {
+                          const newDate = e.target.value;
+                          setDate(newDate);
+                          if (newDate === todayStr) {
+                            // Switch to today — set start to current time, end to +30m
+                            const now = new Date();
+                            const nowStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+                            const endD = new Date(now.getTime() + 30 * 60000);
+                            const endStr = `${String(endD.getHours()).padStart(2, "0")}:${String(endD.getMinutes()).padStart(2, "0")}`;
+                            setStartTime(nowStr);
+                            setEndTime(endStr);
+                          } else if (newDate > todayStr) {
+                            // Future date — reset to sensible morning defaults
+                            setStartTime("09:00");
+                            setEndTime("09:30");
+                          }
+                        }}
                         className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2 rounded-xl border border-slate-100 dark:border-[#2a2a2a] outline-none"
                       />
                     </div>
@@ -694,8 +806,18 @@ export default function MeetingsView({
                       <input
                         type="time"
                         required
+                        min={date === todayStr ? new Date().toTimeString().slice(0, 5) : undefined}
                         value={startTime}
-                        onChange={(e) => setStartTime(e.target.value)}
+                        onChange={(e) => {
+                          setStartTime(e.target.value);
+                          // Auto-push end time if it's now before or equal to start time
+                          const [sh, sm] = e.target.value.split(":").map(Number);
+                          const [eh, em] = endTime.split(":").map(Number);
+                          if (!isNaN(sh) && !isNaN(eh) && (eh * 60 + em) <= (sh * 60 + sm)) {
+                            const newEnd = new Date(0, 0, 0, sh, sm + 30);
+                            setEndTime(`${String(newEnd.getHours()).padStart(2, "0")}:${String(newEnd.getMinutes()).padStart(2, "0")}`);
+                          }
+                        }}
                         className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2 rounded-xl border border-slate-100 dark:border-[#2a2a2a] outline-none"
                       />
                     </div>
@@ -705,6 +827,7 @@ export default function MeetingsView({
                       <input
                         type="time"
                         required
+                        min={startTime || undefined}
                         value={endTime}
                         onChange={(e) => setEndTime(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2 rounded-xl border border-slate-100 dark:border-[#2a2a2a] outline-none"
@@ -786,9 +909,31 @@ export default function MeetingsView({
 
                   {/* Participants Picker */}
                   <div className="space-y-1.5">
-                    <label className="block text-slate-500 dark:text-gray-400">
-                      Attending Participants <span className="text-rose-500">*</span> ({selectedParticipants.length} selected)
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-slate-500 dark:text-gray-400">
+                        Attending Participants <span className="text-rose-500">*</span>{" "}
+                        <span className="text-slate-400 dark:text-gray-500">({selectedParticipants.length} selected)</span>
+                      </label>
+                      {filteredEmployeesList.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allIds = filteredEmployeesList.map(e => e.id);
+                            const allSelected = allIds.every(id => selectedParticipants.includes(id));
+                            if (allSelected) {
+                              setSelectedParticipants(prev => prev.filter(id => !allIds.includes(id)));
+                            } else {
+                              setSelectedParticipants(prev => [...new Set([...prev, ...allIds])]);
+                            }
+                          }}
+                          className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/30 px-2.5 py-1 rounded-lg border border-emerald-200/60 dark:border-emerald-900/40 transition-colors cursor-pointer"
+                        >
+                          {filteredEmployeesList.every(e => selectedParticipants.includes(e.id))
+                            ? "✓ Deselect All"
+                            : "+ Select All"}
+                        </button>
+                      )}
+                    </div>
 
                     {/* Search inside picker */}
                     <div className="relative mb-1">
@@ -809,6 +954,13 @@ export default function MeetingsView({
                       ) : (
                         filteredEmployeesList.map(emp => {
                           const isChecked = selectedParticipants.includes(emp.id);
+                          const roleLabel = emp.role === "admin" ? "Admin" : emp.role === "hr" ? "HR" : "Employee";
+                          const roleBadgeClass =
+                            emp.role === "admin"
+                              ? "bg-purple-50 text-purple-600 border-purple-200/60 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/40"
+                              : emp.role === "hr"
+                              ? "bg-sky-50 text-sky-600 border-sky-200/60 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40"
+                              : "bg-slate-100 text-slate-500 border-slate-200/60 dark:bg-slate-800/30 dark:text-slate-400 dark:border-slate-700/40";
                           return (
                             <div
                               key={emp.id}
@@ -818,18 +970,23 @@ export default function MeetingsView({
                                   : "hover:bg-slate-100 dark:hover:bg-[#222]"
                                 }`}
                             >
-                              <div className="flex items-center space-x-2.5">
+                              <div className="flex items-center space-x-2.5 min-w-0">
                                 <img
                                   src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
                                   alt={emp.fullName}
-                                  className="w-5.5 h-5.5 rounded-full object-cover"
+                                  className="w-7 h-7 rounded-full object-cover shrink-0"
                                 />
-                                <div>
-                                  <p className="font-bold text-[11px] leading-none">{emp.fullName}</p>
-                                  <p className="text-[9px] text-slate-400 dark:text-gray-500 mt-0.5">{emp.department} • {emp.id}</p>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="font-bold text-[11px] leading-none">{emp.fullName}</p>
+                                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border leading-none ${roleBadgeClass}`}>
+                                      {roleLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-[9px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">{emp.department} • {emp.id}</p>
                                 </div>
                               </div>
-                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${isChecked
+                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 ml-2 ${isChecked
                                   ? "bg-emerald-600 border-emerald-600 text-white"
                                   : "border-slate-300 dark:border-[#333]"
                                 }`}>
@@ -1129,6 +1286,14 @@ export default function MeetingsView({
                     setShowForm(true);
                     const generatedLink = generateJitsiLink("Team Sync");
                     setMeetingLink(generatedLink);
+                    // Default date to today, start time to now, end time to now+30m
+                    setDate(todayStr);
+                    const now = new Date();
+                    const nowStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+                    const endD = new Date(now.getTime() + 30 * 60000);
+                    const endStr = `${String(endD.getHours()).padStart(2, "0")}:${String(endD.getMinutes()).padStart(2, "0")}`;
+                    setStartTime(nowStr);
+                    setEndTime(endStr);
                   }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-xs font-bold"
                 >
@@ -1201,21 +1366,26 @@ export default function MeetingsView({
                         {/* Meetings list in cell */}
                         <div className="flex-1 space-y-1 overflow-y-auto max-h-[60px] custom-scrollbar pr-0.5 mt-1">
                           {dayMeetings.map(meet => {
-                            let priorityPill = "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
+                            const monthIsClosed = isMeetingClosed(meet);
+                            let priorityPill = monthIsClosed
+                              ? "bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-900/30 dark:text-slate-500 dark:border-slate-800 opacity-70"
+                              : "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/40 dark:text-slate-300 dark:border-slate-800";
                             let dotColor = "bg-slate-400";
 
-                            if (meet.priority === "Low") {
-                              priorityPill = "bg-slate-50 text-slate-600 border-slate-200/50 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-800/60";
-                              dotColor = "bg-slate-400";
-                            } else if (meet.priority === "Medium") {
-                              priorityPill = "bg-blue-50 text-blue-700 border-blue-100/50 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-900/30";
-                              dotColor = "bg-blue-500";
-                            } else if (meet.priority === "High") {
-                              priorityPill = "bg-amber-50 text-amber-700 border-amber-100/50 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/30";
-                              dotColor = "bg-amber-500";
-                            } else if (meet.priority === "Urgent") {
-                              priorityPill = "bg-rose-50 text-rose-700 border-rose-100/50 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/30";
-                              dotColor = "bg-rose-500";
+                            if (!monthIsClosed) {
+                              if (meet.priority === "Low") {
+                                priorityPill = "bg-slate-50 text-slate-600 border-slate-200/50 dark:bg-slate-900/30 dark:text-slate-400 dark:border-slate-800/60";
+                                dotColor = "bg-slate-400";
+                              } else if (meet.priority === "Medium") {
+                                priorityPill = "bg-blue-50 text-blue-700 border-blue-100/50 dark:bg-blue-950/20 dark:text-blue-300 dark:border-blue-900/30";
+                                dotColor = "bg-blue-500";
+                              } else if (meet.priority === "High") {
+                                priorityPill = "bg-amber-50 text-amber-700 border-amber-100/50 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-900/30";
+                                dotColor = "bg-amber-500";
+                              } else if (meet.priority === "Urgent") {
+                                priorityPill = "bg-rose-50 text-rose-700 border-rose-100/50 dark:bg-rose-950/20 dark:text-rose-300 dark:border-rose-900/30";
+                                dotColor = "bg-rose-500";
+                              }
                             }
 
                             return (
@@ -1228,9 +1398,12 @@ export default function MeetingsView({
                                 }}
                                 className={`w-full text-left p-1 rounded-md text-[9px] font-bold border transition-all flex items-center space-x-1 hover:brightness-105 active:scale-98 cursor-pointer truncate ${priorityPill}`}
                               >
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                {monthIsClosed
+                                  ? <Lock className="w-2 h-2 shrink-0 opacity-60" />
+                                  : <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                }
                                 <span className="shrink-0 text-[8px] font-semibold opacity-75">{meet.startTime}</span>
-                                <span className="truncate">{meet.title}</span>
+                                <span className="truncate">{monthIsClosed ? `[Closed] ${meet.title}` : meet.title}</span>
                               </button>
                             );
                           })}
@@ -1338,6 +1511,16 @@ export default function MeetingsView({
                               }
 
                               const hasLink = meet.type !== "Offline" && meet.link;
+                              const calIsClosed = isMeetingClosed(meet);
+                              const calIsLive = isMeetingLive(meet);
+
+                              // Override colors for closed meetings to look muted/greyed out
+                              if (calIsClosed) {
+                                priorityColor = "border-slate-400";
+                                priorityBg = "bg-slate-100/80 dark:bg-[#111]/80 text-slate-400 dark:text-gray-500 opacity-70";
+                              } else if (calIsLive) {
+                                priorityColor = "border-emerald-500";
+                              }
 
                               return (
                                 <div
@@ -1352,17 +1535,28 @@ export default function MeetingsView({
                                   }}
                                   className={`border-l-4 rounded-r-lg p-2 text-xs flex flex-col justify-between overflow-hidden shadow-2xs hover:shadow-xs cursor-pointer select-none transition-all active:scale-98 border-t border-r border-b border-t-slate-100/50 dark:border-t-[#1a1a1a]/50 ${priorityColor} ${priorityBg}`}
                                   onClick={() => setSelectedDetailMeeting(meet)}
-                                  title={`${meet.title}\n${meet.startTime} - ${meet.endTime}\n${meet.description}`}
+                                  title={`${meet.title}\n${meet.startTime} - ${meet.endTime}\n${meet.description}${calIsClosed ? "\n[MEETING CLOSED]" : calIsLive ? "\n[LIVE NOW]" : ""}`}
                                 >
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                      {hasLink && <Video className="w-3 h-3 shrink-0 text-emerald-500 opacity-80" />}
+                                      {calIsClosed
+                                        ? <Lock className="w-3 h-3 shrink-0 opacity-60" />
+                                        : (calIsLive
+                                          ? <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                          : (hasLink && <Video className="w-3 h-3 shrink-0 text-emerald-500 opacity-80" />)
+                                        )
+                                      }
                                       <h4 className="font-extrabold text-[10px] leading-tight truncate">{meet.title}</h4>
                                     </div>
                                     <p className="text-[8px] opacity-75 font-bold mt-0.5 truncate">{meet.startTime} - {meet.endTime}</p>
                                   </div>
                                   <div className="flex items-center justify-between text-[8px] opacity-70 font-semibold pt-1 border-t border-current/10 shrink-0">
-                                    <span className="truncate">{meet.reason}</span>
+                                    {calIsClosed
+                                      ? <span className="font-bold opacity-80">Meeting Closed</span>
+                                      : calIsLive
+                                      ? <span className="font-bold text-emerald-600 dark:text-emerald-400">● Live Now</span>
+                                      : <span className="truncate">{meet.reason}</span>
+                                    }
                                   </div>
                                 </div>
                               );
@@ -1396,6 +1590,9 @@ export default function MeetingsView({
                 const isOrganizer = meet.organizerId === currentEmployeeId;
                 const isPast = new Date(meet.date + "T00:00:00") < new Date(todayStr + "T00:00:00");
                 const canCancel = role === "admin" || role === "hr" || isOrganizer;
+                const canEdit = (role === "admin" || role === "hr") && !!onEditMeeting;
+                const isClosed = isMeetingClosed(meet);
+                const isLive = isMeetingLive(meet);
 
                 // Priority Styling
                 const priorityStyles = {
@@ -1415,24 +1612,52 @@ export default function MeetingsView({
                 return (
                   <div
                     key={meet.id}
-                    className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow hover:border-slate-200 dark:hover:border-emerald-500/20 transition-all flex flex-col justify-between"
+                    className={`bg-white dark:bg-[#0f0f0f] border rounded-2xl p-5 shadow-xs dark:neon-glow transition-all flex flex-col justify-between ${
+                      isClosed
+                        ? "border-slate-200 dark:border-[#222] opacity-80"
+                        : isLive
+                        ? "border-emerald-400 dark:border-emerald-500/50 ring-1 ring-emerald-400/30 hover:border-emerald-500 dark:hover:border-emerald-500/70"
+                        : "border-slate-100 dark:border-[#1a1a1a] hover:border-slate-200 dark:hover:border-emerald-500/20"
+                    }`}
                   >
                     <div>
-                      {/* Header: Date, Priority badge */}
+                      {/* Header: Date, Priority badge, Status badge */}
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center flex-wrap gap-2">
                           <span className="bg-emerald-50 border border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] tracking-wide uppercase px-2.5 py-1 rounded-lg">
                             {meet.date}
                           </span>
                           <span className="text-slate-400 dark:text-gray-500 text-[10px] font-bold">
-                            {meet.startTime} - {meet.endTime} ({meet.duration})
+                            {meet.startTime} - {meet.endTime} {meet.duration ? `(${meet.duration})` : ""}
                           </span>
+                          {isClosed && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                              <Lock className="w-2.5 h-2.5" />
+                              Meeting Closed
+                            </span>
+                          )}
+                          {isLive && !isClosed && (
+                            <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Live Now
+                            </span>
+                          )}
                         </div>
 
-                        <span className={`border font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md ${priorityStyles[meet.priority || "Medium"]
-                          }`}>
-                          {meet.priority || "Medium"}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {canEdit && (
+                            <button
+                              onClick={() => openEditModal(meet)}
+                              className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Meeting"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span className={`border font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md ${priorityStyles[meet.priority || "Medium"]}`}>
+                            {meet.priority || "Medium"}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Title & Description */}
@@ -1518,21 +1743,27 @@ export default function MeetingsView({
                               title: meet.title,
                               link: meet.link!
                             })}
-                            disabled={isPast}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isClosed}
+                            className={`text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                              isClosed
+                                ? "bg-slate-400 dark:bg-slate-700"
+                                : "bg-emerald-600 hover:bg-emerald-500"
+                            }`}
                           >
-                            <Video className="w-3.5 h-3.5" />
-                            <span>Join Meeting</span>
+                            {isClosed ? <Lock className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                            <span>{isClosed ? "Meeting Closed" : "Join Meeting"}</span>
                           </button>
-                          <a
-                            href={meet.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg transition-colors border border-slate-100 dark:border-[#1a1a1a]"
-                            title="Open Jitsi in new window"
-                          >
-                            <Link2 className="w-3.5 h-3.5" />
-                          </a>
+                          {!isClosed && (
+                            <a
+                              href={meet.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg transition-colors border border-slate-100 dark:border-[#1a1a1a]"
+                              title="Open Jitsi in new window"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                         </div>
                       ) : (
                         <div className="flex items-center text-slate-400 text-[10px] font-bold">
@@ -1572,9 +1803,23 @@ export default function MeetingsView({
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 text-xs">
             <div className="flex justify-between items-start">
               <div>
-                <span className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] tracking-wide uppercase px-2.5 py-1 rounded-lg">
-                  {selectedDetailMeeting.date}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] tracking-wide uppercase px-2.5 py-1 rounded-lg">
+                    {selectedDetailMeeting.date}
+                  </span>
+                  {isMeetingClosed(selectedDetailMeeting) && (
+                    <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400 font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                      <Lock className="w-2.5 h-2.5" />
+                      Meeting Closed
+                    </span>
+                  )}
+                  {isMeetingLive(selectedDetailMeeting) && !isMeetingClosed(selectedDetailMeeting) && (
+                    <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 font-bold text-[9px] tracking-wider uppercase px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800 animate-pulse">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Live Now
+                    </span>
+                  )}
+                </div>
                 <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-sm sm:text-base mt-2">
                   {selectedDetailMeeting.title}
                 </h3>
@@ -1669,6 +1914,7 @@ export default function MeetingsView({
                   <div className="flex items-center space-x-1.5">
                     <button
                       type="button"
+                      disabled={isMeetingClosed(selectedDetailMeeting)}
                       onClick={() => {
                         setActiveCallRoom({
                           id: selectedDetailMeeting.id,
@@ -1677,21 +1923,27 @@ export default function MeetingsView({
                         });
                         setSelectedDetailMeeting(null);
                       }}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs"
+                      className={`text-white text-[11px] font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isMeetingClosed(selectedDetailMeeting)
+                          ? "bg-slate-400 dark:bg-slate-700"
+                          : "bg-emerald-600 hover:bg-emerald-500"
+                      }`}
                     >
-                      <Video className="w-3.5 h-3.5" />
-                      <span>Join Meeting</span>
+                      {isMeetingClosed(selectedDetailMeeting) ? <Lock className="w-3.5 h-3.5" /> : <Video className="w-3.5 h-3.5" />}
+                      <span>{isMeetingClosed(selectedDetailMeeting) ? "Meeting Closed" : "Join Meeting"}</span>
                     </button>
 
-                    <a
-                      href={selectedDetailMeeting.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg transition-colors border border-slate-200/50 dark:border-[#222]"
-                      title="Open Jitsi in new window"
-                    >
-                      <Link2 className="w-3.5 h-3.5" />
-                    </a>
+                    {!isMeetingClosed(selectedDetailMeeting) && (
+                      <a
+                        href={selectedDetailMeeting.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-lg transition-colors border border-slate-200/50 dark:border-[#222]"
+                        title="Open Jitsi in new window"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center text-slate-400 text-[10px] font-bold">
@@ -1702,6 +1954,20 @@ export default function MeetingsView({
               </div>
 
               <div className="flex items-center space-x-2">
+                {/* Edit meeting button (admin/hr only) */}
+                {(role === "admin" || role === "hr") && onEditMeeting && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openEditModal(selectedDetailMeeting);
+                    }}
+                    className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 p-1.5 rounded-lg transition-colors cursor-pointer"
+                    title="Edit Meeting"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+
                 {/* Cancel meeting button */}
                 {(role === "admin" || role === "hr" || selectedDetailMeeting.organizerId === currentEmployeeId) && (
                   <button
@@ -1732,7 +1998,115 @@ export default function MeetingsView({
         </div>
       )}
 
-      {/* 6. Embedded Jitsi Video Call Modal Iframe Overlay */}
+      {/* 7. Edit Meeting Modal (Admin / HR only) */}
+      {editingMeeting && (
+        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200 dark:neon-glow">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-5">
+              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm flex items-center gap-1.5">
+                <Pencil className="w-4 h-4 text-blue-500" />
+                <span>Edit Meeting Schedule</span>
+              </h3>
+              <button
+                onClick={() => setEditingMeeting(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white font-bold text-base cursor-pointer"
+              >&times;</button>
+            </div>
+
+            <div className="mb-4 p-3 bg-slate-50 dark:bg-[#151515] rounded-xl border border-slate-100 dark:border-[#2a2a2a]">
+              <p className="text-[10px] text-slate-400 dark:text-gray-500 font-bold uppercase tracking-wider mb-0.5">Meeting</p>
+              <p className="text-xs font-bold text-slate-700 dark:text-gray-200 truncate">{editingMeeting.title}</p>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4 text-xs font-semibold">
+              <div className="space-y-1.5">
+                <label className="block text-slate-500 dark:text-gray-400">Date <span className="text-rose-500">*</span></label>
+                <input
+                  type="date"
+                  required
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2.5 rounded-xl border border-slate-100 dark:border-[#2a2a2a] focus:border-blue-500 outline-none transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-slate-500 dark:text-gray-400">Start Time <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2.5 rounded-xl border border-slate-100 dark:border-[#2a2a2a] focus:border-blue-500 outline-none transition-colors"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-slate-500 dark:text-gray-400">End Time <span className="text-rose-500">*</span></label>
+                  <input
+                    type="time"
+                    required
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 p-2.5 rounded-xl border border-slate-100 dark:border-[#2a2a2a] focus:border-blue-500 outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Duration Preview */}
+              {editStartTime && editEndTime && (() => {
+                const [sh, sm] = editStartTime.split(":").map(Number);
+                const [eh, em] = editEndTime.split(":").map(Number);
+                const diff = (eh * 60 + em) - (sh * 60 + sm);
+                if (diff <= 0) return (
+                  <p className="text-rose-500 text-[10px] font-bold">⚠ End time must be after start time</p>
+                );
+                const h = Math.floor(diff / 60), m = diff % 60;
+                const dur = h > 0 && m > 0 ? `${h}h ${m}m` : h > 0 ? `${h}h` : `${diff}m`;
+                return (
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-gray-400 font-semibold">
+                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Duration: <strong className="text-slate-700 dark:text-gray-200">{dur}</strong></span>
+                  </div>
+                );
+              })()}
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-50 dark:border-[#1a1a1a]">
+                <button
+                  type="button"
+                  disabled={isEditSubmitting}
+                  onClick={() => setEditingMeeting(null)}
+                  className="px-4 py-2 border border-slate-200 dark:border-[#2a2a2a] text-slate-600 dark:text-gray-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] cursor-pointer disabled:opacity-50 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditSubmitting || !editDate || !editStartTime || !editEndTime}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center gap-1.5 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isEditSubmitting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Pencil className="w-4 h-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. Embedded Jitsi Video Call Modal Iframe Overlay */}
       {activeCallRoom && (
         <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-md flex flex-col p-4 md:p-6 animate-in fade-in duration-300">
           {/* Header Panel */}
