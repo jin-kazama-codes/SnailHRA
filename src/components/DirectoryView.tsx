@@ -2208,337 +2208,348 @@ export default function DirectoryView({
               </div>
 
               <form onSubmit={handleEditSubmit} className="space-y-5">
-                {/* Section 1: Basic Info */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">1. Personnel Credentials</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
-                      <input
-                        type="text"
-                        value={editFullName}
-                        onChange={(e) => setEditFullName(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Email Address *</label>
-                      <input
-                        type="email"
-                        value={editEmail}
-                        onChange={(e) => setEditEmail(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Phone Number</label>
-                      <input
-                        type="text"
-                        value={editPhone}
-                        onChange={(e) => setEditPhone(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      />
-                    </div>
-                    {(role === "admin" || role === "hr") && (
+                {(() => {
+                  let dSecIdx = 0;
+                  return (
+                    <>
+                      {/* Section: Basic Info */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Change Password</label>
-                        <div className="relative">
-                          <input
-                            type={showEditPassword ? "text" : "password"}
-                            value={editPassword}
-                            onChange={(e) => setEditPassword(e.target.value)}
-                            placeholder="Leave blank to keep existing"
-                            className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-3 pr-10 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowEditPassword(!showEditPassword)}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 p-1 rounded-lg cursor-pointer"
-                            title={showEditPassword ? "Hide password" : "Show password"}
-                          >
-                            {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
-                      <select
-                        value={editRole}
-                        onChange={(e) => setEditRole(e.target.value as any)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                        disabled={role === "hr"}
-                      >
-                        <option value="employee">Employee</option>
-                        {role === "admin" && <option value="hr">HR Manager</option>}
-                        {role === "admin" && <option value="admin">Administrator</option>}
-                      </select>
-                      {role === "hr" && (
-                        <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
-                          HR Managers can only assign Employee roles.
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Status</label>
-                      <select
-                        value={editStatus}
-                        onChange={(e) => setEditStatus(e.target.value as any)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Probation">Probation</option>
-                        <option value="Suspended">Suspended</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Date of Birth</label>
-                      <input
-                        type="date"
-                        value={editDateOfBirth}
-                        onChange={(e) => setEditDateOfBirth(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
-                      <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700 shrink-0">
-                        {editProfileImagePreview ? (
-                          <img src={editProfileImagePreview} alt="Preview" className="w-full h-full object-cover" />
-                        ) : (
-                          <Camera className="w-5 h-5 text-slate-400" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Employee Profile Photo</label>
-                        <input
-                          type="file"
-                          ref={editProfileImageRef}
-                          accept="image/*"
-                          onChange={handleEditProfileImageSelect}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => editProfileImageRef.current?.click()}
-                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-100 dark:border-emerald-900/30 cursor-pointer"
-                        >
-                          Choose Photo
-                        </button>
-                        {editProfileImageFile && (
-                          <span className="text-[10px] text-slate-400 ml-2 font-mono">{editProfileImageFile.name}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 2: Department and Designations */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">2. Designation & Placement</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Department</label>
-                      <select
-                        value={editDept}
-                        onChange={(e) => setEditDept(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      >
-                        {(customDepartments && customDepartments.length > 0
-                          ? customDepartments
-                          : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
-                        ).map((d) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Corporate Designation</label>
-                      <select
-                        value={editDesigId}
-                        onChange={(e) => setEditDesigId(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      >
-                        {designations.map(desg => (
-                          <option key={desg.id} value={desg.id}>{desg.title} ({desg.department})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Branch Office</label>
-                      <select
-                        value={editBranch}
-                        onChange={(e) => setEditBranch(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                      >
-                        {(customBranches || []).map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Salary structure */}
-                <div className="p-4 rounded-2xl bg-emerald-50/40 dark:bg-emerald-950/20 border-2 border-emerald-500/40 dark:border-emerald-500/30 ring-4 ring-emerald-500/10 shadow-xs">
-                  <h4 className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>3. SALARY ALLOCATION (MONTHLY)</span>
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-gray-300 mb-1">Basic Salary (INR) *</label>
-                      <input
-                        type="number"
-                        value={editSalaryBasic}
-                        onChange={(e) => setEditSalaryBasic(e.target.value)}
-                        className="w-full bg-white dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-emerald-300 dark:border-emerald-700/50 font-mono font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs"
-                        placeholder="e.g. 50000"
-                      />
-                    </div>
-                    
-                    <div className="text-[11px] text-slate-700 dark:text-gray-200 bg-white dark:bg-[#0d1612] p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs space-y-2">
-                      <div className="flex justify-between items-center text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                        <span className="flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-emerald-500" />
-                          Calculated via Salary &amp; PF Rules
-                        </span>
-                      </div>
-                      {(() => {
-                        const basicVal = Number(editSalaryBasic) || 0;
-                        const hra = onboardPayrollConfig
-                          ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
-                          : Math.round(basicVal * 0.4);
-                        const allowances = onboardPayrollConfig
-                          ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
-                          : Math.round(basicVal * 0.2);
-                        const gross = basicVal + hra + allowances;
-                        const isExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee?.id);
-                        const pf = isExempt
-                          ? 0
-                          : (onboardPayrollConfig
-                            ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
-                            : Math.round(basicVal * 0.12));
-                        const tax = onboardPayrollConfig
-                          ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(gross * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
-                          : Math.round(gross * 0.05);
-                        const net = Math.max(0, gross - pf - tax);
-
-                        return (
-                          <div className="space-y-1.5 text-[11px]">
-                            <div className="flex justify-between">
-                              <span className="text-slate-600 dark:text-gray-400">HRA: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{hra.toLocaleString()}</strong></span>
-                              <span className="text-slate-600 dark:text-gray-400">Allowances: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{allowances.toLocaleString()}</strong></span>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Personnel Credentials</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
+                            <input
+                              type="text"
+                              value={editFullName}
+                              onChange={(e) => setEditFullName(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Email Address *</label>
+                            <input
+                              type="email"
+                              value={editEmail}
+                              onChange={(e) => setEditEmail(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Phone Number</label>
+                            <input
+                              type="text"
+                              value={editPhone}
+                              onChange={(e) => setEditPhone(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                            />
+                          </div>
+                          {(role === "admin" || role === "hr") && (
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Change Password</label>
+                              <div className="relative">
+                                <input
+                                  type={showEditPassword ? "text" : "password"}
+                                  value={editPassword}
+                                  onChange={(e) => setEditPassword(e.target.value)}
+                                  placeholder="Leave blank to keep existing"
+                                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-3 pr-10 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditPassword(!showEditPassword)}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 p-1 rounded-lg cursor-pointer"
+                                  title={showEditPassword ? "Hide password" : "Show password"}
+                                >
+                                  {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex justify-between border-t border-emerald-100 dark:border-emerald-900/50 pt-1.5">
-                              <span className="text-slate-600 dark:text-gray-400">PF: <strong className="font-mono text-slate-800 dark:text-gray-200">{isExempt ? "Exempt (₹0)" : `₹${pf.toLocaleString()}`}</strong></span>
-                              <span className="text-slate-600 dark:text-gray-400">Tax/TDS: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{tax.toLocaleString()}</strong></span>
+                          )}
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
+                            <select
+                              value={editRole}
+                              onChange={(e) => setEditRole(e.target.value as any)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              disabled={role === "hr"}
+                            >
+                              <option value="employee">Employee</option>
+                              {role === "admin" && <option value="hr">HR Manager</option>}
+                              {role === "admin" && <option value="admin">Administrator</option>}
+                            </select>
+                            {role === "hr" && (
+                              <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">
+                                HR Managers can only assign Employee roles.
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Status</label>
+                            <select
+                              value={editStatus}
+                              onChange={(e) => setEditStatus(e.target.value as any)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                            >
+                              <option value="Active">Active</option>
+                              <option value="Probation">Probation</option>
+                              <option value="Suspended">Suspended</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Date of Birth</label>
+                            <input
+                              type="date"
+                              value={editDateOfBirth}
+                              onChange={(e) => setEditDateOfBirth(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2 flex items-center space-x-4 p-3 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl mt-2">
+                            <div className="relative w-12 h-12 bg-slate-200 dark:bg-gray-800 rounded-full overflow-hidden flex items-center justify-center border border-slate-300 dark:border-gray-700 shrink-0">
+                              {editProfileImagePreview ? (
+                                <img src={editProfileImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                              ) : (
+                                <Camera className="w-5 h-5 text-slate-400" />
+                              )}
                             </div>
-                            <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-400 pt-1.5 border-t border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-lg">
-                              <span>Est. Gross: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{gross.toLocaleString()}</span></span>
-                              <span>Est. Net: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{net.toLocaleString()}</span></span>
+                            <div className="flex-1">
+                              <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300 mb-1">Employee Profile Photo</label>
+                              <input
+                                type="file"
+                                ref={editProfileImageRef}
+                                accept="image/*"
+                                onChange={handleEditProfileImageSelect}
+                                className="hidden"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => editProfileImageRef.current?.click()}
+                                className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 text-xs font-semibold rounded-lg border border-emerald-100 dark:border-emerald-900/30 cursor-pointer"
+                              >
+                                Choose Photo
+                              </button>
+                              {editProfileImageFile && (
+                                <span className="text-[10px] text-slate-400 ml-2 font-mono">{editProfileImageFile.name}</span>
+                              )}
                             </div>
                           </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
+                        </div>
+                      </div>
 
-                {/* Section 4: Bank specs */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">4. Bank & Compensation Account</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Account Number</label>
-                      <input
-                        type="text"
-                        value={editBankAccount}
-                        onChange={(e) => setEditBankAccount(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Bank Name</label>
-                      <input
-                        type="text"
-                        value={editBankName}
-                        onChange={(e) => setEditBankName(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">IFSC Code</label>
-                      <input
-                        type="text"
-                        value={editBankIfsc}
-                        onChange={(e) => setEditBankIfsc(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
+                      {/* Section: Department and Designations (Only for Admin / HR) */}
+                      {(role === "admin" || role === "hr") && (
+                        <div>
+                          <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Designation & Placement</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Department</label>
+                              <select
+                                value={editDept}
+                                onChange={(e) => setEditDept(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              >
+                                {(customDepartments && customDepartments.length > 0
+                                  ? customDepartments
+                                  : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+                                ).map((d) => (
+                                  <option key={d} value={d}>{d}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Corporate Designation</label>
+                              <select
+                                value={editDesigId}
+                                onChange={(e) => setEditDesigId(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              >
+                                {designations.map(desg => (
+                                  <option key={desg.id} value={desg.id}>{desg.title} ({desg.department})</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Branch Office</label>
+                              <select
+                                value={editBranch}
+                                onChange={(e) => setEditBranch(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              >
+                                {(customBranches || []).map((b) => (
+                                  <option key={b} value={b}>{b}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-                {/* Section 5: Contact & Address Details */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">5. Contact & Address Details</h4>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Residential Address</label>
-                    <textarea
-                      value={editAddress}
-                      onChange={(e) => setEditAddress(e.target.value)}
-                      rows={2}
-                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
+                      {/* Section: Salary structure (Only for Admin) */}
+                      {role === "admin" && (
+                        <div className="p-4 rounded-2xl bg-emerald-50/40 dark:bg-emerald-950/20 border-2 border-emerald-500/40 dark:border-emerald-500/30 ring-4 ring-emerald-500/10 shadow-xs">
+                          <h4 className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <Calculator className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span>{++dSecIdx}. SALARY ALLOCATION (MONTHLY)</span>
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-700 dark:text-gray-300 mb-1">Basic Salary (INR) *</label>
+                              <input
+                                type="number"
+                                value={editSalaryBasic}
+                                onChange={(e) => setEditSalaryBasic(e.target.value)}
+                                className="w-full bg-white dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-emerald-300 dark:border-emerald-700/50 font-mono font-semibold focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 shadow-xs"
+                                placeholder="e.g. 50000"
+                              />
+                            </div>
+                            
+                            <div className="text-[11px] text-slate-700 dark:text-gray-200 bg-white dark:bg-[#0d1612] p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 shadow-xs space-y-2">
+                              <div className="flex justify-between items-center text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                                <span className="flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-emerald-500" />
+                                  Calculated via Salary &amp; PF Rules
+                                </span>
+                              </div>
+                              {(() => {
+                                const basicVal = Number(editSalaryBasic) || 0;
+                                const hra = onboardPayrollConfig
+                                  ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
+                                  : Math.round(basicVal * 0.4);
+                                const allowances = onboardPayrollConfig
+                                  ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
+                                  : Math.round(basicVal * 0.2);
+                                const gross = basicVal + hra + allowances;
+                                const isExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee?.id);
+                                const pf = isExempt
+                                  ? 0
+                                  : (onboardPayrollConfig
+                                    ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+                                    : Math.round(basicVal * 0.12));
+                                const tax = onboardPayrollConfig
+                                  ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(gross * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
+                                  : Math.round(gross * 0.05);
+                                const net = Math.max(0, gross - pf - tax);
 
-                {/* Section 6: Emergency Contact Details */}
-                <div>
-                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">6. Emergency Contact Details</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Name</label>
-                      <input
-                        type="text"
-                        value={editEmergencyName}
-                        onChange={(e) => setEditEmergencyName(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Relationship</label>
-                      <input
-                        type="text"
-                        value={editEmergencyRelation}
-                        onChange={(e) => setEditEmergencyRelation(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Phone</label>
-                      <input
-                        type="text"
-                        value={editEmergencyPhone}
-                        onChange={(e) => setEditEmergencyPhone(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
+                                return (
+                                  <div className="space-y-1.5 text-[11px]">
+                                    <div className="flex justify-between">
+                                      <span className="text-slate-600 dark:text-gray-400">HRA: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{hra.toLocaleString()}</strong></span>
+                                      <span className="text-slate-600 dark:text-gray-400">Allowances: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{allowances.toLocaleString()}</strong></span>
+                                    </div>
+                                    <div className="flex justify-between border-t border-emerald-100 dark:border-emerald-900/50 pt-1.5">
+                                      <span className="text-slate-600 dark:text-gray-400">PF: <strong className="font-mono text-slate-800 dark:text-gray-200">{isExempt ? "Exempt (₹0)" : `₹${pf.toLocaleString()}`}</strong></span>
+                                      <span className="text-slate-600 dark:text-gray-400">Tax/TDS: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{tax.toLocaleString()}</strong></span>
+                                    </div>
+                                    <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-400 pt-1.5 border-t border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-lg">
+                                      <span>Est. Gross: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{gross.toLocaleString()}</span></span>
+                                      <span>Est. Net: <span className="font-mono text-emerald-800 dark:text-emerald-300">₹{net.toLocaleString()}</span></span>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-                {/* Section 7: Biography */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employee Bio / Profile Summary</label>
-                  <textarea
-                    value={editBio}
-                    onChange={(e) => setEditBio(e.target.value)}
-                    rows={2}
-                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
-                  />
-                </div>
+                      {/* Section: Bank specs */}
+                      <div>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Bank & Compensation Account</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Account Number</label>
+                            <input
+                              type="text"
+                              value={editBankAccount}
+                              onChange={(e) => setEditBankAccount(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">Bank Name</label>
+                            <input
+                              type="text"
+                              value={editBankName}
+                              onChange={(e) => setEditBankName(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">IFSC Code</label>
+                            <input
+                              type="text"
+                              value={editBankIfsc}
+                              onChange={(e) => setEditBankIfsc(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Contact & Address Details */}
+                      <div>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Contact & Address Details</h4>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Residential Address</label>
+                          <textarea
+                            value={editAddress}
+                            onChange={(e) => setEditAddress(e.target.value)}
+                            rows={2}
+                            className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Section: Emergency Contact Details */}
+                      <div>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Emergency Contact Details</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Name</label>
+                            <input
+                              type="text"
+                              value={editEmergencyName}
+                              onChange={(e) => setEditEmergencyName(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Relationship</label>
+                            <input
+                              type="text"
+                              value={editEmergencyRelation}
+                              onChange={(e) => setEditEmergencyRelation(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Contact Phone</label>
+                            <input
+                              type="text"
+                              value={editEmergencyPhone}
+                              onChange={(e) => setEditEmergencyPhone(e.target.value)}
+                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: Biography */}
+                      <div>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Employee Bio / Profile Summary</h4>
+                        <textarea
+                          value={editBio}
+                          onChange={(e) => setEditBio(e.target.value)}
+                          rows={2}
+                          className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="flex justify-center space-x-2 pt-4 border-t border-slate-100 dark:border-[#1a1a1a]">
                   <button
