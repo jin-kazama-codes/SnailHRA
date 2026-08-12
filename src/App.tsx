@@ -1934,7 +1934,9 @@ export default function App() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="font-extrabold text-xs text-slate-800 dark:text-white truncate">{currentEmployee?.fullName}</p>
-                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 capitalize">{activeRole} Role</p>
+                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                      {activeRole === "hr" ? "HR" : activeRole === "admin" ? "Admin" : "Employee"}
+                    </p>
                   </div>
                 </div>
 

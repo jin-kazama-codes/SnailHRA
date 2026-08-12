@@ -496,29 +496,9 @@
           "color": "#10b981"
         },
         {
-          "id": "sec-row1",
-          "name": "Desk Row 1",
-          "color": "#0ea5e9"
-        },
-        {
-          "id": "sec-row2",
-          "name": "Desk Row 2",
-          "color": "#a855f7"
-        },
-        {
-          "id": "sec-row3",
-          "name": "Desk Row 3",
-          "color": "#f59e0b"
-        },
-        {
-          "id": "sec-reserved",
-          "name": "Reserved / Cabin",
+          "id": "sec-1786534308674",
+          "name": "Office Head",
           "color": "#f43f5e"
-        },
-        {
-          "id": "sec-1785479436876",
-          "name": "Sales team",
-          "color": "#f97316"
         }
       ],
       "seats": [
@@ -563,579 +543,13 @@
           "type": "desk"
         },
         {
-          "id": "seat-6",
-          "seatNumber": "6",
-          "sectionId": "sec-row1",
-          "x": 0,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-7",
-          "seatNumber": "7",
-          "sectionId": "sec-row1",
-          "x": 1,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-8",
-          "seatNumber": "8",
-          "sectionId": "sec-row1",
-          "x": 2,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-9",
-          "seatNumber": "9",
-          "sectionId": "sec-row1",
-          "x": 3,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-10",
-          "seatNumber": "10",
-          "sectionId": "sec-row1",
-          "x": 4,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-11",
-          "seatNumber": "11",
-          "sectionId": "sec-row1",
-          "x": 5,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-12",
-          "seatNumber": "12",
-          "sectionId": "sec-row1",
-          "x": 6,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-13",
-          "seatNumber": "13",
-          "sectionId": "sec-row1",
-          "x": 7,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-14",
-          "seatNumber": "14",
-          "sectionId": "sec-row1",
-          "x": 8,
-          "y": 2,
-          "type": "desk"
-        },
-        {
-          "id": "seat-15",
-          "seatNumber": "15",
-          "sectionId": "sec-row1",
-          "x": 0,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-16",
-          "seatNumber": "16",
-          "sectionId": "sec-row1",
-          "x": 1,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-17",
-          "seatNumber": "17",
-          "sectionId": "sec-row1",
-          "x": 2,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-18",
-          "seatNumber": "18",
-          "sectionId": "sec-row1",
-          "x": 3,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-19",
-          "seatNumber": "19",
-          "sectionId": "sec-row1",
-          "x": 4,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-20",
-          "seatNumber": "20",
-          "sectionId": "sec-row1",
-          "x": 5,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-21",
-          "seatNumber": "21",
-          "sectionId": "sec-row1",
-          "x": 6,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-22",
-          "seatNumber": "22",
-          "sectionId": "sec-row1",
-          "x": 7,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-23",
-          "seatNumber": "23",
-          "sectionId": "sec-row1",
-          "x": 8,
-          "y": 3,
-          "type": "desk"
-        },
-        {
-          "id": "seat-24",
-          "seatNumber": "24",
-          "sectionId": "sec-row2",
-          "x": 0,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-25",
-          "seatNumber": "25",
-          "sectionId": "sec-row2",
-          "x": 1,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-26",
-          "seatNumber": "26",
-          "sectionId": "sec-row2",
-          "x": 2,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-27",
-          "seatNumber": "27",
-          "sectionId": "sec-row2",
-          "x": 3,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-28",
-          "seatNumber": "28",
-          "sectionId": "sec-row2",
-          "x": 4,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-29",
-          "seatNumber": "29",
-          "sectionId": "sec-row2",
-          "x": 5,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-30",
-          "seatNumber": "30",
-          "sectionId": "sec-row2",
-          "x": 6,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-31",
-          "seatNumber": "31",
-          "sectionId": "sec-row2",
-          "x": 7,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-32",
-          "seatNumber": "32",
-          "sectionId": "sec-row2",
-          "x": 8,
-          "y": 5,
-          "type": "desk"
-        },
-        {
-          "id": "seat-33",
-          "seatNumber": "33",
-          "sectionId": "sec-row2",
-          "x": 0,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-34",
-          "seatNumber": "34",
-          "sectionId": "sec-row2",
-          "x": 1,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-35",
-          "seatNumber": "35",
-          "sectionId": "sec-row2",
-          "x": 2,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-36",
-          "seatNumber": "36",
-          "sectionId": "sec-row2",
-          "x": 3,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-37",
-          "seatNumber": "37",
-          "sectionId": "sec-row2",
-          "x": 4,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-38",
-          "seatNumber": "38",
-          "sectionId": "sec-row2",
-          "x": 5,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-39",
-          "seatNumber": "39",
-          "sectionId": "sec-row2",
-          "x": 6,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-40",
-          "seatNumber": "40",
-          "sectionId": "sec-row2",
-          "x": 7,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-41",
-          "seatNumber": "41",
-          "sectionId": "sec-row2",
-          "x": 8,
-          "y": 6,
-          "type": "desk"
-        },
-        {
-          "id": "seat-42",
-          "seatNumber": "42",
-          "sectionId": "sec-row3",
-          "x": 0,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-43",
-          "seatNumber": "43",
-          "sectionId": "sec-row3",
-          "x": 1,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-44",
-          "seatNumber": "44",
-          "sectionId": "sec-row3",
-          "x": 2,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-45",
-          "seatNumber": "45",
-          "sectionId": "sec-row3",
-          "x": 3,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-46",
-          "seatNumber": "46",
-          "sectionId": "sec-row3",
-          "x": 4,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-47",
-          "seatNumber": "47",
-          "sectionId": "sec-row3",
-          "x": 5,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-48",
-          "seatNumber": "48",
-          "sectionId": "sec-row3",
-          "x": 6,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-49",
-          "seatNumber": "49",
-          "sectionId": "sec-row3",
-          "x": 7,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-50",
-          "seatNumber": "50",
-          "sectionId": "sec-row3",
-          "x": 8,
-          "y": 8,
-          "type": "desk"
-        },
-        {
-          "id": "seat-51",
-          "seatNumber": "51",
-          "sectionId": "sec-row3",
-          "x": 0,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-52",
-          "seatNumber": "52",
-          "sectionId": "sec-row3",
-          "x": 1,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-53",
-          "seatNumber": "53",
-          "sectionId": "sec-row3",
-          "x": 2,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-54",
-          "seatNumber": "54",
-          "sectionId": "sec-row3",
-          "x": 3,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-55",
-          "seatNumber": "55",
-          "sectionId": "sec-row3",
-          "x": 4,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-56",
-          "seatNumber": "56",
-          "sectionId": "sec-row3",
-          "x": 5,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-57",
-          "seatNumber": "57",
-          "sectionId": "sec-row3",
-          "x": 6,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-58",
-          "seatNumber": "58",
-          "sectionId": "sec-row3",
-          "x": 7,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-59",
-          "seatNumber": "59",
-          "sectionId": "sec-row3",
-          "x": 8,
-          "y": 9,
-          "type": "desk"
-        },
-        {
-          "id": "seat-60",
-          "seatNumber": "60",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 0,
-          "type": "cabin",
-          "label": "Director A"
-        },
-        {
-          "id": "seat-61",
-          "seatNumber": "61",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 1,
-          "type": "cabin",
-          "label": "Director B"
-        },
-        {
-          "id": "seat-62",
-          "seatNumber": "62",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 2,
-          "type": "reserved",
-          "label": "Conference 1"
-        },
-        {
-          "id": "seat-63",
-          "seatNumber": "63",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 3,
-          "type": "reserved",
-          "label": "Conference 2"
-        },
-        {
-          "id": "seat-64",
-          "seatNumber": "64",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 4,
-          "type": "reserved",
-          "label": "Conference 3"
-        },
-        {
-          "id": "seat-65",
-          "seatNumber": "65",
-          "sectionId": "sec-reserved",
-          "x": 11,
-          "y": 5,
-          "type": "reserved",
-          "label": "HR Cabin"
-        },
-        {
           "id": "seat-1785479418023",
           "seatNumber": "66",
           "sectionId": "sec-it",
           "x": 5,
           "y": 0,
           "type": "desk",
-          "assignedEmployeeId": "EMP-2112"
-        },
-        {
-          "id": "seat-1785479440529",
-          "seatNumber": "67",
-          "sectionId": "sec-1785479436876",
-          "x": 0,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479441254",
-          "seatNumber": "68",
-          "sectionId": "sec-1785479436876",
-          "x": 1,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479441619",
-          "seatNumber": "69",
-          "sectionId": "sec-1785479436876",
-          "x": 2,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479441851",
-          "seatNumber": "70",
-          "sectionId": "sec-1785479436876",
-          "x": 3,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479442035",
-          "seatNumber": "71",
-          "sectionId": "sec-1785479436876",
-          "x": 4,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479442225",
-          "seatNumber": "72",
-          "sectionId": "sec-1785479436876",
-          "x": 5,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479442427",
-          "seatNumber": "73",
-          "sectionId": "sec-1785479436876",
-          "x": 6,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479442620",
-          "seatNumber": "74",
-          "sectionId": "sec-1785479436876",
-          "x": 7,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785479442812",
-          "seatNumber": "75",
-          "sectionId": "sec-1785479436876",
-          "x": 8,
-          "y": 0,
-          "type": "desk"
-        },
-        {
-          "id": "seat-1785480815595",
-          "seatNumber": "76",
-          "sectionId": "sec-1785479436876",
-          "x": 9,
-          "y": 0,
-          "type": "desk"
+          "assignedEmployeeId": "EMP-2117"
         },
         {
           "id": "seat-1785482657618",
@@ -1144,7 +558,7 @@
           "x": 6,
           "y": 0,
           "type": "desk",
-          "assignedEmployeeId": "EMP-2111"
+          "assignedEmployeeId": "EMP-2115"
         },
         {
           "id": "seat-1785486039024",
@@ -1153,7 +567,7 @@
           "x": 7,
           "y": 0,
           "type": "desk",
-          "assignedEmployeeId": "EMP-2107"
+          "assignedEmployeeId": "EMP-2114"
         },
         {
           "id": "seat-1785486039467",
@@ -1162,7 +576,7 @@
           "x": 8,
           "y": 0,
           "type": "desk",
-          "assignedEmployeeId": "EMP-1005"
+          "assignedEmployeeId": "EMP-2113"
         },
         {
           "id": "seat-1785486039736",
@@ -1171,11 +585,20 @@
           "x": 9,
           "y": 0,
           "type": "desk",
-          "assignedEmployeeId": "EMP-1004"
+          "assignedEmployeeId": "EMP-2112"
+        },
+        {
+          "id": "seat-1786534313202",
+          "seatNumber": "11",
+          "sectionId": "sec-1786534308674",
+          "x": 0,
+          "y": 0,
+          "type": "desk",
+          "assignedEmployeeId": "EMP-2116"
         }
       ],
-      "updatedAt": "2026-07-31T10:47:05.427+00:00",
-      "updatedBy": "Shah Nawaz (EMP-2111)"
+      "updatedAt": "2026-08-12T11:32:25.606+00:00",
+      "updatedBy": "Mohammad Shah Nawaz (EMP-2117)"
     }
   ],
   "rooms": [
