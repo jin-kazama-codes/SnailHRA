@@ -166,6 +166,13 @@ export async function PUT(request: Request) {
   try {
     const updatedEmp: Employee = await request.json();
     updatedEmp.fullName = capitalizeName(updatedEmp.fullName);
+    if (updatedEmp.password) {
+      const isAlreadyHashed = typeof updatedEmp.password === "string" && /^\$2[aby]\$/.test(updatedEmp.password);
+      if (!isAlreadyHashed) {
+        const salt = bcrypt.genSaltSync(10);
+        updatedEmp.password = bcrypt.hashSync(updatedEmp.password, salt);
+      }
+    }
     const db = loadDatabase();
     if (!db.employees) db.employees = [];
     const index = db.employees.findIndex(e => e.id === updatedEmp.id);

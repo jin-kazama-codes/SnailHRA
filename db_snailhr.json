@@ -139,7 +139,7 @@
       ],
       "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       "bio": "",
-      "password": "Gulam@123",
+      "password": "$2b$10$uz2fr3i6rcMx3ck5c0AOnOeI1VwsceHz7neGu81NvVhe6.uC4PDzK",
       "dateOfBirth": "2001-03-15"
     },
     {
@@ -251,7 +251,7 @@
       ],
       "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       "bio": "",
-      "password": "$2b$10$7vtS7ww6UkH80jY9uKlj2.V.mJJ1zGEgKSsqB69ddA.bcv8LivDz2",
+      "password": "$2b$10$T04218juyDUJSvPj2sOGmeyFnyJfs5Ov85fY2uES4cIcsShNMuL/i",
       "dateOfBirth": "2004-10-11"
     }
   ],
@@ -294,7 +294,12 @@
   "payslips": [],
   "simulatedEmails": [],
   "customLeaveTypes": [
-    "Medical Leaves|10"
+    "Medical Leaves|10",
+    "Casual Leave|10",
+    "Earned Leave|5",
+    "Unpaid Leave|20",
+    "Work From Home|10",
+    "Half Day Leave|10"
   ],
   "customDepartments": [
     "Information Technology"

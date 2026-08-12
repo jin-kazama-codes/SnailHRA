@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
+import bcrypt from "bcryptjs";
 
 export async function PUT(
   request: Request,
@@ -14,6 +15,15 @@ export async function PUT(
 
     if (!db.employees) db.employees = [];
     const index = db.employees.findIndex(e => e.id === empId);
+
+    if (body.password) {
+      const isAlreadyHashed = typeof body.password === "string" && /^\$2[aby]\$/.test(body.password);
+      if (!isAlreadyHashed) {
+        const salt = bcrypt.genSaltSync(10);
+        body.password = bcrypt.hashSync(body.password, salt);
+      }
+    }
+
     let emp: any;
     if (index >= 0) {
       db.employees[index] = { ...db.employees[index], ...body };
