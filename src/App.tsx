@@ -1218,7 +1218,7 @@ export default function App() {
         showToast(data.error || "Payslip generation failed", "error");
         return;
       }
-      
+
       // INSTANT OPTIMISTIC STATE UPDATE: Immediately update payslips, emails, and fines in React state!
       if (data.payslip) {
         setPayslips(prev => [data.payslip, ...(prev || []).filter(p => !(p.employeeId === employeeId && p.month === month))]);
@@ -1227,7 +1227,7 @@ export default function App() {
         setEmails(prev => [data.email, ...(prev || []).filter(e => e.id !== data.email.id)]);
       }
       setFines(prev => (prev || []).map(f => f.employeeId === employeeId && (f.status === "Pending" || f.status === "Deducted From Payroll") ? { ...f, status: "Deducted" } : f));
-      
+
       showToast("Payslip Generated & Dispatched to employee email inbox successfully!", "success");
       await refreshDatabase();
     } catch (err) {
@@ -2195,7 +2195,7 @@ export default function App() {
           )}
 
           {currentView === "fines" && (
-          <FinesView
+            <FinesView
               fines={fines}
               employees={employees}
               role={activeRole}
@@ -2281,10 +2281,10 @@ export default function App() {
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[99999] animate-in fade-in slide-in-from-top-4 duration-300">
           <div className={`flex items-center space-x-3 px-4 py-3 rounded-2xl shadow-2xl border backdrop-blur-md transition-all ${toast.type === "success"
-              ? "bg-emerald-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-900/30"
-              : toast.type === "error"
-                ? "bg-rose-900/95 text-rose-100 border-rose-500/40 shadow-rose-900/30"
-                : "bg-slate-900/95 text-slate-100 border-slate-700/40 shadow-slate-900/30"
+            ? "bg-emerald-900/95 text-emerald-100 border-emerald-500/40 shadow-emerald-900/30"
+            : toast.type === "error"
+              ? "bg-rose-900/95 text-rose-100 border-rose-500/40 shadow-rose-900/30"
+              : "bg-slate-900/95 text-slate-100 border-slate-700/40 shadow-slate-900/30"
             }`}>
             {toast.type === "success" && <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />}
             {toast.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
