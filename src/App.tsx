@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
@@ -32,6 +32,7 @@ import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import MeetingsView from "./components/MeetingsView";
 import WorkspaceView from "./components/WorkspaceView";
 import PasswordUpdateView from "./components/PasswordUpdateView";
+import EditEmployeeModal from "./components/EditEmployeeModal";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,20 @@ export default function App() {
     return "dashboard";
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [showMyProfileModal, setShowMyProfileModal] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Active RBAC Persona Simulation (Persisted across refreshes)
   const [activeRole, setActiveRole] = useState<"admin" | "hr" | "employee">(() => {
@@ -1880,34 +1895,92 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Access Controls */}
+        {/* Global Access Controls - Top Right Corner */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 min-w-0">
-
-          {/* Active Logged In User Badge */}
-          <div className="flex items-center bg-slate-50 dark:bg-[#0f0f0f] px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] sm:text-xs gap-1.5 sm:gap-2 shadow-xs min-w-0">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shrink-0"></div>
-            <span className="text-slate-400 font-semibold hidden md:inline">Logged In:</span>
-            <span className="text-slate-800 dark:text-gray-200 font-bold truncate max-w-[110px] sm:max-w-none">
-              {currentEmployee?.fullName} ({currentEmployee?.role.toUpperCase()})
-            </span>
-          </div>
-
-          {/* Sign Out Button */}
-          <button
-            onClick={handleLogout}
-            className="hidden lg:flex items-center space-x-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-bold text-xs rounded-xl border border-rose-100/50 dark:border-rose-900/20 transition-all cursor-pointer shadow-xs"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Sign Out</span>
-          </button>
 
           {/* Quick Theme Switcher */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className="hidden lg:flex items-center justify-center p-2 bg-slate-50 dark:bg-[#0f0f0f] text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-emerald-400 rounded-xl border border-slate-100 dark:border-[#1a1a1a] transition-colors cursor-pointer"
+            className="flex items-center justify-center p-2 bg-slate-50 dark:bg-[#0f0f0f] text-slate-500 hover:text-slate-800 dark:text-gray-400 dark:hover:text-emerald-400 rounded-xl border border-slate-100 dark:border-[#1a1a1a] transition-colors cursor-pointer"
+            title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
-            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {darkMode ? <Sun className="w-4.5 h-4.5 text-amber-400" /> : <Moon className="w-4.5 h-4.5" />}
           </button>
+
+          {/* Top Right User Profile Avatar Dropdown Menu */}
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+              className="relative p-0.5 rounded-full hover:ring-2 hover:ring-emerald-500/50 transition-all cursor-pointer focus:outline-none shrink-0"
+              title={`${currentEmployee?.fullName} (${activeRole.toUpperCase()})`}
+            >
+              <img
+                src={currentEmployee?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                alt={currentEmployee?.fullName}
+                className="w-10 h-10 rounded-full object-cover border-2 border-slate-200 dark:border-slate-800 shadow-xs"
+              />
+              <span className="w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-[#0f0f0f] absolute bottom-0 right-0 shadow-xs" />
+            </button>
+
+            {/* Dropdown Modal */}
+            {profileMenuOpen && (
+              <div className="absolute right-0 top-12 z-50 w-64 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-2xl p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
+                {/* User Info Header */}
+                <div className="flex items-center space-x-3 p-2 bg-slate-50 dark:bg-[#141414] rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                  <img
+                    src={currentEmployee?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                    alt={currentEmployee?.fullName}
+                    className="w-10 h-10 rounded-full object-cover border border-emerald-500/30 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-extrabold text-xs text-slate-800 dark:text-white truncate">{currentEmployee?.fullName}</p>
+                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 capitalize">{activeRole} Role</p>
+                  </div>
+                </div>
+
+                {/* Dropdown Navigation Menu */}
+                <div className="space-y-1 pt-1 text-xs font-semibold text-slate-600 dark:text-gray-300">
+                  {/* My Profile */}
+                  <button
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      setShowMyProfileModal(true);
+                    }}
+                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                  >
+                    <User className="w-4 h-4 text-emerald-500" />
+                    <span>My Profile</span>
+                  </button>
+
+                  {/* Password Update */}
+                  <button
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      setCurrentView("password-update");
+                    }}
+                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                  >
+                    <Lock className="w-4 h-4 text-amber-500" />
+                    <span>Password Update</span>
+                  </button>
+                </div>
+
+                {/* Logout Button */}
+                <div className="pt-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+                  <button
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold text-xs transition-all shadow-md shadow-rose-500/20 cursor-pointer"
+                  >
+                    <span>Logout</span>
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -2307,6 +2380,36 @@ export default function App() {
             <span className="font-semibold text-xs">{toast.message}</span>
           </div>
         </div>
+      )}
+      {/* Edit Employee Information Full-Screen Modal (Triggered via My Profile) */}
+      {showMyProfileModal && currentEmployee && (
+        <EditEmployeeModal
+          employee={currentEmployee}
+          designations={designations}
+          customDepartments={customDepartments}
+          customBranches={customBranches}
+          role={activeRole}
+          onClose={() => setShowMyProfileModal(false)}
+          onSave={async (id, updatedData) => {
+            showToast("Saving profile information...", "info");
+            try {
+              const res = await fetch(`/api/employees/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updatedData)
+              });
+              if (res.ok) {
+                await refreshDatabase();
+                showToast("Profile details updated successfully!", "success");
+              } else {
+                showToast("Failed to update profile information", "error");
+              }
+            } catch (err) {
+              console.error(err);
+              showToast("Error updating profile information", "error");
+            }
+          }}
+        />
       )}
     </div>
   );

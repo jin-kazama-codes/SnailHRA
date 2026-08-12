@@ -90,7 +90,7 @@
       "id": "EMP-2112",
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
       "fullName": "Gulam Raza",
-      "email": "razaji5537@gmail.com",
+      "email": "razag5537@gmail.com",
       "phone": "9675214637",
       "role": "employee",
       "designationId": "des-1786520806680",
@@ -139,7 +139,7 @@
       ],
       "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       "bio": "",
-      "password": "$2b$10$0sNk7j0Vr6eWZdpEiM0stumAAsIULrt3IEQwx88eKWv8121U9Ij6y",
+      "password": "$2b$10$H0o0xX/k4pdLjhkkOjccheViabvTjANBF82ShV3dQd1xahp0Q0nnS",
       "dateOfBirth": "2001-03-15"
     },
     {
@@ -155,11 +155,11 @@
       "joiningDate": "2023-01-01",
       "status": "Active",
       "salary": {
-        "basic": 18000,
-        "hra": 7200,
-        "allowances": 3600,
-        "pfDeduction": 3600,
-        "tdsDeduction": 1440
+        "basic": 19000,
+        "hra": 7600,
+        "allowances": 3800,
+        "pfDeduction": 2280,
+        "tdsDeduction": 1520
       },
       "bankDetails": {
         "accountNumber": "",
@@ -253,6 +253,62 @@
       "bio": "",
       "password": "$2b$10$T04218juyDUJSvPj2sOGmeyFnyJfs5Ov85fY2uES4cIcsShNMuL/i",
       "dateOfBirth": "2004-10-11"
+    },
+    {
+      "id": "EMP-2115",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
+      "fullName": "Gausi Khan",
+      "email": "gausikhan007@gmail.com",
+      "phone": "8126214483",
+      "role": "employee",
+      "designationId": "des-1786522525694",
+      "department": "Loans",
+      "branch": "Shashtri Nagar",
+      "joiningDate": "2026-04-01",
+      "status": "Active",
+      "salary": {
+        "basic": 1000,
+        "hra": 400,
+        "allowances": 200,
+        "pfDeduction": 3600,
+        "tdsDeduction": 80
+      },
+      "bankDetails": {
+        "accountNumber": "",
+        "bankName": "State Bank of India",
+        "ifsc": ""
+      },
+      "address": "",
+      "emergencyContact": {
+        "name": "Mr. Shahenshah Mian",
+        "relation": "Father",
+        "phone": "9897431499"
+      },
+      "documents": [],
+      "onboardingTasks": [
+        {
+          "id": "tsk-auto-EMP-2115-1",
+          "taskName": "Verify KYC and Identity proof",
+          "completed": false,
+          "dueDate": "2026-04-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2115-2",
+          "taskName": "Collect Bank Account proof & PAN card",
+          "completed": false,
+          "dueDate": "2026-04-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2115-3",
+          "taskName": "Allocate Code Vamp Tech Credentials & Assets",
+          "completed": false,
+          "dueDate": "2026-04-01"
+        }
+      ],
+      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+      "bio": "",
+      "password": "$2b$10$iGGN3PDsqZrftkunRA9KlejqzPc.OaNJ2V2PMjgTAGTVMups.m.2G",
+      "dateOfBirth": "1993-04-27"
     }
   ],
   "attendance": [],
