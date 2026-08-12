@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Laptop, Tablet, Radio, Layers, Plus, Check, X, Trash2,
-  HelpCircle, AlertCircle, FileText, User, Calendar
+  HelpCircle, AlertCircle, FileText, User, Calendar, Loader2
 } from "lucide-react";
 import { InventoryItem, InventoryRequest, Employee, UserRole } from "../types";
 
@@ -12,10 +12,10 @@ interface InventoryViewProps {
   role: UserRole;
   currentEmployeeId: string;
   customBranches?: string[];
-  onAddAsset: (assetData: any) => void;
-  onDeleteAsset: (id: string) => void;
-  onApplyAssetRequest: (reqData: any) => void;
-  onReviewAssetRequest: (id: string, status: "Approved" | "Rejected", assetId?: string) => void;
+  onAddAsset: (assetData: any) => void | Promise<void>;
+  onDeleteAsset: (id: string) => void | Promise<void>;
+  onApplyAssetRequest: (reqData: any) => void | Promise<void>;
+  onReviewAssetRequest: (id: string, status: "Approved" | "Rejected", assetId?: string) => void | Promise<void>;
 }
 
 export default function InventoryView({
@@ -33,6 +33,7 @@ export default function InventoryView({
   const [activeTab, setActiveTab] = useState<"items" | "requests">("items");
   const [showAddAssetForm, setShowAddAssetForm] = useState(false);
   const [showRequestForm, setShowRequestForm] = useState(false);
+  const [isSubmittingAsset, setIsSubmittingAsset] = useState(false);
 
   // Allocation states
   const [allocatingReqId, setAllocatingReqId] = useState<string | null>(null);
@@ -88,31 +89,38 @@ export default function InventoryView({
   const [itemSelectionMode, setItemSelectionMode] = useState<"select" | "custom">("select");
   const [selectedExistingAssetId, setSelectedExistingAssetId] = useState("");
 
-  const handleAddAssetSubmit = (e: React.FormEvent) => {
+  const handleAddAssetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetName || !serialNumber) return;
-    onAddAsset({
-      id: `inv-${Date.now()}`,
-      name: assetName,
-      serialNumber,
-      category: assetCategory,
-      status: "Available",
-      assignedToEmployeeId: null,
-      assignedDate: null,
-      branch: selectedBranch || undefined
-    });
-    setAssetName("");
-    setShowAddAssetForm(false);
+    setIsSubmittingAsset(true);
+    try {
+      await onAddAsset({
+        id: `inv-${Date.now()}`,
+        name: assetName,
+        serialNumber,
+        category: assetCategory,
+        status: "Available",
+        assignedToEmployeeId: null,
+        assignedDate: null,
+        branch: selectedBranch || undefined
+      });
+      setAssetName("");
+      setShowAddAssetForm(false);
 
-    // Reset serial number for next asset
-    const currentEmp = employees.find(e => e.id === currentEmployeeId);
-    const empBranch = currentEmp?.branch || "Mumbai Branch";
-    if (empBranch) {
-      setSelectedBranch(empBranch);
-      const code = getBranchCode(empBranch);
-      const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
-      const randNum = Math.floor(1000 + Math.random() * 9000);
-      setSerialNumber(`${code}-${catCode}-${randNum}`);
+      // Reset serial number for next asset
+      const currentEmp = employees.find(e => e.id === currentEmployeeId);
+      const empBranch = currentEmp?.branch || "Mumbai Branch";
+      if (empBranch) {
+        setSelectedBranch(empBranch);
+        const code = getBranchCode(empBranch);
+        const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
+        const randNum = Math.floor(1000 + Math.random() * 9000);
+        setSerialNumber(`${code}-${catCode}-${randNum}`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingAsset(false);
     }
   };
 
@@ -283,9 +291,17 @@ export default function InventoryView({
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-xl cursor-pointer"
+                    disabled={isSubmittingAsset}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl cursor-pointer flex items-center justify-center gap-2"
                   >
-                    Register Asset
+                    {isSubmittingAsset ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Registering...</span>
+                      </>
+                    ) : (
+                      <span>Register Asset</span>
+                    )}
                   </button>
                 </div>
               </form>

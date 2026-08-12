@@ -71,7 +71,9 @@ export async function POST() {
       const employeeRecords = db.employees.map(emp => ({
         id: emp.id,
         company_id: emp.companyId || (emp as any).company_id || MGM_COMPANY_ID,
+        prefix: emp.prefix || null,
         full_name: emp.fullName,
+        gender: emp.gender || null,
         email: emp.email,
         phone: emp.phone,
         role: emp.role,

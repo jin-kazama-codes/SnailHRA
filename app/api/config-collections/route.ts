@@ -60,7 +60,9 @@ export async function POST(request: Request) {
 
     // Identify added and removed items
     const added = capitalizedAdded || capitalizedList.find((item: string) => !previousList.includes(item));
-    const removed = removedItem || previousList.find((item: string) => !capitalizedList.includes(item));
+    const getCleanName = (s: string) => (s.includes("|") ? s.split("|")[0] : s).trim().toLowerCase();
+    const currentCleanNames = new Set(capitalizedList.map(getCleanName));
+    const removed = removedItem || previousList.find((item: string) => !currentCleanNames.has(getCleanName(item)));
 
     // Sync changes to Supabase database tables asynchronously
     if (type === "departments") {

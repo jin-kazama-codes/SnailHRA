@@ -83,7 +83,9 @@ export async function POST(request: Request) {
       const newEmp: Employee = {
         id: empId,
         companyId: resolvedCompanyId,
+        prefix: item.prefix || undefined,
         fullName: item.fullName || item.name || `Employee ${maxNum}`,
+        gender: item.gender || undefined,
         email: item.email || `emp_${maxNum}_${Date.now().toString().slice(-4)}@company.com`,
         phone: item.phone || "+91 99999 00000",
         role: item.role === "admin" || item.role === "hr" ? item.role : "employee",
@@ -131,7 +133,9 @@ export async function POST(request: Request) {
           await supabase.from("employees").upsert({
             id: newEmp.id,
             company_id: newEmp.companyId,
+            prefix: newEmp.prefix || null,
             full_name: newEmp.fullName,
+            gender: newEmp.gender || null,
             email: newEmp.email,
             phone: newEmp.phone,
             role: newEmp.role,

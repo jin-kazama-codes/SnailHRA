@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Video, Calendar, Clock, Plus, Search, Users, Check, X,
   Trash2, MapPin, Link2, UserCheck, Sparkles, Filter, Info, ShieldAlert,
@@ -32,6 +32,13 @@ export default function MeetingsView({
   companyName = "SnailHR"
 }: MeetingsViewProps) {
   const todayStr = new Date().toISOString().split("T")[0];
+
+  // Live clock tick — updates every second for countdown timers
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -162,6 +169,38 @@ export default function MeetingsView({
       return false;
     }
   };
+
+  // Returns a live HH:MM:SS countdown string for upcoming/live meetings
+  const getTimeRemaining = (meet: Meeting): string | null => {
+    try {
+      const [year, month, day] = meet.date.split("-").map(Number);
+      const [sh, sm] = meet.startTime.split(":").map(Number);
+      const [eh, em] = meet.endTime.split(":").map(Number);
+      const startDt = new Date(year, month - 1, day, sh, sm, 0);
+      const endDt = new Date(year, month - 1, day, eh, em, 0);
+      if (now >= endDt) return null; // closed
+
+      const targetDt = now >= startDt ? endDt : startDt;
+      const prefix = now >= startDt ? "Ends in" : "Starts in";
+
+      const diffMs = targetDt.getTime() - now.getTime();
+      const totalSecs = Math.max(0, Math.floor(diffMs / 1000));
+      const d = Math.floor(totalSecs / 86400);
+      const h = Math.floor((totalSecs % 86400) / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = totalSecs % 60;
+
+      const pad = (n: number) => String(n).padStart(2, "0");
+
+      if (d > 0) {
+        return `${prefix} ${d}d ${pad(h)}:${pad(m)}:${pad(s)}`;
+      }
+      return `${prefix} ${pad(h)}:${pad(m)}:${pad(s)}`;
+    } catch {
+      return null;
+    }
+  };
+
 
   // Open edit modal for a meeting
   const openEditModal = (meet: Meeting) => {
@@ -1554,8 +1593,8 @@ export default function MeetingsView({
                                     {calIsClosed
                                       ? <span className="font-bold opacity-80">Meeting Closed</span>
                                       : calIsLive
-                                      ? <span className="font-bold text-emerald-600 dark:text-emerald-400">● Live Now</span>
-                                      : <span className="truncate">{meet.reason}</span>
+                                      ? <span className="font-bold text-emerald-600 dark:text-emerald-400">● Live Now · {getTimeRemaining(meet)}</span>
+                                      : <span className="truncate opacity-90 font-bold">{getTimeRemaining(meet) ?? meet.reason}</span>
                                     }
                                   </div>
                                 </div>
@@ -1642,6 +1681,21 @@ export default function MeetingsView({
                               Live Now
                             </span>
                           )}
+                          {!isClosed && (() => {
+                            const remaining = getTimeRemaining(meet);
+                            if (!remaining) return null;
+                            const isLiveRemaining = isLive;
+                            return (
+                              <span className={`inline-flex items-center gap-1 font-bold text-[9px] px-2 py-0.5 rounded-md border ${
+                                isLiveRemaining
+                                  ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60"
+                                  : "bg-sky-50 dark:bg-sky-950/20 text-sky-600 dark:text-sky-400 border-sky-200/60 dark:border-sky-900/40"
+                              }`}>
+                                <Clock className="w-2.5 h-2.5" />
+                                {remaining}
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">

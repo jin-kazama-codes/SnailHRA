@@ -7,3 +7,5 @@ coverage/
 .env*
 !.env.example
 .next/
+db_snailhr.json
+*.json.bak

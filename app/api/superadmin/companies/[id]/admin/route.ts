@@ -17,7 +17,10 @@ export async function POST(
   try {
     const body = await request.json();
     const {
-      fullName, email, phone = "", password,
+      prefix,
+      fullName,
+      gender,
+      email, phone = "", password,
       role = "admin",
       department = "Management",
       designation,
@@ -94,7 +97,9 @@ export async function POST(
 
     const { data, error } = await db.from("employees").insert({
       id: newId,
+      prefix: prefix || null,
       full_name: fullName,
+      gender: gender || null,
       email,
       phone,
       role,

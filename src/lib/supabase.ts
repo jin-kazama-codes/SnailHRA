@@ -412,15 +412,19 @@ export async function syncLeaveTypeToSupabase(name: string, companyId?: string) 
 export async function deleteLeaveTypeFromSupabase(name: string, companyId?: string) {
   if (!supabase) return;
   try {
-    let query1 = supabase.from("custom_leave_types").delete().eq("name", name);
-    let query2 = supabase.from("custom_leaves").delete().eq("name", name);
+    const cleanName = (name.includes("|") ? name.split("|")[0] : name).trim();
+    let query1 = supabase.from("custom_leave_types").delete().ilike("name", cleanName);
+    let query2 = supabase.from("custom_leaves").delete().ilike("name", cleanName);
+    let query3 = supabase.from("leave_types").delete().ilike("name", cleanName);
     if (companyId) {
       query1 = query1.eq("company_id", companyId);
       query2 = query2.eq("company_id", companyId);
+      query3 = query3.eq("company_id", companyId);
     }
     await query1;
     await query2;
-    console.log(`Successfully deleted leave type "${name}" from Supabase 'custom_leave_types' / 'custom_leaves' table.`);
+    await query3;
+    console.log(`Successfully deleted leave type "${cleanName}" from Supabase.`);
   } catch (e) {
     console.warn("Supabase custom_leave_types delete error:", e);
   }

@@ -1,126 +1,59 @@
 {
   "designations": [
     {
-      "id": "des-1785313702741",
-      "title": "11111111111111111",
-      "department": "Vampire Research Dept",
+      "id": "des-1786520689885",
+      "title": "Team Lead",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786520806680",
+      "title": "Software Developer",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786521037085",
+      "title": "Full Stack Developer",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786521053724",
+      "title": "Software Engineer",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786521070920",
+      "title": "Qa Engineer / Software Tester",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786521147966",
+      "title": "Backend Developer",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786521171559",
+      "title": "System Administrator",
+      "department": "Information Technology",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
+    },
+    {
+      "id": "des-1786522525694",
+      "title": "Intern",
+      "department": "Information Technology",
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
     }
   ],
   "employees": [
     {
-      "id": "EMP-1004",
-      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Nawaz Shah",
-      "email": "nawaz@gmail.com",
-      "phone": "+918787878786",
-      "role": "employee",
-      "designationId": "des-1",
-      "department": "Loans",
-      "branch": "Transylvania Branch",
-      "joiningDate": "2026-07-28",
-      "status": "Active",
-      "salary": {
-        "basic": 40000,
-        "hra": 16000,
-        "allowances": 8000,
-        "pfDeduction": 3600,
-        "tdsDeduction": 0
-      },
-      "bankDetails": {
-        "accountNumber": "",
-        "bankName": "State Bank of India",
-        "ifsc": ""
-      },
-      "address": "shashtri nagar",
-      "emergencyContact": {
-        "name": "Guardian",
-        "relation": "Spouse",
-        "phone": "+91 99999 88888"
-      },
-      "documents": [],
-      "onboardingTasks": [],
-      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      "bio": "",
-      "password": "$2b$10$/LVBAQUE64Ep46qcENgoGO.k5dd7nGGSsR067pxXYO7tfnt32HIBS"
-    },
-    {
-      "id": "EMP-1005",
-      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Demo Test",
-      "email": "kaushikji@quattrovc.com",
-      "phone": "+918989898989",
-      "role": "hr",
-      "designationId": "des-1",
-      "department": "Loans",
-      "branch": "Transylvania Branch",
-      "joiningDate": "2026-07-29",
-      "status": "Active",
-      "salary": {
-        "basic": 40000,
-        "hra": 16000,
-        "allowances": 8000,
-        "pfDeduction": 3600,
-        "tdsDeduction": 0
-      },
-      "bankDetails": {
-        "accountNumber": "",
-        "bankName": "State Bank of India",
-        "ifsc": ""
-      },
-      "address": "Vihar , Gurugram 273. Iconic, Udyog",
-      "emergencyContact": {
-        "name": "Guardian",
-        "relation": "Spouse",
-        "phone": "+91 99999 88888"
-      },
-      "documents": [],
-      "onboardingTasks": [],
-      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      "bio": "",
-      "password": "$2b$10$0rfbfhnl2/KVaUycfsWqye4YzD2.izTSWwJ.RLLXZj5SBEyUyOC9y",
-      "dateOfBirth": "2011-10-19"
-    },
-    {
-      "id": "EMP-2107",
-      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Nikhil Saxena",
-      "email": "nikhil.saxena@gmail.com",
-      "phone": "+91 98220 22110",
-      "role": "hr",
-      "designationId": "des-4",
-      "department": "Human Resources",
-      "branch": "Pune Branch Office",
-      "joiningDate": "2026-07-14",
-      "status": "Active",
-      "salary": {
-        "basic": 48000,
-        "hra": 19200,
-        "allowances": 10000,
-        "pfDeduction": 3800,
-        "tdsDeduction": 0
-      },
-      "bankDetails": {
-        "accountNumber": "91801007766554",
-        "bankName": "Axis Bank",
-        "ifsc": "UTIB0000123"
-      },
-      "address": "55, Kothrud Main Road, Pune, Maharashtra",
-      "emergencyContact": {
-        "name": "Ananya Saxena",
-        "relation": "Spouse",
-        "phone": "+91 98220 00998"
-      },
-      "documents": [],
-      "onboardingTasks": [],
-      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      "bio": "",
-      "password": ""
-    },
-    {
       "id": "EMP-2111",
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Shah Nawaz",
+      "fullName": "Mohammad Shah Nawaz",
       "email": "shahnawaz844536@gmail.com",
       "phone": "9557712155",
       "role": "admin",
@@ -131,10 +64,10 @@
       "status": "Active",
       "salary": {
         "basic": 30000,
-        "hra": 5000,
-        "allowances": 2000,
-        "pfDeduction": 3000,
-        "tdsDeduction": 3000
+        "hra": 12000,
+        "allowances": 6000,
+        "pfDeduction": 3600,
+        "tdsDeduction": 2400
       },
       "bankDetails": {
         "accountNumber": "",
@@ -145,7 +78,7 @@
       "emergencyContact": {
         "name": "Shakra Parveen",
         "relation": "Mother",
-        "phone": "9557712133"
+        "phone": "9557712155"
       },
       "documents": [],
       "onboardingTasks": [],
@@ -156,85 +89,179 @@
     {
       "id": "EMP-2112",
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Kavita Sexena",
-      "email": "kavita@gmail.com",
-      "phone": "9889989899",
+      "fullName": "Gulam Raza",
+      "email": "razaji5537@gmail.com",
+      "phone": "9675214637",
       "role": "employee",
-      "designationId": "des-1",
+      "designationId": "des-1786520806680",
       "department": "Loans",
-      "branch": "Transylvania Branch",
-      "joiningDate": "2026-07-29",
+      "branch": "Shashtri Nagar",
+      "joiningDate": "2024-03-01",
       "status": "Active",
       "salary": {
-        "basic": 40000,
-        "hra": 16000,
-        "allowances": 8000,
-        "pfDeduction": 3600,
-        "tdsDeduction": 0
+        "basic": 8000,
+        "hra": 3200,
+        "allowances": 1600,
+        "pfDeduction": 960,
+        "tdsDeduction": 640
       },
       "bankDetails": {
         "accountNumber": "",
         "bankName": "State Bank of India",
         "ifsc": ""
       },
-      "address": "",
+      "address": "Parsa kheda cb ganj Bareilly",
+      "emergencyContact": {
+        "name": "Shahid Raza Khan",
+        "relation": "Father",
+        "phone": "9756858028"
+      },
+      "documents": [],
+      "onboardingTasks": [
+        {
+          "id": "tsk-auto-EMP-2112-1",
+          "taskName": "Verify KYC and Identity proof",
+          "completed": false,
+          "dueDate": "2024-03-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2112-2",
+          "taskName": "Collect Bank Account proof & PAN card",
+          "completed": false,
+          "dueDate": "2024-03-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2112-3",
+          "taskName": "Allocate Code Vamp Tech Credentials & Assets",
+          "completed": false,
+          "dueDate": "2024-03-01"
+        }
+      ],
+      "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
+      "bio": "",
+      "password": "Gulam@123",
+      "dateOfBirth": "2001-03-15"
+    },
+    {
+      "id": "EMP-2113",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
+      "fullName": "Faraz Husain",
+      "email": "faraz.husain@codevamp.tech",
+      "phone": "6396765059",
+      "role": "employee",
+      "designationId": "des-1786521037085",
+      "department": "Loans",
+      "branch": "Shashtri Nagar",
+      "joiningDate": "2023-01-01",
+      "status": "Active",
+      "salary": {
+        "basic": 18000,
+        "hra": 7200,
+        "allowances": 3600,
+        "pfDeduction": 3600,
+        "tdsDeduction": 1440
+      },
+      "bankDetails": {
+        "accountNumber": "",
+        "bankName": "State Bank of India",
+        "ifsc": ""
+      },
+      "address": "Old City Bareilly",
       "emergencyContact": {
         "name": "Guardian",
         "relation": "Spouse",
         "phone": "+91 99999 88888"
       },
       "documents": [],
-      "onboardingTasks": [],
+      "onboardingTasks": [
+        {
+          "id": "tsk-auto-EMP-2113-1",
+          "taskName": "Verify KYC and Identity proof",
+          "completed": false,
+          "dueDate": "2023-01-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2113-2",
+          "taskName": "Collect Bank Account proof & PAN card",
+          "completed": false,
+          "dueDate": "2023-01-01"
+        },
+        {
+          "id": "tsk-auto-EMP-2113-3",
+          "taskName": "Allocate Code Vamp Tech Credentials & Assets",
+          "completed": false,
+          "dueDate": "2023-01-01"
+        }
+      ],
       "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       "bio": "",
-      "password": "$2b$10$PxkC4oh5fP1suuMzcsEJxOlsqAUWkhvj5LQdaE9SNksF7nJv0epdW",
-      "dateOfBirth": "1995-08-09"
+      "password": "$2b$10$StSvYQ6YIcFxbXYe1QuWO.m1JaPUgt/udeFNKxRP7Iqdm/buSJEsO",
+      "dateOfBirth": "1997-03-16"
     },
     {
-      "id": "EMP-2113",
+      "id": "EMP-2114",
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "fullName": "Aafaq Ahmad",
-      "email": "aafaq@gmail.com",
-      "phone": "9560648715",
-      "role": "hr",
-      "designationId": "des-1785313702741",
+      "fullName": "Mohammad Amaan",
+      "email": "mohdamaan.dev@gmail.com",
+      "phone": "7725977314",
+      "role": "employee",
+      "designationId": "des-1786522525694",
       "department": "Loans",
-      "branch": "Transylvania Branch",
-      "joiningDate": "2026-07-31",
+      "branch": "Shashtri Nagar",
+      "joiningDate": "2026-06-20",
       "status": "Active",
       "salary": {
-        "basic": 80000,
-        "hra": 32000,
-        "allowances": 16000,
-        "pfDeduction": 9600,
-        "tdsDeduction": 6400
+        "basic": 1000,
+        "hra": 400,
+        "allowances": 200,
+        "pfDeduction": 120,
+        "tdsDeduction": 80
       },
       "bankDetails": {
         "accountNumber": "",
         "bankName": "State Bank of India",
         "ifsc": ""
       },
-      "address": "shashtri nagar",
+      "address": "Shashtri Nagar Bareilly",
       "emergencyContact": {
-        "name": "shah nawaz",
-        "relation": "Brother",
-        "phone": "9557712155"
+        "name": "Noorul Islam",
+        "relation": "Father",
+        "phone": "7302177904"
       },
       "documents": [],
-      "onboardingTasks": [],
+      "onboardingTasks": [
+        {
+          "id": "tsk-auto-EMP-2114-1",
+          "taskName": "Verify KYC and Identity proof",
+          "completed": false,
+          "dueDate": "2026-06-20"
+        },
+        {
+          "id": "tsk-auto-EMP-2114-2",
+          "taskName": "Collect Bank Account proof & PAN card",
+          "completed": false,
+          "dueDate": "2026-06-20"
+        },
+        {
+          "id": "tsk-auto-EMP-2114-3",
+          "taskName": "Allocate Code Vamp Tech Credentials & Assets",
+          "completed": false,
+          "dueDate": "2026-06-20"
+        }
+      ],
       "avatarUrl": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      "bio": "Bio",
-      "password": "$2b$10$brzrsFPG3S4vEFF3ZLyb/urbXptxRetCNn5T.T2vv19CYGSo.zrOG",
-      "dateOfBirth": "1993-07-12"
+      "bio": "",
+      "password": "$2b$10$7vtS7ww6UkH80jY9uKlj2.V.mJJ1zGEgKSsqB69ddA.bcv8LivDz2",
+      "dateOfBirth": "2004-10-11"
     }
   ],
   "attendance": [],
   "leaves": [],
   "holidays": [
     {
-      "id": "hol-1785251041514",
-      "name": "Test",
-      "date": "2026-10-02",
+      "id": "hol-1786523360355",
+      "name": "Indipendance Day",
+      "date": "2026-08-15",
       "type": "National"
     }
   ],
@@ -249,14 +276,7 @@
     }
   ],
   "expenses": [],
-  "expenseCategories": [
-    {
-      "id": "expcat-1785318854445",
-      "name": "Test",
-      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "description": "discription"
-    }
-  ],
+  "expenseCategories": [],
   "infractionTypes": [
     {
       "id": "infr-1786448026910",
@@ -266,107 +286,31 @@
       "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
     }
   ],
-  "corporateAllowancesFaqs": [
-    {
-      "id": "faq-1786450450862",
-      "title": "test",
-      "description": "test123",
-      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
-      "createdAt": "2026-08-11T12:14:13.363+00:00"
-    }
-  ],
+  "corporateAllowancesFaqs": [],
   "inventory": [],
-  "inventoryRequests": [
-    {
-      "id": "invreq-1785306589692",
-      "employeeId": "EMP-1005",
-      "employeeName": "Veda Ji",
-      "itemName": "test hai",
-      "category": "Other",
-      "requestDate": "2026-07-29",
-      "reason": "mjhe dongle chahiye",
-      "status": "Pending"
-    }
-  ],
-  "fines": [
-    {
-      "id": "fin-1786446315042",
-      "employeeId": "EMP-1005",
-      "employeeName": "Demo Test",
-      "reason": "Late Coming",
-      "amount": 500,
-      "date": "2026-08-11",
-      "status": "Pending"
-    },
-    {
-      "id": "fin-1785309509484",
-      "employeeId": "EMP-1005",
-      "employeeName": "Veda Ji",
-      "reason": "Unprofessional Conduct",
-      "amount": 5000,
-      "date": "2026-07-29",
-      "status": "Deducted"
-    },
-    {
-      "id": "fin-1785250978573",
-      "employeeId": "EMP-2107",
-      "employeeName": "Nikhil Saxena",
-      "reason": "Unprofessional Conduct",
-      "amount": 5000,
-      "date": "2026-07-28",
-      "status": "Deducted"
-    },
-    {
-      "id": "fin-1785250717298",
-      "employeeId": "EMP-1005",
-      "employeeName": "Veda Ji",
-      "reason": "Late Coming",
-      "amount": 2000,
-      "date": "2026-07-28",
-      "status": "Deducted"
-    },
-    {
-      "id": "fin-1785250602040",
-      "employeeId": "EMP-1005",
-      "employeeName": "Veda Ji",
-      "reason": "Unprofessional Conduct",
-      "amount": 5000,
-      "date": "2026-07-28",
-      "status": "Deducted"
-    },
-    {
-      "id": "fin-1785250028106",
-      "employeeId": "EMP-1004",
-      "employeeName": "Nawaz Shah",
-      "reason": "Late Coming",
-      "amount": 1000,
-      "date": "2026-07-28",
-      "status": "Deducted From Payroll"
-    }
-  ],
+  "inventoryRequests": [],
+  "fines": [],
   "reimbursements": [],
   "payslips": [],
   "simulatedEmails": [],
   "customLeaveTypes": [
-    "Test Policy"
+    "Medical Leaves|10"
   ],
   "customDepartments": [
-    "Vampire Research Dept",
-    "Test"
+    "Information Technology"
   ],
   "customBranches": [
-    "Transylvania Branch",
-    "Test"
+    "Shashtri Nagar"
   ],
   "customAmenities": [
     "Ac|Snowflake",
     "Wifi|Wifi"
   ],
   "wifiRestrictionSettings": {
-    "enabled": false,
-    "allowedIp": "223.233.67.216",
+    "enabled": true,
+    "allowedIp": "223.233.66.140",
     "allowedIps": [
-      "223.233.67.216"
+      "223.233.66.140"
     ],
     "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
   },
@@ -1236,5 +1180,15 @@
       "approvedAt": "2026-07-31T10:44:35.91+00:00",
       "createdAt": "2026-07-31T10:33:46.775+00:00"
     }
-  ]
+  ],
+  "payrollConfigs": {},
+  "companyTimingSettings": {
+    "bf46db43-ad37-41fe-8004-971e049f016e": {
+      "clockInTime": "10:00",
+      "clockOutTime": "19:00",
+      "lateThreshold": "10:30",
+      "breakStartTime": "14:00",
+      "breakEndTime": "15:00"
+    }
+  }
 }

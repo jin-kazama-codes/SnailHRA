@@ -55,7 +55,9 @@ export interface OnboardingTask {
 export interface Employee {
   id: string;
   companyId?: string; // tenant company reference
+  prefix?: "Mr" | "Mrs" | "Miss" | "Ms"; // honorific prefix
   fullName: string;
+  gender?: "Male" | "Female" | "Other";
   email: string;
   phone: string;
   role: UserRole;

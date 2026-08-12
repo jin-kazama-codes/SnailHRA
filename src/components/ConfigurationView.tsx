@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star, Scale,
+  Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star, Scale, Loader2,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
   Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2
 } from "lucide-react";
@@ -59,21 +59,21 @@ interface ConfigurationViewProps {
     error?: string;
   };
   subscriptionModel?: number;
-  onAddDesignation: (title: string, department: string) => void;
-  onRemoveDesignation: (id: string) => void;
+  onAddDesignation: (title: string, department: string) => void | Promise<void>;
+  onRemoveDesignation: (id: string) => void | Promise<void>;
   onUpdateCollection: (
     type: "leaveTypes" | "departments" | "branches" | "amenities",
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
-  ) => void;
-  onAddExpenseCategory: (name: string, description: string) => void;
-  onRemoveExpenseCategory: (id: string) => void;
-  onAddInfractionType?: (name: string, description: string, defaultAmount: number) => void;
-  onRemoveInfractionType?: (id: string) => void;
-  onUpdateInfractionType?: (id: string, name: string, description: string, defaultAmount: number) => void;
-  onAddCorporateAllowanceFaq?: (title: string, description: string, id?: string) => void;
-  onRemoveCorporateAllowanceFaq?: (id: string) => void;
+  ) => void | Promise<void>;
+  onAddExpenseCategory: (name: string, description: string) => void | Promise<void>;
+  onRemoveExpenseCategory: (id: string) => void | Promise<void>;
+  onAddInfractionType?: (name: string, description: string, defaultAmount: number) => void | Promise<void>;
+  onRemoveInfractionType?: (id: string) => void | Promise<void>;
+  onUpdateInfractionType?: (id: string, name: string, description: string, defaultAmount: number) => void | Promise<void>;
+  onAddCorporateAllowanceFaq?: (title: string, description: string, id?: string) => void | Promise<void>;
+  onRemoveCorporateAllowanceFaq?: (id: string) => void | Promise<void>;
   wifiRestrictionSettings?: {
     enabled: boolean;
     allowedIp?: string;
@@ -131,16 +131,33 @@ export default function ConfigurationView({
   const [newAmenity, setNewAmenity] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("Star");
 
+  // Loading States for Form Submissions
+  const [isSubmittingDesignation, setIsSubmittingDesignation] = useState(false);
+  const [isSubmittingExpenseCat, setIsSubmittingExpenseCat] = useState(false);
+  const [isSubmittingInfraction, setIsSubmittingInfraction] = useState(false);
+  const [isSubmittingFaq, setIsSubmittingFaq] = useState(false);
+  const [isSubmittingDepartment, setIsSubmittingDepartment] = useState(false);
+  const [isSubmittingBranch, setIsSubmittingBranch] = useState(false);
+  const [isSubmittingLeaveType, setIsSubmittingLeaveType] = useState(false);
+  const [isSubmittingAmenity, setIsSubmittingAmenity] = useState(false);
+
   // Expense Categories Form State
   const [newCatName, setNewCatName] = useState("");
   const [newCatDesc, setNewCatDesc] = useState("");
 
-  const handleSubmitExpenseCat = (e: React.FormEvent) => {
+  const handleSubmitExpenseCat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
-    onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
-    setNewCatName("");
-    setNewCatDesc("");
+    setIsSubmittingExpenseCat(true);
+    try {
+      await onAddExpenseCategory(newCatName.trim(), newCatDesc.trim());
+      setNewCatName("");
+      setNewCatDesc("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingExpenseCat(false);
+    }
   };
 
   // Infraction Types Form State
@@ -149,24 +166,29 @@ export default function ConfigurationView({
   const [newInfrDesc, setNewInfrDesc] = useState("");
   const [newInfrAmount, setNewInfrAmount] = useState("500");
 
-  const handleSubmitInfractionType = (e: React.FormEvent) => {
+  const handleSubmitInfractionType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newInfrName.trim()) return;
-
-    if (editingInfrId) {
-      if (onUpdateInfractionType) {
-        onUpdateInfractionType(editingInfrId, newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
+    setIsSubmittingInfraction(true);
+    try {
+      if (editingInfrId) {
+        if (onUpdateInfractionType) {
+          await onUpdateInfractionType(editingInfrId, newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
+        }
+      } else {
+        if (onAddInfractionType) {
+          await onAddInfractionType(newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
+        }
       }
-    } else {
-      if (onAddInfractionType) {
-        onAddInfractionType(newInfrName.trim(), newInfrDesc.trim(), Number(newInfrAmount) || 0);
-      }
+      setEditingInfrId(null);
+      setNewInfrName("");
+      setNewInfrDesc("");
+      setNewInfrAmount("500");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingInfraction(false);
     }
-
-    setEditingInfrId(null);
-    setNewInfrName("");
-    setNewInfrDesc("");
-    setNewInfrAmount("500");
   };
 
   const handleEditInfractionType = (type: InfractionType) => {
@@ -188,13 +210,20 @@ export default function ConfigurationView({
   const [newFaqTitle, setNewFaqTitle] = useState("");
   const [newFaqDescription, setNewFaqDescription] = useState("");
 
-  const handleSubmitFaq = (e: React.FormEvent) => {
+  const handleSubmitFaq = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFaqTitle.trim() || !onAddCorporateAllowanceFaq) return;
-    onAddCorporateAllowanceFaq(newFaqTitle.trim(), newFaqDescription.trim(), editingFaqId || undefined);
-    setNewFaqTitle("");
-    setNewFaqDescription("");
-    setEditingFaqId(null);
+    setIsSubmittingFaq(true);
+    try {
+      await onAddCorporateAllowanceFaq(newFaqTitle.trim(), newFaqDescription.trim(), editingFaqId || undefined);
+      setNewFaqTitle("");
+      setNewFaqDescription("");
+      setEditingFaqId(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingFaq(false);
+    }
   };
 
   const handleEditFaq = (faq: CorporateAllowanceFaq) => {
@@ -347,7 +376,7 @@ export default function ConfigurationView({
     return { name: leaveStr.trim(), quota: 12 };
   };
 
-  const handleAddLeaveType = (e: React.FormEvent) => {
+  const handleAddLeaveType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLeaveType.trim()) return;
     const trimmed = newLeaveType.trim();
@@ -362,9 +391,16 @@ export default function ConfigurationView({
     map.set(trimmed.toLowerCase(), itemStr);
     const newList = Array.from(map.values());
 
-    onUpdateCollection("leaveTypes", newList, "add", itemStr);
-    setNewLeaveType("");
-    setNewLeaveDays("12");
+    setIsSubmittingLeaveType(true);
+    try {
+      await onUpdateCollection("leaveTypes", newList, "add", itemStr);
+      setNewLeaveType("");
+      setNewLeaveDays("12");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingLeaveType(false);
+    }
   };
 
   const handleUpdateLeaveQuota = (targetItemStr: string, newQuotaVal: number) => {
@@ -391,23 +427,37 @@ export default function ConfigurationView({
     }
   };
 
-  const handleAddDesignation = (e: React.FormEvent) => {
+  const handleAddDesignation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDesignationTitle.trim() || !newDesignationDept.trim()) return;
-    onAddDesignation(newDesignationTitle.trim(), newDesignationDept.trim());
-    setNewDesignationTitle("");
-    setNewDesignationDept("");
+    setIsSubmittingDesignation(true);
+    try {
+      await onAddDesignation(newDesignationTitle.trim(), newDesignationDept.trim());
+      setNewDesignationTitle("");
+      setNewDesignationDept("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingDesignation(false);
+    }
   };
 
-  const handleAddDepartment = (e: React.FormEvent) => {
+  const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDepartment.trim()) return;
     const trimmed = newDepartment.trim();
     const newList = customDepartments.some(d => d.toLowerCase() === trimmed.toLowerCase())
       ? customDepartments
       : [...customDepartments, trimmed];
-    onUpdateCollection("departments", newList, "add", trimmed);
-    setNewDepartment("");
+    setIsSubmittingDepartment(true);
+    try {
+      await onUpdateCollection("departments", newList, "add", trimmed);
+      setNewDepartment("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingDepartment(false);
+    }
   };
 
   const handleRemoveDepartment = (dept: string) => {
@@ -416,15 +466,22 @@ export default function ConfigurationView({
     }
   };
 
-  const handleAddBranch = (e: React.FormEvent) => {
+  const handleAddBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBranch.trim()) return;
     const trimmed = newBranch.trim();
     const newList = customBranches.some(b => b.toLowerCase() === trimmed.toLowerCase())
       ? customBranches
       : [...customBranches, trimmed];
-    onUpdateCollection("branches", newList, "add", trimmed);
-    setNewBranch("");
+    setIsSubmittingBranch(true);
+    try {
+      await onUpdateCollection("branches", newList, "add", trimmed);
+      setNewBranch("");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingBranch(false);
+    }
   };
 
   const handleRemoveBranch = (branch: string) => {
@@ -433,7 +490,7 @@ export default function ConfigurationView({
     }
   };
 
-  const handleAddAmenity = (e: React.FormEvent) => {
+  const handleAddAmenity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAmenity.trim()) return;
     const trimmed = newAmenity.trim();
@@ -445,9 +502,16 @@ export default function ConfigurationView({
       return;
     }
     const newList = [...customAmenities, itemString];
-    onUpdateCollection("amenities", newList, "add", itemString);
-    setNewAmenity("");
-    setSelectedIcon("Star");
+    setIsSubmittingAmenity(true);
+    try {
+      await onUpdateCollection("amenities", newList, "add", itemString);
+      setNewAmenity("");
+      setSelectedIcon("Star");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingAmenity(false);
+    }
   };
 
   const handleRemoveAmenity = (amenity: string) => {
@@ -734,10 +798,11 @@ export default function ConfigurationView({
                 />
                 <button
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white p-2.5 rounded-xl cursor-pointer transition-all"
+                  disabled={isSubmittingDepartment}
+                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
                   title="Add Department"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isSubmittingDepartment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 </button>
               </form>
 
@@ -776,10 +841,11 @@ export default function ConfigurationView({
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-xl cursor-pointer transition-all"
+                  disabled={isSubmittingBranch}
+                  className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
                   title="Add Office Branch"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isSubmittingBranch ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 </button>
               </form>
 
@@ -830,10 +896,11 @@ export default function ConfigurationView({
                 />
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white p-2.5 rounded-xl cursor-pointer transition-all shrink-0"
+                  disabled={isSubmittingLeaveType}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all shrink-0 flex items-center justify-center"
                   title="Add Leave Policy Type"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isSubmittingLeaveType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 </button>
               </form>
 
@@ -907,10 +974,11 @@ export default function ConfigurationView({
                   />
                   <button
                     type="submit"
-                    className="bg-amber-600 hover:bg-amber-500 text-white p-2.5 rounded-xl cursor-pointer transition-all"
+                    disabled={isSubmittingAmenity}
+                    className="bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
                     title="Add Room Amenity"
                   >
-                    <Plus className="w-4 h-4" />
+                    {isSubmittingAmenity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                   </button>
                 </div>
 
@@ -1006,10 +1074,20 @@ export default function ConfigurationView({
 
                 <button
                   type="submit"
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  disabled={isSubmittingDesignation}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Register Designation</span>
+                  {isSubmittingDesignation ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Registering...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Register Designation</span>
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -1093,10 +1171,20 @@ export default function ConfigurationView({
 
                 <button
                   type="submit"
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  disabled={isSubmittingExpenseCat}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Category</span>
+                  {isSubmittingExpenseCat ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Adding...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Add Category</span>
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -1206,10 +1294,20 @@ export default function ConfigurationView({
                   </div>
                   <button
                     type="submit"
-                    className="w-full bg-rose-600 hover:bg-rose-500 text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                    disabled={isSubmittingInfraction}
+                    className="w-full bg-rose-600 hover:bg-rose-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    {editingInfrId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    <span>{editingInfrId ? "Save Changes" : "Add Infraction Type"}</span>
+                    {isSubmittingInfraction ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{editingInfrId ? "Saving..." : "Adding..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        {editingInfrId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        <span>{editingInfrId ? "Save Changes" : "Add Infraction Type"}</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </div>
@@ -1327,10 +1425,20 @@ export default function ConfigurationView({
 
                   <button
                     type="submit"
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-xs"
+                    disabled={isSubmittingFaq}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer text-xs"
                   >
-                    {editingFaqId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                    <span>{editingFaqId ? "Update Allowance FAQ" : "Add Allowance FAQ"}</span>
+                    {isSubmittingFaq ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{editingFaqId ? "Updating..." : "Adding..."}</span>
+                      </>
+                    ) : (
+                      <>
+                        {editingFaqId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        <span>{editingFaqId ? "Update Allowance FAQ" : "Add Allowance FAQ"}</span>
+                      </>
+                    )}
                   </button>
                 </form>
               </div>

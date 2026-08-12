@@ -24,7 +24,9 @@ export default function OnboardAgentSlideover({
   onSuccess,
 }: OnboardAgentSlideoverProps) {
   // Section 1 — credentials
+  const [prefix, setPrefix] = useState<"Mr" | "Mrs" | "Miss" | "Ms" | "">("Mr");
   const [fullName, setFullName] = useState("");
+  const [gender, setGender] = useState<"Male" | "Female" | "Other" | "">("Male");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -92,7 +94,9 @@ export default function OnboardAgentSlideover({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          prefix,
           fullName,
+          gender,
           email,
           phone,
           password,
@@ -175,8 +179,20 @@ export default function OnboardAgentSlideover({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Full Name *</label>
-                <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
-                  placeholder="e.g. Vikram Malhotra" className={inputCls} required />
+                <div className="flex gap-2">
+                  <select
+                    value={prefix}
+                    onChange={e => setPrefix(e.target.value as any)}
+                    className={`${inputCls} w-20 shrink-0`}
+                  >
+                    <option value="Mr">Mr</option>
+                    <option value="Mrs">Mrs</option>
+                    <option value="Miss">Miss</option>
+                    <option value="Ms">Ms</option>
+                  </select>
+                  <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
+                    placeholder="e.g. Vikram Malhotra" className={inputCls} required />
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Email Address *</label>
@@ -206,6 +222,25 @@ export default function OnboardAgentSlideover({
                 <select value={empRole} onChange={e => setEmpRole(e.target.value as any)} className={inputCls}>
                   <option value="admin">Administrator</option>
                 </select>
+              </div>
+              <div>
+                <label className={labelCls}>Gender *</label>
+                <div className="flex gap-2">
+                  {(["Male", "Female", "Other"] as const).map(g => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGender(g)}
+                      className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
+                        gender === g
+                          ? "bg-violet-600 text-white border-violet-600"
+                          : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-500 dark:text-gray-400 border-slate-100 dark:border-[#1a1a1a] hover:border-violet-300"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Date of Birth *</label>

@@ -417,6 +417,8 @@ export default function DirectoryView({
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [editRole, setEditRole] = useState<any>("employee");
   const [editDesigId, setEditDesigId] = useState("");
   const [editDept, setEditDept] = useState("");
@@ -447,7 +449,9 @@ export default function DirectoryView({
   const editProfileImageRef = useRef<HTMLInputElement>(null);
 
   // Onboard form state
+  const [prefix, setPrefix] = useState<"Mr" | "Mrs" | "Miss" | "Ms" | "">("Mr");
   const [fullName, setFullName] = useState("");
+  const [gender, setGender] = useState<"Male" | "Female" | "Other" | "">("Male");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -586,7 +590,7 @@ export default function DirectoryView({
     }
 
     const data = {
-      fullName, email, phone, role: empRole, designationId: selectedDesgId, department,
+      prefix, fullName, gender, email, phone, role: empRole, designationId: selectedDesgId, department,
       branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
       joiningDate, dateOfBirth, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
       bankAccount, bankName, bankIfsc, address, bio, password,
@@ -597,7 +601,9 @@ export default function DirectoryView({
     onOnboardEmployee(data);
 
     // Clear state & close
+    setPrefix("Mr");
     setFullName("");
+    setGender("Male");
     setEmail("");
     setPhone("");
     setPassword("");
@@ -670,6 +676,8 @@ export default function DirectoryView({
     setEditFullName(emp.fullName || "");
     setEditEmail(emp.email || "");
     setEditPhone(emp.phone || "");
+    setEditPassword("");
+    setShowEditPassword(false);
     setEditRole(emp.role || "employee");
     setEditDesigId(emp.designationId || "");
     setEditDept(emp.department || "");
@@ -786,8 +794,14 @@ export default function DirectoryView({
           phone: editEmergencyPhone,
         },
       };
+
+      if (editPassword.trim()) {
+        updated.password = editPassword.trim();
+      }
+
       await onUpdateEmployee(activeEmployee.id, updated);
       setShowEditModal(false);
+      setEditPassword("");
     } catch (err) {
       console.error("Error updating employee details:", err);
     } finally {
@@ -1732,14 +1746,26 @@ export default function DirectoryView({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
-                      <input
-                        type="text"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Vikram Malhotra"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
-                        required
-                      />
+                      <div className="flex gap-2">
+                        <select
+                          value={prefix}
+                          onChange={(e) => setPrefix(e.target.value as any)}
+                          className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-2 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium w-20 shrink-0"
+                        >
+                          <option value="Mr">Mr</option>
+                          <option value="Mrs">Mrs</option>
+                          <option value="Miss">Miss</option>
+                          <option value="Ms">Ms</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="e.g. Vikram Malhotra"
+                          className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                          required
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Email Address *</label>
@@ -1781,6 +1807,25 @@ export default function DirectoryView({
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Gender *</label>
+                      <div className="flex gap-2">
+                        {(["Male", "Female", "Other"] as const).map((g) => (
+                          <button
+                            key={g}
+                            type="button"
+                            onClick={() => setGender(g)}
+                            className={`flex-1 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
+                              gender === g
+                                ? "bg-emerald-500 text-white border-emerald-500"
+                                : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-500 dark:text-gray-400 border-slate-100 dark:border-[#1a1a1a] hover:border-emerald-300"
+                            }`}
+                          >
+                            {g}
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <div>
@@ -2196,6 +2241,28 @@ export default function DirectoryView({
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                       />
                     </div>
+                    {(role === "admin" || role === "hr") && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Change Password</label>
+                        <div className="relative">
+                          <input
+                            type={showEditPassword ? "text" : "password"}
+                            value={editPassword}
+                            onChange={(e) => setEditPassword(e.target.value)}
+                            placeholder="Leave blank to keep existing"
+                            className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-3 pr-10 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowEditPassword(!showEditPassword)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 p-1 rounded-lg cursor-pointer"
+                            title={showEditPassword ? "Hide password" : "Show password"}
+                          >
+                            {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Role Type</label>
                       <select
