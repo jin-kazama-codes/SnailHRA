@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
-  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid
+  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid, Lock
 } from "lucide-react";
 
 import {
@@ -31,6 +31,7 @@ import SuperAdminLoginView from "./components/SuperAdminLoginView";
 import SuperAdminDashboard from "./components/SuperAdminDashboard";
 import MeetingsView from "./components/MeetingsView";
 import WorkspaceView from "./components/WorkspaceView";
+import PasswordUpdateView from "./components/PasswordUpdateView";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -1838,6 +1839,7 @@ export default function App() {
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },
     { id: "fines", label: "Disciplinary Fines", icon: <Scale className="w-4.5 h-4.5" /> },
+    { id: "password-update", label: "Password Update", icon: <Lock className="w-4.5 h-4.5" /> },
     ...((activeRole === "admin" || activeRole === "hr") ? [
       { id: "configurations", label: "System Settings", icon: <Settings className="w-4.5 h-4.5" /> }
     ] : [])
@@ -1913,57 +1915,59 @@ export default function App() {
       <div className="flex-1 flex flex-col lg:flex-row">
 
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a]/80 p-4 shrink-0 space-y-6 sticky top-[57px] h-[calc(100vh-57px)] overflow-hidden hover:overflow-y-auto custom-scrollbar">
+        <aside className="hidden lg:flex flex-col justify-between w-64 bg-white dark:bg-[#0f0f0f] border-r border-slate-100 dark:border-[#1a1a1a]/80 p-4 shrink-0 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto custom-scrollbar space-y-6">
 
-          {/* Current Profile details card */}
-          {currentEmployee && (
-            <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-2xl border border-slate-100/50 dark:border-[#1a1a1a] flex items-center space-x-3">
-              <img
-                src={currentEmployee.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
-                alt={currentEmployee.fullName}
-                className="w-9 h-9 rounded-full object-cover border border-emerald-500/20"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="font-bold text-slate-700 dark:text-gray-300 text-xs truncate leading-tight">{currentEmployee.fullName}</p>
-                <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate leading-tight mt-1">
-                  {designations.find(d => d.id === currentEmployee.designationId)?.title || "Specialist"}
-                </p>
+          <div className="space-y-4">
+            {/* Current Profile details card */}
+            {currentEmployee && (
+              <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-2xl border border-slate-100/50 dark:border-[#1a1a1a] flex items-center space-x-3">
+                <img
+                  src={currentEmployee.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop"}
+                  alt={currentEmployee.fullName}
+                  className="w-9 h-9 rounded-full object-cover border border-emerald-500/20"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-slate-700 dark:text-gray-300 text-xs truncate leading-tight">{currentEmployee.fullName}</p>
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate leading-tight mt-1">
+                    {designations.find(d => d.id === currentEmployee.designationId)?.title || "Specialist"}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Sidebar Menu Links */}
-          <nav className="space-y-1.5 text-xs font-semibold">
-            {navigationLinks.map(link => {
-              const isActive = currentView === link.id;
-              return (
-                <button
-                  key={link.id}
-                  onClick={() => setCurrentView(link.id)}
-                  className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${isActive
-                    ? "bg-emerald-600 text-white font-bold shadow-xs shadow-emerald-600/10 dark:neon-glow dark:bg-emerald-500"
-                    : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/50"
-                    }`}
-                >
-                  {link.icon}
-                  <span>{link.label}</span>
-                </button>
-              );
-            })}
+            {/* Sidebar Menu Links */}
+            <nav className="space-y-1 text-xs font-semibold">
+              {navigationLinks.map(link => {
+                const isActive = currentView === link.id;
+                return (
+                  <button
+                    key={link.id}
+                    onClick={() => setCurrentView(link.id)}
+                    className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${isActive
+                      ? "bg-emerald-600 text-white font-bold shadow-xs shadow-emerald-600/10 dark:neon-glow dark:bg-emerald-500"
+                      : "text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/50"
+                      }`}
+                  >
+                    {link.icon}
+                    <span>{link.label}</span>
+                  </button>
+                );
+              })}
 
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600 transition-all cursor-pointer font-bold mt-4"
-            >
-              <LogOut className="w-4.5 h-4.5" />
-              <span>Sign Out</span>
-            </button>
-          </nav>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600 transition-all cursor-pointer font-bold mt-2"
+              >
+                <LogOut className="w-4.5 h-4.5" />
+                <span>Sign Out</span>
+              </button>
+            </nav>
+          </div>
 
-          <div className="pt-6 border-t border-slate-50 dark:border-[#1a1a1a]/80 text-[10px] text-slate-400 dark:text-gray-500">
+          <div className="pt-4 border-t border-slate-100 dark:border-[#1a1a1a]/80 text-[10px] text-slate-400 dark:text-gray-500 shrink-0">
             <p className="font-bold font-display text-slate-800 dark:text-white">{companyName} Platform Suite</p>
-            <p className="mt-1">HR Management Suite v2.4</p>
-            <p className="font-mono mt-2">UTC: {new Date().toISOString().split('T')[0]}</p>
+            <p className="mt-0.5">HR Management Suite v2.4</p>
+            <p className="font-mono mt-1 text-[9px]">UTC: {new Date().toISOString().split('T')[0]}</p>
           </div>
         </aside>
 
@@ -2051,6 +2055,7 @@ export default function App() {
             <DashboardView
               currentEmployee={currentEmployee}
               employees={employees}
+              designations={designations}
               holidays={holidays}
               leaves={leaves}
               payslips={payslips}
@@ -2239,6 +2244,16 @@ export default function App() {
               onDeleteRoom={handleDeleteRoom}
               onBookRoom={handleBookRoom}
               onUpdateBooking={handleUpdateBooking}
+            />
+          )}
+
+          {currentView === "password-update" && (
+            <PasswordUpdateView
+              currentEmployee={currentEmployee}
+              employees={employees}
+              role={activeRole}
+              companyId={companyId}
+              showToast={showToast}
             />
           )}
 
