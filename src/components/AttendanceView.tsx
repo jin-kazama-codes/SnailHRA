@@ -416,7 +416,7 @@ export default function AttendanceView({
     let totalHours = 0;
 
     selectedMonthDays.forEach(day => {
-      const dStr = day.toISOString().split("T")[0];
+      const dStr = getLocalDateString(day);
       const punch = punches.find(p => p.date === dStr);
       const isWeekend = day.getDay() === 0;
       const holiday = getHolidayOnDate(dStr);
@@ -1223,7 +1223,7 @@ export default function AttendanceView({
                 }
 
                 const dayCells = days.map((day, idx) => {
-                  const dStr = day.toISOString().split("T")[0];
+                  const dStr = getLocalDateString(day);
                   const punch = attendance.find(p => p.employeeId === selectedEmployeeId && p.date === dStr);
                   const isWeekend = day.getDay() === 0;
                   const holiday = getHolidayOnDate(dStr);
