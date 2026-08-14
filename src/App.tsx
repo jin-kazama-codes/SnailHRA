@@ -355,7 +355,8 @@ export default function App() {
             const fetched = attMap.get(p.id);
             attMap.set(p.id, {
               ...fetched,
-              clockOut: fetched.clockOut || p.clockOut
+              clockOut: fetched.clockOut || p.clockOut,
+              breaks: (fetched.breaks && fetched.breaks.length > 0) ? fetched.breaks : (p.breaks || [])
             });
           } else if (p.id) {
             attMap.set(p.id, p);

@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       let breakMs = 0;
       (punch.breaks || []).forEach((b: any) => {
         const bStart = new Date(b.start);
-        const bEnd = b.end ? new Date(b.end) : bStart;
+        const bEnd = b.end ? new Date(b.end) : (punch.clockOut ? bStart : new Date());
         breakMs += (bEnd.getTime() - bStart.getTime());
       });
       const mins = Math.round(breakMs / 60000);

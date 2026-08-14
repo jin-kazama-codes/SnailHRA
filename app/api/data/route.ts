@@ -325,7 +325,7 @@ export async function GET(request: Request) {
 
       if (attendanceRes && !attendanceRes.error && Array.isArray(attendanceRes.data)) {
         const sbAttendance = attendanceRes.data.map((row: any) => {
-          const relatedBreaks = (breaksRes && breaksRes.data)
+          const sbBreaks = (breaksRes && breaksRes.data)
             ? breaksRes.data
                 .filter((b: any) => b.attendance_id === row.id)
                 .map((b: any) => ({
@@ -333,6 +333,10 @@ export async function GET(request: Request) {
                   end: b.break_end
                 }))
             : [];
+
+          const localMatch = (db.attendance || []).find((a: any) => a.id === row.id);
+          const relatedBreaks = sbBreaks.length > 0 ? sbBreaks : (localMatch?.breaks || []);
+
           return {
             id: row.id,
             employeeId: row.employee_id || row.employeeId || "",

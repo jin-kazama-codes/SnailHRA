@@ -221,7 +221,7 @@ export function loadDatabase(): AppState {
         let breakMs = 0;
         relatedBreaks.forEach((b: any) => {
           const bStart = new Date(b.start);
-          const bEnd = b.end ? new Date(b.end) : bStart;
+          const bEnd = b.end ? new Date(b.end) : (a.clockOut ? bStart : new Date());
           breakMs += (bEnd.getTime() - bStart.getTime());
         });
         const mins = Math.round(breakMs / 60000);
@@ -306,7 +306,7 @@ export function saveDatabase(state: AppState): void {
         let breakMs = 0;
         (breaks || []).forEach(b => {
           const bStart = new Date(b.start);
-          const bEnd = b.end ? new Date(b.end) : bStart;
+          const bEnd = b.end ? new Date(b.end) : (a.clockOut ? bStart : new Date());
           breakMs += (bEnd.getTime() - bStart.getTime());
         });
         const mins = Math.round(breakMs / 60000);

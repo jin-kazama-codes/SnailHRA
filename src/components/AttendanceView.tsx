@@ -80,7 +80,11 @@ export default function AttendanceView({
 
   const formatBreakDuration = (punch: AttendancePunch) => {
     const mins = calculateTotalBreakMinutes(punch);
-    if (mins <= 0) return "0m";
+    if (mins <= 0) {
+      const hasActive = (punch.breaks || []).some(b => !b.end);
+      if (hasActive) return "Active";
+      return "0m";
+    }
     if (mins < 60) return `${mins}m`;
     const hrs = Math.floor(mins / 60);
     const remainingMins = mins % 60;
@@ -828,6 +832,7 @@ export default function AttendanceView({
                   <th className="py-2.5 px-3">Clock In</th>
                   <th className="py-2.5 px-3">Clock Out</th>
                   <th className="py-2.5 px-3">Type</th>
+                  <th className="py-2.5 px-3">Breaks</th>
                   <th className="py-2.5 px-3">Duration</th>
                   <th className="py-2.5 px-3 text-right">Status</th>
                 </tr>
@@ -842,6 +847,7 @@ export default function AttendanceView({
                   })
                   .map(punch => {
                     const hrs = calculatePunchHours(punch);
+                    const breakCount = punch.breaks?.length || 0;
                     return (
                       <tr 
                         key={punch.id} 
@@ -867,6 +873,20 @@ export default function AttendanceView({
                             <span className="flex items-center text-slate-500 dark:text-gray-400 gap-1">
                               <Briefcase className="w-3.5 h-3.5" /> Office
                             </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3">
+                          {breakCount > 0 ? (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              punch.breaks.some(b => !b.end)
+                                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse border border-amber-300 dark:border-amber-700"
+                                : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/40"
+                            }`}>
+                              <Coffee className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>{breakCount} {breakCount === 1 ? "Break" : "Breaks"} ({formatBreakDuration(punch)})</span>
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 dark:text-slate-500 font-semibold bg-slate-50 dark:bg-[#1a1a1a]/50 px-2.5 py-0.5 rounded-xl border border-slate-100 dark:border-[#222]/30 text-[10px] select-none">No Breaks</span>
                           )}
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-gray-300">{formatPunchDuration(punch)}</td>
@@ -1311,8 +1331,9 @@ export default function AttendanceView({
                               {calculatePunchHours(punch)} hrs
                             </p>
                             {punch.breaks && punch.breaks.length > 0 && (
-                              <p className="text-[9px] text-amber-600 dark:text-amber-500 font-mono font-medium mt-0.5">
-                                Break: {formatBreakDuration(punch)}
+                              <p className="text-[9px] text-amber-600 dark:text-amber-400 font-mono font-medium mt-0.5 flex items-center justify-center gap-0.5">
+                                <Coffee className="w-2.5 h-2.5 shrink-0 text-amber-500" />
+                                <span>Break: {formatBreakDuration(punch)}</span>
                               </p>
                             )}
                           </div>
@@ -1483,13 +1504,13 @@ export default function AttendanceView({
                           <div className="space-y-1 pt-1">
                             {punch.breaks.map((b, idx) => {
                               const bStart = new Date(b.start);
-                              const bEnd = b.end ? new Date(b.end) : null;
-                              const diffMins = bEnd ? Math.round((bEnd.getTime() - bStart.getTime()) / 60000) : 0;
+                              const calcEnd = b.end ? new Date(b.end) : (punch.clockOut ? new Date(b.start) : currentTime);
+                              const diffMins = Math.round((calcEnd.getTime() - bStart.getTime()) / 60000);
 
                               return (
                                 <div key={idx} className="flex justify-between items-center text-[11px] font-mono text-slate-600 dark:text-gray-300 py-1 border-b border-slate-100/50 dark:border-[#2a2a2a] last:border-none">
-                                  <span>Break {idx + 1}: {bStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {bEnd ? bEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Active"}</span>
-                                  <span className="font-bold text-amber-600">{bEnd ? `${diffMins} mins` : "In Progress"}</span>
+                                  <span>Break {idx + 1}: {bStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {b.end ? new Date(b.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Active"}</span>
+                                  <span className="font-bold text-amber-600">{b.end ? `${diffMins} mins` : `${diffMins > 0 ? `${diffMins}m ` : ""}(Active)`}</span>
                                 </div>
                               );
                             })}

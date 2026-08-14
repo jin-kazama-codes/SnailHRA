@@ -84,9 +84,18 @@ export async function syncPunchToSupabase(punch: any) {
       // First delete existing breaks for this punch to avoid duplicates
       await dbClient.from("attendance_breaks").delete().eq("attendance_id", punch.id);
       // Then insert the new ones
-      const { error: breakErr } = await dbClient.from("attendance_breaks").insert(breakRecords);
+      let { error: breakErr } = await dbClient.from("attendance_breaks").insert(breakRecords);
       if (breakErr) {
-        console.warn("Supabase attendance_breaks insert error:", breakErr.message, breakErr.details);
+        console.warn("Supabase attendance_breaks insert error, retrying fallback insert without company_id:", breakErr.message, breakErr.details);
+        const fallbackBreakRecords = punch.breaks.map((b: any) => ({
+          attendance_id: punch.id,
+          break_start: b.start,
+          break_end: b.end || null
+        }));
+        const { error: fbErr } = await dbClient.from("attendance_breaks").insert(fallbackBreakRecords);
+        if (fbErr) {
+          console.warn("Supabase attendance_breaks fallback insert error:", fbErr.message);
+        }
       }
     } else {
       // If there are no breaks, delete any existing ones

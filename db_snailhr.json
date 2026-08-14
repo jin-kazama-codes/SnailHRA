@@ -210,7 +210,16 @@
       },
       "pan": "",
       "uan": "",
-      "documents": [],
+      "documents": [
+        {
+          "id": "doc-chk-1786720128218-1786720289982",
+          "name": "Aadhaar Card Copy",
+          "category": "Onboarding Document Checklist",
+          "uploadedAt": "2026-08-14",
+          "size": "1.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786720125843_MOHD_AMAAN_PAN_PDF.pdf"
+        }
+      ],
       "onboardingChecklist": [
         {
           "id": "chk-1786719565075",
@@ -222,6 +231,19 @@
           "templateId": "onb-tmpl-2",
           "uploadedAt": "2026-08-14",
           "description": "Permanent Account Number card for income tax deduction & compliance"
+        },
+        {
+          "id": "chk-1786720128218",
+          "type": "onboarding",
+          "title": "Aadhaar Card Copy",
+          "status": "Approved",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786720125843_MOHD_AMAAN_PAN_PDF.pdf",
+          "fileName": "MOHD AMAAN PAN PDF.pdf",
+          "reviewedAt": "2026-08-14T15:11:29.982Z",
+          "reviewedBy": "Aafaq Ahmad",
+          "templateId": "onb-tmpl-1",
+          "uploadedAt": "2026-08-14",
+          "description": "Government Identity Proof for mandatory KYC verification"
         }
       ],
       "exitChecklist": [],
@@ -650,6 +672,17 @@
           "templateId": "onb-tmpl-1",
           "uploadedAt": "2026-08-14",
           "description": "Government Identity Proof for mandatory KYC verification"
+        },
+        {
+          "id": "chk-1786719986203",
+          "type": "onboarding",
+          "title": "PAN Card Copy",
+          "status": "Uploaded",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786719981359_AArif_bhai.pdf",
+          "fileName": "AArif bhai.pdf",
+          "templateId": "onb-tmpl-2",
+          "uploadedAt": "2026-08-14",
+          "description": "Permanent Account Number card for income tax deduction & compliance"
         }
       ],
       "exitChecklist": [],
@@ -669,6 +702,16 @@
       "workFromHome": false,
       "notes": "",
       "totalBreakDuration": "00h 00m"
+    },
+    {
+      "id": "pun-1786689299792",
+      "employeeId": "EMP-2119",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:34:59.313+00:00",
+      "status": "Late",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 02m"
     },
     {
       "id": "pun-1786596961450",
@@ -747,16 +790,6 @@
       "employeeId": "EMP-2116",
       "date": "2026-08-14",
       "clockIn": "2026-08-14T06:26:00.022+00:00",
-      "status": "Late",
-      "workFromHome": false,
-      "notes": "",
-      "totalBreakDuration": "00h 00m"
-    },
-    {
-      "id": "pun-1786689299792",
-      "employeeId": "EMP-2119",
-      "date": "2026-08-14",
-      "clockIn": "2026-08-14T06:34:59.313+00:00",
       "status": "Late",
       "workFromHome": false,
       "notes": "",
@@ -1046,7 +1079,7 @@
     "Wifi|Wifi"
   ],
   "wifiRestrictionSettings": {
-    "enabled": true,
+    "enabled": false,
     "allowedIp": "223.233.66.140, 223.233.66.0/24",
     "allowedIps": [
       "223.233.66.140",
@@ -1056,6 +1089,18 @@
   },
   "showLeaveCount": false,
   "attendanceBreaks": [
+    {
+      "id": "brk-pun-1786689299792-0",
+      "attendanceId": "pun-1786689299792",
+      "breakStart": "2026-08-14T15:15:29.854+00:00",
+      "breakEnd": "2026-08-14T15:15:57.707+00:00"
+    },
+    {
+      "id": "brk-pun-1786689299792-1",
+      "attendanceId": "pun-1786689299792",
+      "breakStart": "2026-08-14T15:16:45.79+00:00",
+      "breakEnd": "2026-08-14T15:18:01.49+00:00"
+    },
     {
       "id": "brk-pun-1786602032091-0",
       "attendanceId": "pun-1786602032091",
