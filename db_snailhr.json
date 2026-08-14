@@ -643,6 +643,36 @@
       "workFromHome": false,
       "notes": "",
       "totalBreakDuration": "00h 00m"
+    },
+    {
+      "id": "pun-1786688760295",
+      "employeeId": "EMP-2116",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:26:00.022+00:00",
+      "status": "Late",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 00m"
+    },
+    {
+      "id": "pun-1786688767901",
+      "employeeId": "EMP-2114",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:26:07.283+00:00",
+      "status": "Present",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 00m"
+    },
+    {
+      "id": "pun-1786689299792",
+      "employeeId": "EMP-2119",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:34:59.313+00:00",
+      "status": "Late",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 00m"
     }
   ],
   "leaves": [],
@@ -693,6 +723,24 @@
   "inventory": [],
   "inventoryRequests": [],
   "fines": [
+    {
+      "id": "fin-auto-1786689300114",
+      "employeeId": "EMP-2119",
+      "employeeName": "Demo 123",
+      "reason": "Late Comming",
+      "amount": 700,
+      "date": "2026-08-14",
+      "status": "Pending"
+    },
+    {
+      "id": "fin-auto-1786688760494",
+      "employeeId": "EMP-2116",
+      "employeeName": "Aafaq Ahmad",
+      "reason": "Late Comming",
+      "amount": 700,
+      "date": "2026-08-14",
+      "status": "Pending"
+    },
     {
       "id": "fin-auto-1786600451534",
       "employeeId": "EMP-2116",
@@ -843,8 +891,11 @@
   ],
   "wifiRestrictionSettings": {
     "enabled": true,
-    "allowedIp": "",
-    "allowedIps": [],
+    "allowedIp": "223.233.66.140, 223.233.66.0/24",
+    "allowedIps": [
+      "223.233.66.140",
+      "223.233.66.0/24"
+    ],
     "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
   },
   "showLeaveCount": false,
@@ -1142,30 +1193,6 @@
       "title": "PAN Card Copy",
       "description": "Permanent Account Number card for income tax deduction & compliance",
       "category": "Tax Document",
-      "required": true,
-      "type": "onboarding"
-    },
-    {
-      "id": "onb-tmpl-3",
-      "title": "Educational Certificates & Marksheets",
-      "description": "Copy of highest degree or professional qualification certificate",
-      "category": "Educational",
-      "required": true,
-      "type": "onboarding"
-    },
-    {
-      "id": "onb-tmpl-4",
-      "title": "Previous Relieving / Experience Letter",
-      "description": "Relieving letter and last 3 months pay slips from previous organization",
-      "category": "Contract",
-      "required": false,
-      "type": "onboarding"
-    },
-    {
-      "id": "onb-tmpl-5",
-      "title": "Cancelled Cheque or Bank Passbook",
-      "description": "Bank account proof with IFSC code for salary transfer",
-      "category": "Other",
       "required": true,
       "type": "onboarding"
     },

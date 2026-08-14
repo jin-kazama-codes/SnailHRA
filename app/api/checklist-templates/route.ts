@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { ChecklistItemTemplate } from "@/src/types";
+import { supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
 export async function GET() {
   const db = loadDatabase();
@@ -54,11 +56,58 @@ export async function DELETE(request: Request) {
     }
 
     const db = loadDatabase();
+    let deletedTitle = "";
+    let deletedType: "onboarding" | "exit" | null = null;
+
     if (db.onboardingChecklistTemplates) {
+      const tmpl = db.onboardingChecklistTemplates.find(t => t.id === id);
+      if (tmpl) {
+        deletedTitle = tmpl.title;
+        deletedType = "onboarding";
+      }
       db.onboardingChecklistTemplates = db.onboardingChecklistTemplates.filter(t => t.id !== id);
     }
     if (db.exitChecklistTemplates) {
+      const tmpl = db.exitChecklistTemplates.find(t => t.id === id);
+      if (tmpl) {
+        deletedTitle = tmpl.title;
+        deletedType = "exit";
+      }
       db.exitChecklistTemplates = db.exitChecklistTemplates.filter(t => t.id !== id);
+    }
+
+    // Clean up unuploaded pending items for deleted template from all employee records
+    if (db.employees && db.employees.length > 0) {
+      db.employees.forEach(emp => {
+        if (emp.onboardingChecklist) {
+          emp.onboardingChecklist = emp.onboardingChecklist.filter(i => {
+            const matches = i.templateId === id || i.id === id || (deletedTitle && i.title && i.title.trim().toLowerCase() === deletedTitle.trim().toLowerCase());
+            if (matches && i.status === "Pending") return false;
+            return true;
+          });
+        }
+        if (emp.exitChecklist) {
+          emp.exitChecklist = emp.exitChecklist.filter(i => {
+            const matches = i.templateId === id || i.id === id || (deletedTitle && i.title && i.title.trim().toLowerCase() === deletedTitle.trim().toLowerCase());
+            if (matches && i.status === "Pending") return false;
+            return true;
+          });
+        }
+      });
+
+      const client = supabaseAdmin || supabase;
+      if (client) {
+        try {
+          for (const emp of db.employees) {
+            await client.from("employees").update({
+              onboarding_checklist: emp.onboardingChecklist || [],
+              exit_checklist: emp.exitChecklist || []
+            }).eq("id", emp.id);
+          }
+        } catch (sbErr) {
+          console.warn("Failed to sync employee checklist cleanup to Supabase:", sbErr);
+        }
+      }
     }
 
     saveDatabase(db);

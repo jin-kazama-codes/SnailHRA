@@ -84,9 +84,12 @@ export default function ChecklistCard({
     };
   });
 
-  // Include any custom employee items not in template
+  // Include custom/legacy employee items that are not in active templates ONLY if they have been uploaded or approved
   employeeItems.forEach(item => {
-    if (!mergedItems.some(m => m.id === item.id || m.templateId === item.id || (m.title && item.title && m.title.trim().toLowerCase() === item.title.trim().toLowerCase()))) {
+    const exists = mergedItems.some(
+      m => m.id === item.id || m.templateId === item.id || (m.title && item.title && m.title.trim().toLowerCase() === item.title.trim().toLowerCase())
+    );
+    if (!exists && item.status !== "Pending") {
       mergedItems.push({
         ...item,
         required: true
