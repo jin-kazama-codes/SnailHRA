@@ -248,17 +248,23 @@ export default function AttendanceView({
   }, []);
 
   const getLocalDateString = (d: Date = new Date()) => {
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    try {
+      return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    } catch {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
   };
 
   const todayStr = getLocalDateString(currentTime);
-  const todayLocalStr = todayStr;
 
   const todayPunches = attendance.filter(a => 
-    a.employeeId === currentEmployeeId && (a.date === todayStr || a.date === todayLocalStr)
+    a.employeeId === currentEmployeeId && (
+      a.date === todayStr ||
+      (a.clockIn && getLocalDateString(new Date(a.clockIn)) === todayStr)
+    )
   );
   const todayPunch = todayPunches.length > 0
     ? todayPunches.reduce((latest, current) => {

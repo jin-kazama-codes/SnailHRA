@@ -166,13 +166,17 @@ export async function POST(request: Request) {
     if (!db.attendance) db.attendance = [];
 
     const getLocalDateString = (d: Date = new Date()) => {
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      try {
+        return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      } catch {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
     };
 
-    const todayStr = getLocalDateString(new Date());
+    const todayStr = body.date || getLocalDateString(new Date());
 
     // Check if punch for today exists for this employee
     let existingIndex = db.attendance.findIndex(
@@ -375,11 +379,16 @@ export async function POST(request: Request) {
         db.attendance.push(punch);
       }
     } else if (type === "breakstart") {
+      const nowStr = new Date().toISOString();
       if (existingIndex >= 0) {
         punch = db.attendance[existingIndex];
         if (!punch.breaks) punch.breaks = [];
+        // First close any unclosed break before starting a new break
+        punch.breaks.forEach((b: any) => {
+          if (!b.end) b.end = nowStr;
+        });
         punch.breaks.push({
-          start: new Date().toISOString(),
+          start: nowStr,
           end: null
         });
         db.attendance[existingIndex] = punch;
@@ -388,9 +397,9 @@ export async function POST(request: Request) {
           id: body.id || `pun-${Date.now()}`,
           employeeId,
           date: todayStr,
-          clockIn: new Date().toISOString(),
+          clockIn: nowStr,
           clockOut: null,
-          breaks: [{ start: new Date().toISOString(), end: null }],
+          breaks: [{ start: nowStr, end: null }],
           status: "Present",
           workFromHome: false
         };

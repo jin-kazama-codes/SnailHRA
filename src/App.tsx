@@ -820,10 +820,22 @@ export default function App() {
   // 5. Attendance punch clock-in/out
   const handlePunchAction = async (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => {
     try {
+      const getLocalDateString = (d: Date = new Date()) => {
+        try {
+          return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+        } catch {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      };
+
+      const clientDate = getLocalDateString(new Date());
       const res = await fetch("/api/attendance/punch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, type })
+        body: JSON.stringify({ employeeId, type, date: clientDate })
       });
 
       let data: any = {};
