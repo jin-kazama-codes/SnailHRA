@@ -104,7 +104,7 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("custom_leaves").select("*")),
           
           companyId
-            ? safeQuery(dbClient.from("attendance_breaks").select("*").eq("company_id", companyId))
+            ? safeQuery(dbClient.from("attendance_breaks").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
             : safeQuery(dbClient.from("attendance_breaks").select("*")),
           companyId
             ? safeQuery(dbClient.from("employee_documents").select("*").eq("company_id", companyId))

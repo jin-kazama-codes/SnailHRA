@@ -185,9 +185,14 @@ export async function POST() {
       }
 
       if (breakRecords.length > 0) {
-        const { error: breakErr } = await supabase.from("attendance_breaks").insert(breakRecords);
+        let { error: breakErr } = await supabase.from("attendance_breaks").insert(breakRecords);
         if (breakErr) {
-          console.warn("Sync: attendance_breaks bulk insert warning:", breakErr.message);
+          console.warn("Sync: attendance_breaks bulk insert warning, retrying fallback insert without company_id:", breakErr.message);
+          const fallbackRecords = breakRecords.map(({ company_id, ...rest }) => rest);
+          const { error: fbErr } = await supabase.from("attendance_breaks").insert(fallbackRecords);
+          if (fbErr) {
+            console.warn("Sync: attendance_breaks bulk fallback insert warning:", fbErr.message);
+          }
         }
       }
     }

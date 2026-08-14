@@ -694,16 +694,6 @@
   ],
   "attendance": [
     {
-      "id": "pun-1786689299792",
-      "employeeId": "EMP-2119",
-      "date": "2026-08-14",
-      "clockIn": "2026-08-14T06:34:59.313+00:00",
-      "status": "Late",
-      "workFromHome": false,
-      "notes": "",
-      "totalBreakDuration": "00h 37m"
-    },
-    {
       "id": "pun-1786688767901",
       "employeeId": "EMP-2114",
       "date": "2026-08-14",
@@ -713,6 +703,16 @@
       "workFromHome": false,
       "notes": "",
       "totalBreakDuration": "00h 00m"
+    },
+    {
+      "id": "pun-1786689299792",
+      "employeeId": "EMP-2119",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:34:59.313+00:00",
+      "status": "Late",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 48m"
     },
     {
       "id": "pun-1786596961450",
@@ -1118,7 +1118,7 @@
       "id": "brk-pun-1786689299792-4",
       "attendanceId": "pun-1786689299792",
       "breakStart": "2026-08-14T15:35:26.36+00:00",
-      "breakEnd": null
+      "breakEnd": "2026-08-14T15:56:23.166+00:00"
     },
     {
       "id": "brk-pun-1786602032091-0",
