@@ -1405,19 +1405,29 @@ export default function App() {
       if (res.ok) {
         const json = await res.json();
         if (json.item || json.checklist) {
+          const itemToPut = json.item;
           setEmployees(prev => prev.map(emp => {
             const matchesEmp = emp.id === employeeId || emp.id.toLowerCase().replace(/[-_]/g, "") === employeeId.toLowerCase().replace(/[-_]/g, "");
             if (matchesEmp) {
               const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
               const currentList = emp[listKey] || [];
-              const itemToPut = json.item;
-              const exists = itemToPut ? currentList.some(i => i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) : false;
-              const updatedList = json.checklist || (exists
-                ? currentList.map(i => (i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) ? itemToPut : i)
-                : [...currentList, itemToPut]);
+              let updatedList = json.checklist;
+              if (!updatedList && itemToPut) {
+                const idx = currentList.findIndex(i =>
+                  i.id === itemToPut.id ||
+                  (i.templateId && itemToPut.templateId && i.templateId === itemToPut.templateId) ||
+                  (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())
+                );
+                if (idx >= 0) {
+                  updatedList = [...currentList];
+                  updatedList[idx] = { ...updatedList[idx], ...itemToPut };
+                } else {
+                  updatedList = [...currentList, itemToPut];
+                }
+              }
               return {
                 ...emp,
-                [listKey]: updatedList
+                [listKey]: updatedList || currentList
               };
             }
             return emp;
@@ -1540,7 +1550,15 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...template, companyId })
       });
+      const data = await res.json();
       if (res.ok) {
+        if (data.template) {
+          if (data.template.type === "onboarding") {
+            setOnboardingChecklistTemplates(prev => [...(prev || []).filter(t => t.id !== data.template.id), data.template]);
+          } else {
+            setExitChecklistTemplates(prev => [...(prev || []).filter(t => t.id !== data.template.id), data.template]);
+          }
+        }
         showToast(`Added "${template.title}" to ${template.type} checklist templates!`, "success");
         await refreshDatabase();
       } else {
@@ -1553,12 +1571,15 @@ export default function App() {
 
   const handleDeleteChecklistTemplate = async (templateId: string) => {
     try {
+      setOnboardingChecklistTemplates(prev => (prev || []).filter(t => t.id !== templateId));
+      setExitChecklistTemplates(prev => (prev || []).filter(t => t.id !== templateId));
       const res = await fetch(`/api/checklist-templates?id=${templateId}`, { method: "DELETE" });
       if (res.ok) {
         showToast("Checklist requirement template removed", "info");
         await refreshDatabase();
       } else {
         showToast("Failed to delete checklist requirement", "error");
+        await refreshDatabase();
       }
     } catch (err) {
       showToast("Failed to delete requirement", "error");

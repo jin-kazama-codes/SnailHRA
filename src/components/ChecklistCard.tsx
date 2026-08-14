@@ -67,38 +67,47 @@ export default function ChecklistCard({
     const existing = employeeItems.find(i =>
       i.templateId === tmpl.id ||
       i.id === tmpl.id ||
-      (i.title && tmpl.title && i.title.trim().toLowerCase() === tmpl.title.trim().toLowerCase())
+      (i.title && tmpl.title && (
+        i.title.trim().toLowerCase() === tmpl.title.trim().toLowerCase() ||
+        i.title.trim().toLowerCase().includes(tmpl.title.trim().toLowerCase()) ||
+        tmpl.title.trim().toLowerCase().includes(i.title.trim().toLowerCase()) ||
+        i.title === tmpl.id
+      ))
     );
     if (existing) {
       return {
         ...existing,
-        description: tmpl.description || existing.description,
-        required: tmpl.required
+        templateId: tmpl.id,
+        title: tmpl.title, // Always enforce human-readable requirement title from template
+        description: tmpl.description || existing.description || "",
+        required: tmpl.required !== undefined ? tmpl.required : ((existing as any).required ?? true)
       };
     }
     return {
       id: tmpl.id,
       templateId: tmpl.id,
       title: tmpl.title,
-      description: tmpl.description,
+      description: tmpl.description || "",
       type,
       status: "Pending" as const,
       required: tmpl.required
     };
   });
 
-  // Include custom/legacy employee items that are not in active templates ONLY if they have been uploaded or approved
-  employeeItems.forEach(item => {
-    const exists = mergedItems.some(
-      m => m.id === item.id || m.templateId === item.id || (m.title && item.title && m.title.trim().toLowerCase() === item.title.trim().toLowerCase())
-    );
-    if (!exists && item.status !== "Pending") {
-      mergedItems.push({
-        ...item,
-        required: true
-      });
-    }
-  });
+  // If active templates exist, display strictly matching templates. If no templates exist, fall back to employee items.
+  if (matchingTemplates.length === 0 && employeeItems.length > 0) {
+    employeeItems.forEach(item => {
+      const exists = mergedItems.some(
+        m => m.id === item.id || m.templateId === item.id || (m.title && item.title && m.title.trim().toLowerCase() === item.title.trim().toLowerCase())
+      );
+      if (!exists) {
+        mergedItems.push({
+          ...item,
+          required: true
+        });
+      }
+    });
+  }
 
   const totalItems = mergedItems.length;
   const approvedItems = mergedItems.filter(i => i.status === "Approved").length;

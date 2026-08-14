@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { loadDatabase, saveDatabase } from "@/src/lib/db";
+import { loadDatabase, saveDatabase, initialOnboardingChecklistTemplates, initialExitChecklistTemplates } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
         payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
         seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes,
-        grievancesRes, performanceRes
+        grievancesRes, performanceRes, checklistTemplatesRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -145,10 +145,61 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("grievance_tickets").select("*").order("created_at", { ascending: false })),
           companyId
             ? safeQuery(dbClient.from("performance_records").select("*").eq("company_id", companyId).order("created_at", { ascending: false }))
-            : safeQuery(dbClient.from("performance_records").select("*").order("created_at", { ascending: false }))
+            : safeQuery(dbClient.from("performance_records").select("*").order("created_at", { ascending: false })),
+          companyId
+            ? safeQuery(dbClient.from("checklist_templates").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
+            : safeQuery(dbClient.from("checklist_templates").select("*"))
         ]),
         queryTimeout(4500)
       ]);
+
+      if (checklistTemplatesRes && checklistTemplatesRes.data && Array.isArray(checklistTemplatesRes.data) && !checklistTemplatesRes.error) {
+        if (checklistTemplatesRes.data.length === 0) {
+          const defaults = [...initialOnboardingChecklistTemplates, ...initialExitChecklistTemplates];
+          try {
+            await dbClient.from("checklist_templates").upsert(
+              defaults.map(t => ({
+                id: t.id,
+                title: t.title,
+                description: t.description || "",
+                category: t.category || "General",
+                required: t.required ?? true,
+                type: t.type,
+                company_id: companyId || null
+              })),
+              { onConflict: "id" }
+            );
+          } catch (seedErr) {
+            console.warn("Failed to seed initial checklist templates to Supabase:", seedErr);
+          }
+          db.onboardingChecklistTemplates = initialOnboardingChecklistTemplates;
+          db.exitChecklistTemplates = initialExitChecklistTemplates;
+        } else {
+          db.onboardingChecklistTemplates = checklistTemplatesRes.data
+            .filter((row: any) => row.type === "onboarding")
+            .map((row: any) => ({
+              id: row.id,
+              title: row.title || "",
+              description: row.description || "",
+              category: row.category || "ID Proof",
+              required: row.required ?? true,
+              type: "onboarding" as const,
+              companyId: row.company_id || row.companyId || null
+            }));
+
+          db.exitChecklistTemplates = checklistTemplatesRes.data
+            .filter((row: any) => row.type === "exit")
+            .map((row: any) => ({
+              id: row.id,
+              title: row.title || "",
+              description: row.description || "",
+              category: row.category || "Contract",
+              required: row.required ?? true,
+              type: "exit" as const,
+              companyId: row.company_id || row.companyId || null
+            }));
+        }
+      }
 
       if (designationsRes && designationsRes.data && designationsRes.data.length > 0) {
         const sbDesignations = designationsRes.data.map((row: any) => ({

@@ -102,18 +102,46 @@ export async function POST(
       (i.title && i.title.trim().toLowerCase() === String(itemId).trim().toLowerCase())
     );
 
+    const templates = [...(db.onboardingChecklistTemplates || []), ...(db.exitChecklistTemplates || [])];
+    let tmpl = templates.find(t => t.id === itemId || (item && t.id === item.templateId) || (t.title && t.title.trim().toLowerCase() === String(itemId).trim().toLowerCase()));
+
+    if (!tmpl) {
+      const client = supabaseAdmin || supabase;
+      if (client) {
+        try {
+          const { data: sbRows } = await client.from("checklist_templates").select("*");
+          if (sbRows && Array.isArray(sbRows) && sbRows.length > 0) {
+            const found = sbRows.find((r: any) => r.id === itemId || (item && r.id === item.templateId) || (r.title && r.title.trim().toLowerCase() === String(itemId).trim().toLowerCase()));
+            if (found) {
+              tmpl = {
+                id: found.id,
+                title: found.title,
+                description: found.description || "",
+                category: found.category || "General",
+                required: found.required ?? true,
+                type: found.type
+              };
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
     if (!item) {
-      const templates = [...(db.onboardingChecklistTemplates || []), ...(db.exitChecklistTemplates || [])];
-      const tmpl = templates.find(t => t.id === itemId || (t.title && t.title.trim().toLowerCase() === String(itemId).trim().toLowerCase()));
+      const cleanTitle = tmpl?.title || (itemId.startsWith("onb-tmpl-") || itemId.startsWith("exit-tmpl-") ? "Requirement Document" : itemId);
       item = {
         id: `chk-${Date.now()}`,
         templateId: tmpl?.id || itemId,
-        title: tmpl?.title || itemId,
+        title: cleanTitle,
         description: tmpl?.description || "",
         type: (tmpl?.type || type) as "onboarding" | "exit",
         status: "Pending"
       };
       emp[checklistKey]!.push(item);
+    } else {
+      if (tmpl?.title) item.title = tmpl.title;
+      if (tmpl?.id) item.templateId = tmpl.id;
+      if (tmpl?.description && !item.description) item.description = tmpl.description;
     }
 
     if (fileUrl) {

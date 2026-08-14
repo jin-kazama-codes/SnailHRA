@@ -763,8 +763,75 @@ export default function DashboardView({
           );
         };
 
-        const onboardingDocs = (currentEmployee.documents || []).filter((doc: any) => !isExitDoc(doc));
-        const exitDocs = (currentEmployee.documents || []).filter((doc: any) => isExitDoc(doc));
+        const getDynamicVaultDocs = (emp: any, isExit: boolean) => {
+          const checklist = isExit ? (emp?.exitChecklist || []) : (emp?.onboardingChecklist || []);
+          const templates = isExit ? exitChecklistTemplates : onboardingChecklistTemplates;
+          const rawDocs = (emp?.documents || []).filter((doc: any) => isExit ? isExitDoc(doc) : !isExitDoc(doc));
+          
+          const map = new Map<string, any>();
+
+          // 1. Add strictly APPROVED checklist items
+          checklist.forEach((item: any) => {
+            if (item.fileUrl && item.status === "Approved") {
+              const tmpl = (templates || []).find((t: any) => t.id === item.templateId || t.id === item.id);
+              let cleanName = tmpl?.title || item.title || "Document";
+              if (cleanName.startsWith("onb-tmpl-") || cleanName.startsWith("exit-tmpl-")) {
+                cleanName = tmpl?.title || (isExit ? "Exit Clearance Document" : "Onboarding Document");
+              }
+              cleanName = cleanName.replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+
+              const key = cleanName.trim().toLowerCase();
+              map.set(key, {
+                id: `chk-${item.id}`,
+                name: cleanName,
+                category: isExit ? "Employee Exit & Separation Clearance Checklist" : "Onboarding Document Checklist",
+                uploadedAt: item.uploadedAt || new Date().toISOString().split("T")[0],
+                approvedAt: item.reviewedAt || new Date().toISOString().split("T")[0],
+                reviewedBy: item.reviewedBy || "HR Manager",
+                size: "1.2 MB",
+                fileUrl: item.fileUrl
+              });
+            }
+          });
+
+          // 2. Add raw documents ONLY if they have explicit HR approval AND no pending checklist item
+          rawDocs.forEach((d: any) => {
+            const isApprovedDoc = Boolean(d.approvedAt || d.status === "Approved");
+            if (!isApprovedDoc) return; // Exclude unapproved raw documents!
+
+            const docName = (d.name || "").trim().toLowerCase();
+            const matchingChecklistItem = checklist.find((item: any) => {
+              const itemTitle = (item.title || "").trim().toLowerCase();
+              const tmpl = (templates || []).find((t: any) => t.id === item.templateId || t.id === item.id);
+              const tmplTitle = (tmpl?.title || "").trim().toLowerCase();
+              return docName.includes(itemTitle) || itemTitle.includes(docName) || (tmplTitle && (docName.includes(tmplTitle) || tmplTitle.includes(docName)));
+            });
+
+            // If there's a checklist item for this requirement and it's NOT approved, DO NOT show in vault!
+            if (matchingChecklistItem && matchingChecklistItem.status !== "Approved") {
+              return;
+            }
+
+            // If not already in map from an approved checklist item, add it
+            const matchingApprovedInMap = Array.from(map.keys()).some(k => docName.includes(k) || k.includes(docName));
+            if (!matchingApprovedInMap) {
+              map.set(docName, d);
+            }
+          });
+
+          return Array.from(map.values());
+        };
+
+        const onboardingDocs = getDynamicVaultDocs(currentEmployee, false);
+        const exitDocs = getDynamicVaultDocs(currentEmployee, true);
+
+        const dynamicOnboardingSubtitle = onboardingChecklistTemplates && onboardingChecklistTemplates.length > 0
+          ? onboardingChecklistTemplates.map(t => t.title).join(", ")
+          : "Aadhaar, PAN, contracts, tax forms & clearance logs";
+
+        const dynamicExitSubtitle = exitChecklistTemplates && exitChecklistTemplates.length > 0
+          ? exitChecklistTemplates.map(t => t.title).join(", ")
+          : "Resignation copy, no-dues certificate, asset handover & exit logs";
 
         return (
           <div className="space-y-4 w-full">
@@ -845,8 +912,8 @@ export default function DashboardView({
                             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
                               Onboarding Document Checklist
                             </h3>
-                            <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
-                              Aadhaar, PAN, contracts, tax forms &amp; clearance logs
+                            <p className="text-xs text-slate-500 dark:text-gray-400 truncate" title={dynamicOnboardingSubtitle}>
+                              {dynamicOnboardingSubtitle}
                             </p>
                           </div>
                         </div>
