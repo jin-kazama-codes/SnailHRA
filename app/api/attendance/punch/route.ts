@@ -400,10 +400,12 @@ export async function POST(request: Request) {
       if (existingIndex >= 0) {
         punch = db.attendance[existingIndex];
         if (punch.breaks && punch.breaks.length > 0) {
-          const lastBreak = punch.breaks[punch.breaks.length - 1];
-          if (!lastBreak.end) {
-            lastBreak.end = new Date().toISOString();
-          }
+          const nowStr = new Date().toISOString();
+          punch.breaks.forEach((b: any) => {
+            if (!b.end) {
+              b.end = nowStr;
+            }
+          });
         }
         db.attendance[existingIndex] = punch;
       } else {

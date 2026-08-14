@@ -348,42 +348,53 @@ export default function App() {
         setTimingSettings(data.timingSettings);
       }
       setAttendance(prev => {
-        const attMap = new Map();
-        (data.attendance || []).forEach((a: any) => { if (a.id) attMap.set(a.id, a); });
-        (prev || []).forEach((p: any) => {
-          if (p.id && attMap.has(p.id)) {
-            const fetched = attMap.get(p.id);
-            const fetchedBreaks = fetched.breaks || [];
-            const prevBreaks = p.breaks || [];
+        const attMap = new Map<string, any>();
+        const getKey = (item: any) => `${item.employeeId}_${item.date}`;
 
-            // Choose the more up-to-date break list (more ended breaks or more total breaks)
-            const endedF = fetchedBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
-            const endedP = prevBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
-
-            let mergedBreaks = prevBreaks;
-            if (endedF > endedP) {
-              mergedBreaks = fetchedBreaks;
-            } else if (endedP > endedF) {
-              mergedBreaks = prevBreaks;
-            } else if (fetchedBreaks.length > prevBreaks.length) {
-              mergedBreaks = fetchedBreaks;
-            } else if (prevBreaks.length > fetchedBreaks.length) {
-              mergedBreaks = prevBreaks;
-            } else if (fetchedBreaks.length > 0 && prevBreaks.length > 0) {
-              const lastF = fetchedBreaks[fetchedBreaks.length - 1];
-              const lastP = prevBreaks[prevBreaks.length - 1];
-              mergedBreaks = (lastP?.end && !lastF?.end) ? prevBreaks : fetchedBreaks;
-            }
-
-            attMap.set(p.id, {
-              ...fetched,
-              clockOut: fetched.clockOut || p.clockOut,
-              breaks: mergedBreaks
-            });
-          } else if (p.id) {
-            attMap.set(p.id, p);
+        (data.attendance || []).forEach((fetched: any) => {
+          if (fetched && fetched.employeeId && fetched.date) {
+            attMap.set(getKey(fetched), fetched);
           }
         });
+
+        (prev || []).forEach((p: any) => {
+          if (p && p.employeeId && p.date) {
+            const key = getKey(p);
+            if (attMap.has(key)) {
+              const fetched = attMap.get(key);
+              const fetchedBreaks = fetched.breaks || [];
+              const prevBreaks = p.breaks || [];
+
+              const endedF = fetchedBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
+              const endedP = prevBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
+
+              let mergedBreaks = prevBreaks;
+              if (endedF > endedP) {
+                mergedBreaks = fetchedBreaks;
+              } else if (endedP > endedF) {
+                mergedBreaks = prevBreaks;
+              } else if (fetchedBreaks.length > prevBreaks.length) {
+                mergedBreaks = fetchedBreaks;
+              } else if (prevBreaks.length > fetchedBreaks.length) {
+                mergedBreaks = prevBreaks;
+              } else if (fetchedBreaks.length > 0 && prevBreaks.length > 0) {
+                const lastF = fetchedBreaks[fetchedBreaks.length - 1];
+                const lastP = prevBreaks[prevBreaks.length - 1];
+                mergedBreaks = (lastP?.end && !lastF?.end) ? prevBreaks : fetchedBreaks;
+              }
+
+              attMap.set(key, {
+                ...fetched,
+                id: p.id || fetched.id,
+                clockOut: fetched.clockOut || p.clockOut,
+                breaks: mergedBreaks
+              });
+            } else {
+              attMap.set(key, p);
+            }
+          }
+        });
+
         return Array.from(attMap.values());
       });
       setLeaves(prev => {
