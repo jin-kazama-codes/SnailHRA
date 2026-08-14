@@ -659,6 +659,7 @@ export async function GET(request: Request) {
           resolvedByName: row.resolved_by_name ? capitalizeName(row.resolved_by_name) : undefined,
           resolutionMessage: row.resolution_message || undefined,
           resolvedAt: row.resolved_at || undefined,
+          messages: typeof row.messages === "string" ? JSON.parse(row.messages) : (row.messages || [])
         }));
         const grvMap = new Map();
         (db.grievanceTickets || []).forEach((t: any) => { if (t.id) grvMap.set(t.id, t); });

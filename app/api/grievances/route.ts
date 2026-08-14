@@ -14,8 +14,52 @@ export async function GET(request: Request) {
     const db = loadDatabase();
     let tickets: GrievanceTicket[] = db.grievanceTickets || [];
 
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      try {
+        let query = dbClient.from("grievance_tickets").select("*");
+        if (companyId) {
+          query = query.or(`company_id.eq.${companyId},company_id.eq.,company_id.is.null`);
+        }
+        const { data, error } = await query.order("created_at", { ascending: false });
+
+        if (!error && data && Array.isArray(data)) {
+          const sbTickets: GrievanceTicket[] = data.map((row: any) => ({
+            id: row.id,
+            companyId: row.company_id || "",
+            employeeId: row.employee_id || "",
+            employeeName: row.employee_name || row.employeeName || "",
+            title: row.title || "",
+            description: row.description || "",
+            category: row.category || "Other",
+            priority: row.priority || "Medium",
+            status: row.status || "Open",
+            isAnonymous: row.is_anonymous ?? false,
+            createdAt: row.created_at || new Date().toISOString(),
+            resolvedBy: row.resolved_by || undefined,
+            resolvedByName: row.resolved_by_name || undefined,
+            resolutionMessage: row.resolution_message || undefined,
+            resolvedAt: row.resolved_at || undefined,
+            messages: typeof row.messages === "string" ? JSON.parse(row.messages) : (row.messages || [])
+          }));
+
+          const ticketMap = new Map<string, GrievanceTicket>();
+          (tickets || []).forEach(t => { if (t && t.id) ticketMap.set(t.id, t); });
+          sbTickets.forEach(t => { if (t && t.id) ticketMap.set(t.id, t); });
+          tickets = Array.from(ticketMap.values());
+
+          db.grievanceTickets = tickets;
+          saveDatabase(db);
+        }
+      } catch (e) {
+        console.warn("Supabase grievance fetch exception in GET /api/grievances:", e);
+      }
+    }
+
     // Filter by company
-    if (companyId) tickets = tickets.filter(t => (t.companyId || "") === companyId);
+    if (companyId) {
+      tickets = tickets.filter(t => !t.companyId || t.companyId === companyId || t.companyId === "default" || t.companyId === "");
+    }
 
     // Employees only see their own
     if (role === "employee" && employeeId) {

@@ -2165,7 +2165,9 @@ export default function App() {
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },
     { id: "fines", label: "Disciplinary Fines", icon: <Scale className="w-4.5 h-4.5" /> },
     { id: "grievance", label: "Support & Grievance", icon: <MessageSquareWarning className="w-4.5 h-4.5" /> },
-    { id: "performance", label: "Performance", icon: <TrendingUp className="w-4.5 h-4.5" /> },
+    ...((activeRole === "admin" || activeRole === "hr") ? [
+      { id: "performance", label: "Performance", icon: <TrendingUp className="w-4.5 h-4.5" /> }
+    ] : []),
     { id: "password-update", label: "Password Update", icon: <Lock className="w-4.5 h-4.5" /> },
     ...((activeRole === "admin" || activeRole === "hr") ? [
       { id: "configurations", label: "System Settings", icon: <Settings className="w-4.5 h-4.5" /> }
@@ -2692,7 +2694,7 @@ export default function App() {
             />
           )}
 
-          {currentView === "performance" && (
+          {currentView === "performance" && (activeRole === "admin" || activeRole === "hr") && (
             <PerformanceView
               role={activeRole}
               currentEmployee={currentEmployee}

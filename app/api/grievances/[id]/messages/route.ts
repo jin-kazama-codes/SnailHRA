@@ -72,12 +72,36 @@ export async function POST(
     const db = loadDatabase();
     if (!db.grievanceTickets) db.grievanceTickets = [];
 
-    const idx = db.grievanceTickets.findIndex(t => t.id === ticketId);
+    let idx = db.grievanceTickets.findIndex(t => t.id === ticketId);
+
+    const dbClient = supabaseAdmin || supabase;
+    if (idx === -1 && dbClient) {
+      try {
+        const { data } = await dbClient.from("grievance_tickets").select("*").eq("id", ticketId).maybeSingle();
+        if (data) {
+          db.grievanceTickets.push({
+            id: data.id,
+            companyId: data.company_id || "",
+            employeeId: data.employee_id || "",
+            employeeName: data.employee_name || "",
+            title: data.title || "",
+            description: data.description || "",
+            category: data.category || "Other",
+            priority: data.priority || "Medium",
+            status: data.status || "Open",
+            isAnonymous: data.is_anonymous ?? false,
+            createdAt: data.created_at || new Date().toISOString(),
+            messages: typeof data.messages === "string" ? JSON.parse(data.messages) : (data.messages || [])
+          });
+          idx = db.grievanceTickets.length - 1;
+        }
+      } catch (e) {}
+    }
+
     if (idx === -1) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
     // If local messages are empty, try to restore from Supabase first
     if (!db.grievanceTickets[idx].messages || db.grievanceTickets[idx].messages!.length === 0) {
-      const dbClient = supabaseAdmin || supabase;
       if (dbClient) {
         try {
           const { data } = await dbClient
@@ -114,7 +138,6 @@ export async function POST(
     const allMessages = db.grievanceTickets[idx].messages || [];
 
     // Sync to Supabase: 1 row per ticket in grievance_messages, all messages in JSONB array
-    const dbClient = supabaseAdmin || supabase;
     if (dbClient) {
       try {
         const { error: msgErr } = await dbClient.from("grievance_messages").upsert(

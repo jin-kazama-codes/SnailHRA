@@ -694,16 +694,6 @@
   ],
   "attendance": [
     {
-      "id": "pun-1786688767901",
-      "employeeId": "EMP-2114",
-      "date": "2026-08-14",
-      "clockIn": "2026-08-14T06:26:07.283+00:00",
-      "status": "Present",
-      "workFromHome": false,
-      "notes": "",
-      "totalBreakDuration": "00h 00m"
-    },
-    {
       "id": "pun-1786689299792",
       "employeeId": "EMP-2119",
       "date": "2026-08-14",
@@ -711,7 +701,18 @@
       "status": "Late",
       "workFromHome": false,
       "notes": "",
-      "totalBreakDuration": "00h 02m"
+      "totalBreakDuration": "00h 37m"
+    },
+    {
+      "id": "pun-1786688767901",
+      "employeeId": "EMP-2114",
+      "date": "2026-08-14",
+      "clockIn": "2026-08-14T06:26:07.283+00:00",
+      "clockOut": "2026-08-14T15:42:46.635+00:00",
+      "status": "Present",
+      "workFromHome": false,
+      "notes": "",
+      "totalBreakDuration": "00h 00m"
     },
     {
       "id": "pun-1786596961450",
@@ -1114,6 +1115,12 @@
       "breakEnd": null
     },
     {
+      "id": "brk-pun-1786689299792-4",
+      "attendanceId": "pun-1786689299792",
+      "breakStart": "2026-08-14T15:35:26.36+00:00",
+      "breakEnd": null
+    },
+    {
       "id": "brk-pun-1786602032091-0",
       "attendanceId": "pun-1786602032091",
       "breakStart": "2026-08-13T08:20:20.318+00:00",
@@ -1492,7 +1499,27 @@
       "isAnonymous": false,
       "createdAt": "2026-08-14T13:25:58.951+00:00",
       "resolvedBy": "EMP-2116",
-      "resolvedByName": "Aafaq Ahmad"
+      "resolvedByName": "Aafaq Ahmad",
+      "messages": [
+        {
+          "id": "msg-1786713982299-tdy9u",
+          "message": "ok i will see to it and inform you about it...",
+          "senderId": "EMP-2119",
+          "ticketId": "grv-1786713958951-r1jb0",
+          "createdAt": "2026-08-14T13:26:22.299Z",
+          "senderName": "Demo 123",
+          "senderRole": "employee"
+        },
+        {
+          "id": "msg-1786713993722-z2gay",
+          "message": "thank you sir",
+          "senderId": "EMP-2116",
+          "ticketId": "grv-1786713958951-r1jb0",
+          "createdAt": "2026-08-14T13:26:33.722Z",
+          "senderName": "Aafaq Ahmad",
+          "senderRole": "admin"
+        }
+      ]
     },
     {
       "id": "grv-1786694918681-n092h",
@@ -1507,7 +1534,54 @@
       "isAnonymous": false,
       "createdAt": "2026-08-14T08:08:38.682+00:00",
       "resolvedBy": "EMP-2116",
-      "resolvedByName": "Aafaq Ahmad"
+      "resolvedByName": "Aafaq Ahmad",
+      "messages": [
+        {
+          "id": "msg-1786713137911-zp8al",
+          "message": "hi",
+          "senderId": "EMP-2116",
+          "ticketId": "grv-1786694918681-n092h",
+          "createdAt": "2026-08-14T13:12:17.911Z",
+          "senderName": "Aafaq Ahmad",
+          "senderRole": "admin"
+        },
+        {
+          "id": "msg-1786713143245-s4wna",
+          "message": "hello",
+          "senderId": "EMP-2119",
+          "ticketId": "grv-1786694918681-n092h",
+          "createdAt": "2026-08-14T13:12:23.245Z",
+          "senderName": "Demo 123",
+          "senderRole": "employee"
+        },
+        {
+          "id": "msg-1786713229660-67j8p",
+          "message": "how are you",
+          "senderId": "EMP-2116",
+          "ticketId": "grv-1786694918681-n092h",
+          "createdAt": "2026-08-14T13:13:49.660Z",
+          "senderName": "Aafaq Ahmad",
+          "senderRole": "admin"
+        },
+        {
+          "id": "msg-1786713258708-w7t8b",
+          "message": "what is issue with it",
+          "senderId": "EMP-2116",
+          "ticketId": "grv-1786694918681-n092h",
+          "createdAt": "2026-08-14T13:14:18.708Z",
+          "senderName": "Aafaq Ahmad",
+          "senderRole": "admin"
+        },
+        {
+          "id": "msg-1786713270845-a62tl",
+          "message": "its just a message test",
+          "senderId": "EMP-2119",
+          "ticketId": "grv-1786694918681-n092h",
+          "createdAt": "2026-08-14T13:14:30.845Z",
+          "senderName": "Demo 123",
+          "senderRole": "employee"
+        }
+      ]
     },
     {
       "id": "grv-1786694702590-kp5ug",
@@ -1520,7 +1594,50 @@
       "priority": "Medium",
       "status": "Open",
       "isAnonymous": false,
-      "createdAt": "2026-08-14T08:05:02.59+00:00"
+      "createdAt": "2026-08-14T08:05:02.59+00:00",
+      "messages": []
+    },
+    {
+      "id": "grv-1786722108288-lq2tl",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
+      "employeeId": "EMP-2114",
+      "employeeName": "Mohammad Amaan",
+      "title": "test",
+      "description": "test",
+      "category": "Workplace",
+      "priority": "High",
+      "status": "Open",
+      "isAnonymous": false,
+      "createdAt": "2026-08-14T15:41:48.288+00:00",
+      "messages": []
+    },
+    {
+      "id": "grv-1786721818896-r08i8",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
+      "employeeId": "EMP-2114",
+      "employeeName": "Mohammad Amaan",
+      "title": "Nothing",
+      "description": "Nothing",
+      "category": "Other",
+      "priority": "Medium",
+      "status": "Open",
+      "isAnonymous": false,
+      "createdAt": "2026-08-14T15:36:58.896+00:00",
+      "messages": []
+    },
+    {
+      "id": "grv-1786721792772-u515d",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e",
+      "employeeId": "EMP-2114",
+      "employeeName": "Mohammad Amaan",
+      "title": "Nothing",
+      "description": "Nothing",
+      "category": "Other",
+      "priority": "Medium",
+      "status": "Open",
+      "isAnonymous": false,
+      "createdAt": "2026-08-14T15:36:32.772+00:00",
+      "messages": []
     }
   ],
   "performanceRecords": [
