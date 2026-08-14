@@ -353,10 +353,19 @@ export default function App() {
         (prev || []).forEach((p: any) => {
           if (p.id && attMap.has(p.id)) {
             const fetched = attMap.get(p.id);
+            // For active (ongoing) punches, keep whichever breaks array is longer —
+            // this prevents a stale Supabase response from overwriting a freshly
+            // added break that the punch API already returned to the client.
+            const isActivePunch = !fetched.clockOut && !p.clockOut;
+            const fetchedBreaks = fetched.breaks || [];
+            const prevBreaks = p.breaks || [];
+            const mergedBreaks = isActivePunch
+              ? (fetchedBreaks.length >= prevBreaks.length ? fetchedBreaks : prevBreaks)
+              : (fetchedBreaks.length > 0 ? fetchedBreaks : prevBreaks);
             attMap.set(p.id, {
               ...fetched,
               clockOut: fetched.clockOut || p.clockOut,
-              breaks: (fetched.breaks && fetched.breaks.length > 0) ? fetched.breaks : (p.breaks || [])
+              breaks: mergedBreaks
             });
           } else if (p.id) {
             attMap.set(p.id, p);
@@ -809,13 +818,20 @@ export default function App() {
         }
         return;
       }
+
+      // For break actions, apply the API response immediately so the live timer
+      // starts/stops without waiting for refreshDatabase (which may have stale Supabase data)
       if (data && data.id) {
         setAttendance(prev => {
           const next = prev.filter(a => a.id !== data.id && !(a.employeeId === data.employeeId && a.date === data.date));
           return [data, ...next];
         });
       }
-      await refreshDatabase();
+
+      // Refresh from server (runs in background, does not overwrite break state for active punches
+      // because refreshDatabase prefers longer breaks arrays for open punches)
+      refreshDatabase().catch(e => console.warn("refreshDatabase after punch:", e));
+
       showToast("Attendance punch recorded successfully!", "success");
     } catch (err: any) {
       console.error(err);

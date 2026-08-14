@@ -37,10 +37,14 @@ export async function syncPunchToSupabase(punch: any) {
   try {
     await ensureEmployeeSynced(punch.employeeId);
     
-    // Find the employee's company_id from local DB state
+    // Get company_id: first try in-memory, then query Supabase directly
+    // On Vercel (serverless), in-memory DB is always empty so we always query Supabase
     const db = loadDatabase();
     const emp = db.employees?.find((e: any) => e.id === punch.employeeId);
-    const compId = emp?.companyId || MGM_COMPANY_ID;
+    const compId = emp?.companyId || (emp as any)?.company_id || await getCompanyIdForEmployee(punch.employeeId);
+
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const dbClient = supabaseAdmin || supabase;
 
     const record = {
       id: punch.id,
@@ -52,7 +56,7 @@ export async function syncPunchToSupabase(punch: any) {
       status: punch.status || "Present",
       total_break_duration: punch.totalBreakDuration || "00h 00m"
     };
-    let { error } = await supabase.from("attendance").upsert(record, { onConflict: "id" });
+    let { error } = await dbClient.from("attendance").upsert(record, { onConflict: "id" });
     if (error) {
       console.warn("Supabase upsert with total_break_duration failed. Attempting fallback upsert without it...", error.message);
       const fallbackRecord = {
@@ -64,7 +68,7 @@ export async function syncPunchToSupabase(punch: any) {
         clock_out: punch.clockOut || null,
         status: punch.status || "Present"
       };
-      const { error: fallbackErr } = await supabase.from("attendance").upsert(fallbackRecord, { onConflict: "id" });
+      const { error: fallbackErr } = await dbClient.from("attendance").upsert(fallbackRecord, { onConflict: "id" });
       if (fallbackErr) {
         console.warn("Supabase attendance fallback upsert error:", fallbackErr.message, fallbackErr.details);
         return;
@@ -72,8 +76,6 @@ export async function syncPunchToSupabase(punch: any) {
     }
 
     // Sync breaks to attendance_breaks
-    const { supabaseAdmin } = await import("./supabase-admin");
-    const dbClient = supabaseAdmin || supabase;
     if (punch.breaks && punch.breaks.length > 0) {
       const breakRecords = punch.breaks.map((b: any) => ({
         attendance_id: punch.id,
@@ -105,6 +107,7 @@ export async function syncPunchToSupabase(punch: any) {
     console.warn("Supabase attendance sync warning:", e);
   }
 }
+
 
 export async function deletePunchFromSupabase(punchId: string) {
   if (!supabase) return;

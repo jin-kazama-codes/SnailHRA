@@ -1,6 +1,4 @@
 
-import fs from "fs";
-import path from "path";
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
@@ -46,9 +44,6 @@ export interface AppState {
   grievanceTickets?: GrievanceTicket[];
   performanceRecords?: PerformanceRecord[];
 }
-
-
-const DB_FILE = path.join(process.cwd(), "db_snailhr.json");
 
 const initialDesignations: Designation[] = [];
 const initialHolidays: Holiday[] = [];
@@ -153,7 +148,6 @@ export const initialExitChecklistTemplates: ChecklistItemTemplate[] = [
 const initialEmployees: Employee[] = [];
 
 export function getInitialState(): AppState {
-  const defaultCompanyId = "a1b2c3d4-0001-0001-0001-000000000001";
   return {
     designations: initialDesignations,
     employees: initialEmployees,
@@ -201,130 +195,22 @@ export function getInitialState(): AppState {
   };
 }
 
+// Pure in-memory cache — no filesystem I/O. Supabase is the single source of truth.
+// On Vercel (serverless), each request gets a fresh cachedState hydrated from Supabase.
 let cachedState: AppState = getInitialState();
 
+/**
+ * Returns the current in-memory state.
+ * API routes hydrate this state from Supabase after calling loadDatabase().
+ */
 export function loadDatabase(): AppState {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const fileData = fs.readFileSync(DB_FILE, "utf-8");
-      const parsed = JSON.parse(fileData);
-      const attendanceBreaks = parsed.attendanceBreaks || [];
-      
-      const reconstructedAttendance = (parsed.attendance || []).map((a: any) => {
-        const relatedBreaks = attendanceBreaks
-          .filter((b: any) => b.attendanceId === a.id)
-          .map((b: any) => ({
-            start: b.breakStart,
-            end: b.breakEnd
-          }));
-        
-        let breakMs = 0;
-        relatedBreaks.forEach((b: any) => {
-          const bStart = new Date(b.start);
-          const bEnd = b.end ? new Date(b.end) : (a.clockOut ? bStart : new Date());
-          breakMs += (bEnd.getTime() - bStart.getTime());
-        });
-        const mins = Math.round(breakMs / 60000);
-        const hrs = Math.floor(mins / 60);
-        const remainingMins = mins % 60;
-        const totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
-
-        return {
-          ...a,
-          breaks: relatedBreaks,
-          totalBreakDuration: a.totalBreakDuration !== undefined ? a.totalBreakDuration : totalBreakDuration
-        };
-      });
-
-      let loadedEmployees = parsed.employees || [];
-
-      cachedState = {
-        ...getInitialState(),
-        ...cachedState,
-        ...parsed,
-        attendance: reconstructedAttendance,
-        attendanceBreaks: attendanceBreaks,
-        employees: loadedEmployees,
-        designations: (parsed.designations && parsed.designations.length > 0) ? parsed.designations : initialDesignations,
-        holidays: parsed.holidays || [],
-        policies: (parsed.policies && parsed.policies.length > 0) ? parsed.policies : initialPolicies,
-        expenseCategories: parsed.expenseCategories || getInitialState().expenseCategories,
-        infractionTypes: parsed.infractionTypes || [],
-        corporateAllowancesFaqs: parsed.corporateAllowancesFaqs || getInitialState().corporateAllowancesFaqs,
-        timingSettings: parsed.timingSettings || cachedState.timingSettings || getInitialState().timingSettings,
-        excelUploads: parsed.excelUploads || cachedState.excelUploads || [],
-        meetings: parsed.meetings || [],
-        seatLayouts: parsed.seatLayouts || [],
-        rooms: parsed.rooms || [],
-        roomBookings: parsed.roomBookings || [],
-        customAmenities: parsed.customAmenities || getInitialState().customAmenities,
-        wifiRestrictionSettings: parsed.wifiRestrictionSettings || getInitialState().wifiRestrictionSettings,
-        showLeaveCount: parsed.showLeaveCount !== undefined ? parsed.showLeaveCount : true,
-        onboardingChecklistTemplates: (parsed.onboardingChecklistTemplates && parsed.onboardingChecklistTemplates.length > 0) ? parsed.onboardingChecklistTemplates : initialOnboardingChecklistTemplates,
-        exitChecklistTemplates: (parsed.exitChecklistTemplates && parsed.exitChecklistTemplates.length > 0) ? parsed.exitChecklistTemplates : initialExitChecklistTemplates,
-        grievanceTickets: parsed.grievanceTickets || [],
-        performanceRecords: parsed.performanceRecords || [],
-      };
-      return cachedState;
-    }
-  } catch (err) {
-    console.warn("Could not read db_snailhr.json:", err);
-  }
-
   return cachedState;
 }
 
+/**
+ * Updates the in-memory cache only. No file is written.
+ * All persistence is handled by individual API routes writing to Supabase.
+ */
 export function saveDatabase(state: AppState): void {
   cachedState = state;
-  try {
-    const clone = { ...state };
-    delete (clone as any).timingSettings;
-
-    // Dynamically rebuild the top-level attendanceBreaks array from the nested breaks of state.attendance
-    const allBreaks: any[] = [];
-    if (state.attendance) {
-      state.attendance.forEach(a => {
-        if (a.id && a.breaks) {
-          a.breaks.forEach((b, index) => {
-            allBreaks.push({
-              id: `brk-${a.id}-${index}`,
-              attendanceId: a.id,
-              breakStart: b.start,
-              breakEnd: b.end || null
-            });
-          });
-        }
-      });
-    }
-    clone.attendanceBreaks = allBreaks;
-
-    // Strip breaks from attendance punches to prevent nesting them in the JSON database
-    if (clone.attendance) {
-      clone.attendance = clone.attendance.map(a => {
-        const { breaks, ...rest } = a;
-        // Calculate total break duration in hours and minutes
-        let breakMs = 0;
-        (breaks || []).forEach(b => {
-          const bStart = new Date(b.start);
-          const bEnd = b.end ? new Date(b.end) : (a.clockOut ? bStart : new Date());
-          breakMs += (bEnd.getTime() - bStart.getTime());
-        });
-        const mins = Math.round(breakMs / 60000);
-        const hrs = Math.floor(mins / 60);
-        const remainingMins = mins % 60;
-        const totalBreakDuration = `${hrs.toString().padStart(2, "0")}h ${remainingMins.toString().padStart(2, "0")}m`;
-        return {
-          ...rest,
-          totalBreakDuration: a.totalBreakDuration !== undefined ? a.totalBreakDuration : totalBreakDuration
-        } as any;
-      });
-    }
-
-    // Write state to disk so API routes can find records by ID
-    fs.writeFileSync(DB_FILE, JSON.stringify(clone, null, 2), "utf-8");
-
-  } catch (err) {
-    console.warn("Could not save state in memory:", err);
-  }
 }
-
