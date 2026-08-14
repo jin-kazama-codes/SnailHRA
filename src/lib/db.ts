@@ -5,7 +5,8 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType, ChecklistItemTemplate
+  SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType, ChecklistItemTemplate,
+  GrievanceTicket, PerformanceRecord
 } from "../types";
 
 export interface AppState {
@@ -42,6 +43,8 @@ export interface AppState {
   showLeaveCount?: boolean;
   onboardingChecklistTemplates?: ChecklistItemTemplate[];
   exitChecklistTemplates?: ChecklistItemTemplate[];
+  grievanceTickets?: GrievanceTicket[];
+  performanceRecords?: PerformanceRecord[];
 }
 
 
@@ -192,7 +195,9 @@ export function getInitialState(): AppState {
     rooms: [],
     roomBookings: [],
     onboardingChecklistTemplates: initialOnboardingChecklistTemplates,
-    exitChecklistTemplates: initialExitChecklistTemplates
+    exitChecklistTemplates: initialExitChecklistTemplates,
+    grievanceTickets: [],
+    performanceRecords: [],
   };
 }
 
@@ -256,7 +261,9 @@ export function loadDatabase(): AppState {
         wifiRestrictionSettings: parsed.wifiRestrictionSettings || getInitialState().wifiRestrictionSettings,
         showLeaveCount: parsed.showLeaveCount !== undefined ? parsed.showLeaveCount : true,
         onboardingChecklistTemplates: (parsed.onboardingChecklistTemplates && parsed.onboardingChecklistTemplates.length > 0) ? parsed.onboardingChecklistTemplates : initialOnboardingChecklistTemplates,
-        exitChecklistTemplates: (parsed.exitChecklistTemplates && parsed.exitChecklistTemplates.length > 0) ? parsed.exitChecklistTemplates : initialExitChecklistTemplates
+        exitChecklistTemplates: (parsed.exitChecklistTemplates && parsed.exitChecklistTemplates.length > 0) ? parsed.exitChecklistTemplates : initialExitChecklistTemplates,
+        grievanceTickets: parsed.grievanceTickets || [],
+        performanceRecords: parsed.performanceRecords || [],
       };
       return cachedState;
     }

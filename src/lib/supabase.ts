@@ -72,6 +72,8 @@ export async function syncPunchToSupabase(punch: any) {
     }
 
     // Sync breaks to attendance_breaks
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const dbClient = supabaseAdmin || supabase;
     if (punch.breaks && punch.breaks.length > 0) {
       const breakRecords = punch.breaks.map((b: any) => ({
         attendance_id: punch.id,
@@ -80,15 +82,15 @@ export async function syncPunchToSupabase(punch: any) {
         company_id: compId
       }));
       // First delete existing breaks for this punch to avoid duplicates
-      await supabase.from("attendance_breaks").delete().eq("attendance_id", punch.id);
+      await dbClient.from("attendance_breaks").delete().eq("attendance_id", punch.id);
       // Then insert the new ones
-      const { error: breakErr } = await supabase.from("attendance_breaks").insert(breakRecords);
+      const { error: breakErr } = await dbClient.from("attendance_breaks").insert(breakRecords);
       if (breakErr) {
         console.warn("Supabase attendance_breaks insert error:", breakErr.message, breakErr.details);
       }
     } else {
       // If there are no breaks, delete any existing ones
-      await supabase.from("attendance_breaks").delete().eq("attendance_id", punch.id);
+      await dbClient.from("attendance_breaks").delete().eq("attendance_id", punch.id);
     }
   } catch (e) {
     console.warn("Supabase attendance sync warning:", e);

@@ -17,11 +17,13 @@ import {
   syncPayslipToSupabase,
   getCompanyIdForEmployee
 } from "./src/lib/supabase.js";
+import { supabaseAdmin } from "./src/lib/supabase-admin.js";
 import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting,
+  GrievanceTicket, PerformanceRecord
 } from "./src/types";
 
 // Default MGM Financiers company ID (matches migration script)
@@ -63,6 +65,8 @@ interface AppState {
 
   meetings?: Meeting[];
   companies: Company[];
+  grievanceTickets?: GrievanceTicket[];
+  performanceRecords?: PerformanceRecord[];
 }
 
 const initialDesignations: Designation[] = [];
@@ -383,6 +387,54 @@ async function fetchAllFromSupabase(): Promise<AppState> {
       sbDesignations.forEach((d: any) => { desMap.set(d.id, d); });
       db.designations = Array.from(desMap.values());
     }
+
+    // ─── grievance_tickets ───────────────────────────────────────────────────
+    try {
+      const { data: grv } = await supabase.from("grievance_tickets").select("*").order("created_at", { ascending: false });
+      if (grv && grv.length > 0) {
+        db.grievanceTickets = grv.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || "",
+          employeeId: row.employee_id || "",
+          employeeName: row.employee_name || "",
+          title: row.title || "",
+          description: row.description || "",
+          category: row.category || "Other",
+          priority: row.priority || "Medium",
+          status: row.status || "Open",
+          isAnonymous: row.is_anonymous ?? false,
+          createdAt: row.created_at || new Date().toISOString(),
+          resolvedBy: row.resolved_by || undefined,
+          resolvedByName: row.resolved_by_name || undefined,
+          resolutionMessage: row.resolution_message || undefined,
+          resolvedAt: row.resolved_at || undefined,
+        }));
+      }
+    } catch (e) { console.warn("Error fetching grievance_tickets from Supabase:", e); }
+
+    // ─── performance_records ─────────────────────────────────────────────────
+    try {
+      const { data: perf } = await supabase.from("performance_records").select("*").order("created_at", { ascending: false });
+      if (perf && perf.length > 0) {
+        db.performanceRecords = perf.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || "",
+          employeeId: row.employee_id || "",
+          employeeName: row.employee_name || "",
+          reviewerId: row.reviewer_id || "",
+          reviewerName: row.reviewer_name || "",
+          type: row.type || "Appraisal",
+          period: row.period || "",
+          summary: row.summary || "",
+          overallRating: row.overall_rating ?? undefined,
+          incidentDate: row.incident_date || undefined,
+          actionTaken: row.action_taken || undefined,
+          sourceId: row.source_id || undefined,
+          createdAt: row.created_at || new Date().toISOString(),
+        }));
+      }
+    } catch (e) { console.warn("Error fetching performance_records from Supabase:", e); }
+
   } catch (err) {
     console.warn("Error fetching data directly from Supabase tables:", err);
   }
@@ -2054,7 +2106,202 @@ async function startServer() {
     res.json({ success: true, message: `Configuration for ${type} updated successfully.` });
   });
 
-  // 26. AI Chatbot assistant with Gemini Core grounding
+  // ─── 26. Support & Grievance ──────────────────────────────────────────────
+
+  // GET /api/grievances — list tickets (all for admin/hr, own for employee)
+  app.get("/api/grievances", async (req, res) => {
+    const { companyId, employeeId, role } = req.query as Record<string, string>;
+    const cid = companyId || MGM_COMPANY_ID;
+    const dbState = readDatabase();
+    let tickets = (dbState.grievanceTickets || []).filter(t => (t.companyId || MGM_COMPANY_ID) === cid);
+    if (role === "employee" && employeeId) {
+      tickets = tickets.filter(t => t.employeeId === employeeId);
+    }
+    // Sort newest first
+    tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ tickets });
+  });
+
+  // POST /api/grievances — employee creates a ticket
+  app.post("/api/grievances", async (req, res) => {
+    const { companyId, employeeId, employeeName, title, description, category, priority, isAnonymous } = req.body;
+    if (!title || !description || !employeeId) {
+      return res.status(400).json({ error: "title, description, and employeeId are required" });
+    }
+    const ticket: GrievanceTicket = {
+      id: `grv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      companyId: companyId || MGM_COMPANY_ID,
+      employeeId,
+      employeeName: isAnonymous ? "Anonymous" : (employeeName || employeeId),
+      title,
+      description,
+      category: category || "Other",
+      priority: priority || "Medium",
+      status: "Open",
+      isAnonymous: !!isAnonymous,
+      createdAt: new Date().toISOString(),
+    };
+    const dbState = readDatabase();
+    if (!dbState.grievanceTickets) dbState.grievanceTickets = [];
+    dbState.grievanceTickets.unshift(ticket);
+    writeDatabase(dbState);
+    // Sync to Supabase if available
+    if (supabase) {
+      try {
+        await supabase.from("grievance_tickets").upsert({
+          id: ticket.id, company_id: ticket.companyId, employee_id: ticket.employeeId,
+          employee_name: ticket.employeeName, title: ticket.title, description: ticket.description,
+          category: ticket.category, priority: ticket.priority, status: ticket.status,
+          is_anonymous: ticket.isAnonymous, created_at: ticket.createdAt
+        }, { onConflict: "id" });
+      } catch (e) { console.warn("Grievance Supabase sync:", e); }
+    }
+    res.json({ success: true, ticket });
+  });
+
+  // PUT /api/grievances/:id — HR/Admin updates status + resolution message
+  app.put("/api/grievances/:id", async (req, res) => {
+    const { id } = req.params;
+    const { status, resolutionMessage, resolvedBy, resolvedByName } = req.body;
+    const dbState = readDatabase();
+    if (!dbState.grievanceTickets) dbState.grievanceTickets = [];
+    const idx = dbState.grievanceTickets.findIndex(t => t.id === id);
+    if (idx === -1) return res.status(404).json({ error: "Ticket not found" });
+    dbState.grievanceTickets[idx] = {
+      ...dbState.grievanceTickets[idx],
+      ...(status && { status }),
+      ...(resolutionMessage !== undefined && { resolutionMessage }),
+      ...(resolvedBy && { resolvedBy }),
+      ...(resolvedByName && { resolvedByName }),
+      ...((status === "Resolved" || status === "Rejected" || status === "Closed") && { resolvedAt: new Date().toISOString() }),
+    };
+    writeDatabase(dbState);
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      try {
+        const t = dbState.grievanceTickets[idx];
+        const { error } = await dbClient.from("grievance_tickets").upsert({
+          id: t.id,
+          company_id: t.companyId || MGM_COMPANY_ID,
+          employee_id: t.employeeId || "",
+          employee_name: t.employeeName || "",
+          title: t.title || "",
+          description: t.description || "",
+          category: t.category || "Other",
+          priority: t.priority || "Medium",
+          status: t.status || "Open",
+          is_anonymous: t.isAnonymous ?? false,
+          created_at: t.createdAt || new Date().toISOString(),
+          resolution_message: t.resolutionMessage ?? null,
+          resolved_by: t.resolvedBy ?? null,
+          resolved_by_name: t.resolvedByName ?? null,
+          resolved_at: t.resolvedAt ?? null
+        }, { onConflict: "id" });
+        if (error) {
+          console.error("Grievance update Supabase error:", error.message, error.details);
+        }
+      } catch (e) { console.warn("Grievance update Supabase sync:", e); }
+    }
+    res.json({ success: true, ticket: dbState.grievanceTickets[idx] });
+  });
+
+  // DELETE /api/grievances/:id — admin deletes ticket
+  app.delete("/api/grievances/:id", async (req, res) => {
+    const { id } = req.params;
+    const dbState = readDatabase();
+    if (!dbState.grievanceTickets) dbState.grievanceTickets = [];
+    dbState.grievanceTickets = dbState.grievanceTickets.filter(t => t.id !== id);
+    writeDatabase(dbState);
+    if (supabase) {
+      try { await supabase.from("grievance_tickets").delete().eq("id", id); }
+      catch (e) { console.warn("Grievance delete Supabase sync:", e); }
+    }
+    res.json({ success: true });
+  });
+
+  // ─── 27. Performance Management ──────────────────────────────────────────
+
+  // GET /api/performance/records
+  app.get("/api/performance/records", async (req, res) => {
+    const { companyId, employeeId, role } = req.query as Record<string, string>;
+    const cid = companyId || MGM_COMPANY_ID;
+    const dbState = readDatabase();
+    let records = (dbState.performanceRecords || []).filter(r => (r.companyId || MGM_COMPANY_ID) === cid);
+    if (role === "employee" && employeeId) {
+      records = records.filter(r => r.employeeId === employeeId);
+    }
+    records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ records });
+  });
+
+  // POST /api/performance/records
+  app.post("/api/performance/records", async (req, res) => {
+    const body = req.body;
+    if (!body.employeeId || !body.type || !body.summary) {
+      return res.status(400).json({ error: "employeeId, type, and summary are required" });
+    }
+    const record: PerformanceRecord = {
+      id: `prf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      companyId: body.companyId || MGM_COMPANY_ID,
+      employeeId: body.employeeId,
+      employeeName: body.employeeName || body.employeeId,
+      reviewerId: body.reviewerId || "",
+      reviewerName: body.reviewerName || "",
+      type: body.type,
+      period: body.period || "",
+      summary: body.summary,
+      overallRating: body.overallRating ?? undefined,
+      incidentDate: body.incidentDate || undefined,
+      actionTaken: body.actionTaken || undefined,
+      sourceId: body.sourceId || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    const dbState = readDatabase();
+    if (!dbState.performanceRecords) dbState.performanceRecords = [];
+    dbState.performanceRecords.unshift(record);
+    writeDatabase(dbState);
+    if (supabase) {
+      try {
+        await supabase.from("performance_records").upsert({
+          id: record.id, company_id: record.companyId, employee_id: record.employeeId,
+          employee_name: record.employeeName, reviewer_id: record.reviewerId,
+          reviewer_name: record.reviewerName, type: record.type, period: record.period,
+          summary: record.summary, overall_rating: record.overallRating ?? null,
+          incident_date: record.incidentDate ?? null, action_taken: record.actionTaken ?? null,
+          source_id: record.sourceId ?? null, created_at: record.createdAt
+        }, { onConflict: "id" });
+      } catch (e) { console.warn("Performance record Supabase sync:", e); }
+    }
+    res.json({ success: true, record });
+  });
+
+  // PUT /api/performance/records/:id
+  app.put("/api/performance/records/:id", async (req, res) => {
+    const { id } = req.params;
+    const dbState = readDatabase();
+    if (!dbState.performanceRecords) dbState.performanceRecords = [];
+    const idx = dbState.performanceRecords.findIndex(r => r.id === id);
+    if (idx === -1) return res.status(404).json({ error: "Record not found" });
+    dbState.performanceRecords[idx] = { ...dbState.performanceRecords[idx], ...req.body };
+    writeDatabase(dbState);
+    res.json({ success: true, record: dbState.performanceRecords[idx] });
+  });
+
+  // DELETE /api/performance/records/:id
+  app.delete("/api/performance/records/:id", async (req, res) => {
+    const { id } = req.params;
+    const dbState = readDatabase();
+    if (!dbState.performanceRecords) dbState.performanceRecords = [];
+    dbState.performanceRecords = dbState.performanceRecords.filter(r => r.id !== id);
+    writeDatabase(dbState);
+    if (supabase) {
+      try { await supabase.from("performance_records").delete().eq("id", id); }
+      catch (e) { console.warn("Performance delete Supabase sync:", e); }
+    }
+    res.json({ success: true });
+  });
+
+  // ─── 28. AI Chatbot assistant with Gemini Core grounding ─────────────────
   app.post("/api/chat", async (req, res) => {
     const { message, employeeId, chatHistory, companyId } = req.body;
     if (!message) {

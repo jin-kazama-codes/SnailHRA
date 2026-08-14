@@ -51,12 +51,13 @@ export async function GET(request: Request) {
         inventoryRes, inventoryRequestsRes, policiesRes, finesRes, 
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
         payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
-        seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes
+        seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes,
+        grievancesRes, performanceRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
           companyId
-            ? safeQuery(dbClient.from("leaves").select("*").eq("company_id", companyId))
+            ? safeQuery(dbClient.from("leaves").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
             : safeQuery(dbClient.from("leaves").select("*")),
           companyId
             ? safeQuery(dbClient.from("attendance").select("*").eq("company_id", companyId))
@@ -138,7 +139,13 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("custom_amenities").select("*")),
           companyId
             ? safeQuery(dbClient.from("infraction_types").select("*").eq("company_id", companyId))
-            : safeQuery(dbClient.from("infraction_types").select("*"))
+            : safeQuery(dbClient.from("infraction_types").select("*")),
+          companyId
+            ? safeQuery(dbClient.from("grievance_tickets").select("*").eq("company_id", companyId).order("created_at", { ascending: false }))
+            : safeQuery(dbClient.from("grievance_tickets").select("*").order("created_at", { ascending: false })),
+          companyId
+            ? safeQuery(dbClient.from("performance_records").select("*").eq("company_id", companyId).order("created_at", { ascending: false }))
+            : safeQuery(dbClient.from("performance_records").select("*").order("created_at", { ascending: false }))
         ]),
         queryTimeout(4500)
       ]);
@@ -286,8 +293,19 @@ export async function GET(request: Request) {
         })).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
       }
 
-      if (leavesRes && !leavesRes.error && Array.isArray(leavesRes.data)) {
-        db.leaves = leavesRes.data.map((row: any) => ({
+      let leavesData = (leavesRes && !leavesRes.error && Array.isArray(leavesRes.data) && leavesRes.data.length > 0)
+        ? leavesRes.data
+        : null;
+
+      if (!leavesData) {
+        const fallbackLeavesRes = await safeQuery(dbClient.from("leaves").select("*"));
+        if (fallbackLeavesRes && !fallbackLeavesRes.error && Array.isArray(fallbackLeavesRes.data)) {
+          leavesData = fallbackLeavesRes.data;
+        }
+      }
+
+      if (leavesData && Array.isArray(leavesData) && leavesData.length > 0) {
+        const sbLeaves = leavesData.map((row: any) => ({
           id: row.id,
           employeeId: row.employee_id || row.employeeId || "",
           employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
@@ -296,8 +314,13 @@ export async function GET(request: Request) {
           endDate: row.end_date || row.endDate || "",
           reason: row.reason || "",
           status: row.status || "Pending",
-          appliedDate: row.applied_date || row.appliedDate || ""
+          appliedDate: row.applied_date || row.appliedDate || "",
+          companyId: row.company_id || row.companyId || undefined
         }));
+        const leaveMap = new Map();
+        (db.leaves || []).forEach((l: any) => { if (l && l.id) leaveMap.set(l.id, l); });
+        sbLeaves.forEach((l: any) => { if (l && l.id) leaveMap.set(l.id, l); });
+        db.leaves = Array.from(leaveMap.values());
       }
 
       if (attendanceRes && !attendanceRes.error && Array.isArray(attendanceRes.data)) {
@@ -613,6 +636,53 @@ export async function GET(request: Request) {
         (db.infractionTypes || []).forEach((t: any) => { if (t.id) typeMap.set(t.id, t); });
         sbInfractionTypes.forEach((t: any) => { typeMap.set(t.id, t); });
         db.infractionTypes = Array.from(typeMap.values());
+      }
+
+      if (grievancesRes && grievancesRes.data && grievancesRes.data.length > 0) {
+        const sbGrievances = grievancesRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || "",
+          employeeId: row.employee_id || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+          title: row.title || "",
+          description: row.description || "",
+          category: row.category || "Other",
+          priority: row.priority || "Medium",
+          status: row.status || "Open",
+          isAnonymous: row.is_anonymous ?? false,
+          createdAt: row.created_at || new Date().toISOString(),
+          resolvedBy: row.resolved_by || undefined,
+          resolvedByName: row.resolved_by_name ? capitalizeName(row.resolved_by_name) : undefined,
+          resolutionMessage: row.resolution_message || undefined,
+          resolvedAt: row.resolved_at || undefined,
+        }));
+        const grvMap = new Map();
+        (db.grievanceTickets || []).forEach((t: any) => { if (t.id) grvMap.set(t.id, t); });
+        sbGrievances.forEach((t: any) => { grvMap.set(t.id, t); });
+        db.grievanceTickets = Array.from(grvMap.values());
+      }
+
+      if (performanceRes && performanceRes.data && performanceRes.data.length > 0) {
+        const sbPerf = performanceRes.data.map((row: any) => ({
+          id: row.id,
+          companyId: row.company_id || "",
+          employeeId: row.employee_id || "",
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+          reviewerId: row.reviewer_id || "",
+          reviewerName: capitalizeName(row.reviewer_name || row.reviewerName || ""),
+          type: row.type || "Appraisal",
+          period: row.period || "",
+          summary: row.summary || "",
+          overallRating: row.overall_rating ?? undefined,
+          incidentDate: row.incident_date || undefined,
+          actionTaken: row.action_taken || undefined,
+          sourceId: row.source_id || undefined,
+          createdAt: row.created_at || new Date().toISOString(),
+        }));
+        const perfMap = new Map();
+        (db.performanceRecords || []).forEach((r: any) => { if (r.id) perfMap.set(r.id, r); });
+        sbPerf.forEach((r: any) => { perfMap.set(r.id, r); });
+        db.performanceRecords = Array.from(perfMap.values());
       }
 
       // Load local tenant specific timing setting if available

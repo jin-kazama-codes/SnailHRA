@@ -4,14 +4,16 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
-  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid, Lock
+  Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid, Lock,
+  MessageSquareWarning, TrendingUp
 } from "lucide-react";
 
 import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate
+  SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate,
+  GrievanceTicket, PerformanceRecord
 } from "./types";
 
 // Import Modular Views
@@ -33,6 +35,8 @@ import MeetingsView from "./components/MeetingsView";
 import WorkspaceView from "./components/WorkspaceView";
 import PasswordUpdateView from "./components/PasswordUpdateView";
 import EditEmployeeModal from "./components/EditEmployeeModal";
+import GrievanceView from "./components/GrievanceView";
+import PerformanceView from "./components/PerformanceView";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -219,6 +223,8 @@ export default function App() {
   const [seatLayouts, setSeatLayouts] = useState<SeatLayout[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomBookings, setRoomBookings] = useState<RoomBooking[]>([]);
+  const [grievanceTickets, setGrievanceTickets] = useState<GrievanceTicket[]>([]);
+  const [performanceRecords, setPerformanceRecords] = useState<PerformanceRecord[]>([]);
 
   // Organization Config States
   const [customLeaveTypes, setCustomLeaveTypes] = useState<string[]>([]);
@@ -422,6 +428,9 @@ export default function App() {
         (data.roomBookings || []).forEach((b: any) => { if (b.id) bookingMap.set(b.id, b); });
         return Array.from(bookingMap.values());
       });
+      // Grievances & Performance — fetched from dedicated endpoints
+      if (data.grievanceTickets) setGrievanceTickets(data.grievanceTickets);
+      if (data.performanceRecords) setPerformanceRecords(data.performanceRecords);
 
       setCustomLeaveTypes(data.customLeaveTypes || []);
       setCustomDepartments(data.customDepartments || []);
@@ -537,6 +546,8 @@ export default function App() {
     setSeatLayouts([]);
     setRooms([]);
     setRoomBookings([]);
+    setGrievanceTickets([]);
+    setPerformanceRecords([]);
 
     if (typeof window !== "undefined") {
       localStorage.removeItem("snailhr_isLoggedIn");
@@ -887,10 +898,15 @@ export default function App() {
   // 6. Submit leave request
   const handleApplyLeave = async (leaveData: any) => {
     try {
+      const activeCompanyId = localStorage.getItem("snailhr_companyId") || companyId || "";
+      const payloadData = {
+        ...leaveData,
+        companyId: activeCompanyId
+      };
       const res = await fetch("/api/leaves", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(leaveData)
+        body: JSON.stringify(payloadData)
       });
       if (res.ok) {
         const resData = await res.json();
@@ -2147,6 +2163,8 @@ export default function App() {
     { id: "inventory", label: "Asset Inventory", icon: <Package className="w-4.5 h-4.5" /> },
     { id: "policies", label: "Policies Handbook", icon: <ShieldAlert className="w-4.5 h-4.5" /> },
     { id: "fines", label: "Disciplinary Fines", icon: <Scale className="w-4.5 h-4.5" /> },
+    { id: "grievance", label: "Support & Grievance", icon: <MessageSquareWarning className="w-4.5 h-4.5" /> },
+    { id: "performance", label: "Performance", icon: <TrendingUp className="w-4.5 h-4.5" /> },
     { id: "password-update", label: "Password Update", icon: <Lock className="w-4.5 h-4.5" /> },
     ...((activeRole === "admin" || activeRole === "hr") ? [
       { id: "configurations", label: "System Settings", icon: <Settings className="w-4.5 h-4.5" /> }
@@ -2659,6 +2677,27 @@ export default function App() {
               employees={employees}
               role={activeRole}
               companyId={companyId}
+              showToast={showToast}
+            />
+          )}
+
+          {currentView === "grievance" && (
+            <GrievanceView
+              role={activeRole}
+              currentEmployee={currentEmployee}
+              companyId={companyId}
+              employees={employees}
+              showToast={showToast}
+            />
+          )}
+
+          {currentView === "performance" && (
+            <PerformanceView
+              role={activeRole}
+              currentEmployee={currentEmployee}
+              companyId={companyId}
+              employees={employees}
+              fines={fines}
               showToast={showToast}
             />
           )}

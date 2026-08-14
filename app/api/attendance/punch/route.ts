@@ -180,9 +180,9 @@ export async function POST(request: Request) {
     );
 
     // If not found in memory, query Supabase for today's punch for this employee
-    if (existingIndex < 0 && supabase) {
+    if (existingIndex < 0 && dbClient) {
       try {
-        const { data } = await supabase
+        const { data } = await dbClient
           .from("attendance")
           .select("*")
           .eq("employee_id", employeeId)
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
           // Fetch related breaks from attendance_breaks
           let fetchedBreaks: any[] = [];
           try {
-            const { data: breakData } = await supabase
+            const { data: breakData } = await dbClient
               .from("attendance_breaks")
               .select("*")
               .eq("attendance_id", row.id);

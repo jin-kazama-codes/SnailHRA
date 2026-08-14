@@ -55,6 +55,8 @@ export async function POST(request: Request) {
     const emp = db.employees?.find(e => e.id === leaveData.employeeId);
     const empName = capitalizeName(emp?.fullName || (leaveData.employeeName && !leaveData.employeeName.startsWith("Employee ") ? leaveData.employeeName : leaveData.employeeId));
 
+    const compId = leaveData.companyId || emp?.companyId || (emp as any)?.company_id || null;
+
     const newLeave: LeaveRequest = {
       id: leaveId,
       employeeId: leaveData.employeeId,
@@ -64,7 +66,8 @@ export async function POST(request: Request) {
       endDate: leaveData.endDate,
       reason: leaveData.reason,
       status: status,
-      appliedDate: appliedDate
+      appliedDate: appliedDate,
+      ...(compId ? { companyId: compId } : {})
     };
 
     db.leaves = [newLeave, ...(db.leaves || []).filter(l => l.id !== leaveId)];
@@ -74,7 +77,7 @@ export async function POST(request: Request) {
       if (newLeave.employeeId) {
         await ensureEmployeeSynced(newLeave.employeeId);
       }
-      const payload = {
+      const payload: any = {
         id: leaveId,
         employee_id: newLeave.employeeId,
         employee_name: newLeave.employeeName,
@@ -85,7 +88,15 @@ export async function POST(request: Request) {
         status: newLeave.status,
         applied_date: newLeave.appliedDate
       };
-      const { error } = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
+      if (compId) {
+        payload.company_id = compId;
+      }
+      let { error } = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
+      if (error && error.message?.includes("company_id")) {
+        delete payload.company_id;
+        const retryRes = await supabase.from("leaves").upsert(payload, { onConflict: "id" });
+        error = retryRes.error;
+      }
       if (error) {
         console.warn("Supabase 'leaves' table upsert warning:", error.message);
       } else {

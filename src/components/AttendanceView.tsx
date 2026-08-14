@@ -301,7 +301,7 @@ export default function AttendanceView({
     return `${hours.toString().padStart(2, "0")}h ${minutes.toString().padStart(2, "0")}m ${seconds.toString().padStart(2, "0")}s`;
   };
 
-  const hasActiveBreak = todayPunch?.breaks.some(b => b.end === null) || false;
+  const hasActiveBreak = todayPunch?.breaks.some(b => !b.end) || false;
 
   const getPunchStatusText = () => {
     if (!todayPunch) return "Not Clocked In";

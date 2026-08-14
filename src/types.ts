@@ -439,5 +439,56 @@ export interface RoomBooking {
   createdAt: string;
 }
 
+// ─── Support & Grievance ─────────────────────────────────────────────────────
+
+export interface TicketMessage {
+  id: string;
+  ticketId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: "employee" | "hr" | "admin";
+  message: string;
+  createdAt: string;
+}
+
+export interface GrievanceTicket {
+  id: string;
+  companyId: string;
+  employeeId: string;
+  employeeName: string;
+  title: string;
+  description: string;
+  category: string; // "HR Policy" | "Workplace" | "Payroll" | "IT" | "Other"
+  priority: "Low" | "Medium" | "High" | "Urgent";
+  status: "Open" | "In Progress" | "Resolved" | "Rejected" | "Closed";
+  isAnonymous?: boolean;
+  createdAt: string;
+  // Set by HR/Admin when updating status
+  resolvedBy?: string;
+  resolvedByName?: string;
+  resolutionMessage?: string;
+  resolvedAt?: string;
+  messages?: TicketMessage[];
+}
+
+// ─── Performance Management ──────────────────────────────────────────────────
+
+export interface PerformanceRecord {
+  id: string;
+  companyId: string;
+  employeeId: string;
+  employeeName: string;
+  reviewerId: string;
+  reviewerName: string;
+  /** "Fine" = auto-surfaced from FinesView, not stored separately */
+  type: "Appraisal" | "Incident" | "Commendation" | "Disciplinary" | "Fine";
+  period?: string;        // e.g. "Q3 2025", "Annual 2025" — free text
+  summary: string;        // what happened / what is being noted
+  overallRating?: number; // 1–5, applicable for Appraisal / Commendation
+  incidentDate?: string;  // for Incident / Disciplinary
+  actionTaken?: string;   // for Incident / Disciplinary
+  sourceId?: string;      // for "Fine" type — references Fine.id
+  createdAt: string;
+}
 
 
