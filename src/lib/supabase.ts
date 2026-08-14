@@ -504,7 +504,9 @@ export async function ensureEmployeeSynced(employeeId: string) {
       const record = {
         id: emp.id,
         company_id: emp.companyId || MGM_COMPANY_ID,
+        prefix: emp.prefix || null,
         full_name: emp.fullName,
+        gender: emp.gender || null,
         email: emp.email,
         phone: emp.phone,
         role: emp.role,
@@ -512,6 +514,8 @@ export async function ensureEmployeeSynced(employeeId: string) {
         department: emp.department,
         branch: emp.branch,
         joining_date: emp.joiningDate,
+        date_of_birth: emp.dateOfBirth || null,
+        employee_number: emp.employeeNumber || null,
         status: emp.status,
         address: emp.address,
         emergency_contact_name: emp.emergencyContact?.name,
@@ -521,12 +525,22 @@ export async function ensureEmployeeSynced(employeeId: string) {
         bio: emp.bio,
         salary_basic: emp.salary?.basic,
         salary_hra: emp.salary?.hra,
+        salary_telephone: emp.salary?.telephone || 0,
+        salary_fuel: emp.salary?.fuel || 0,
+        salary_professional_dev: emp.salary?.professionalDev || 0,
+        salary_lta: emp.salary?.lta || 0,
         salary_allowances: emp.salary?.allowances,
         salary_pf_deduction: emp.salary?.pfDeduction,
         bank_account_number: emp.bankDetails?.accountNumber,
         bank_name: emp.bankDetails?.bankName,
         bank_ifsc: emp.bankDetails?.ifsc,
-        password: emp.password || null
+        password: emp.password || null,
+        pan: (emp.customFields?.pan as string) || (emp as any).pan || null,
+        uan: (emp.customFields?.uan as string) || (emp as any).uan || null,
+        custom_fields: emp.customFields || {
+          pan: (emp.customFields?.pan as string) || (emp as any).pan || "",
+          uan: (emp.customFields?.uan as string) || (emp as any).uan || ""
+        }
       };
       const { error: insertErr } = await supabase.from("employees").upsert(record, { onConflict: "id" });
       if (insertErr) {
@@ -555,6 +569,10 @@ export async function syncPayslipToSupabase(payslip: any) {
       month: payslip.month || "",
       basic: Number(payslip.basic) || 0,
       hra: Number(payslip.hra) || 0,
+      telephone: Number(payslip.telephone) || 0,
+      fuel: Number(payslip.fuel) || 0,
+      professional_dev: Number(payslip.professionalDev ?? payslip.professional_dev) || 0,
+      lta: Number(payslip.lta) || 0,
       allowances: Number(payslip.allowances) || 0,
       fines_deducted: Number(payslip.finesDeducted ?? payslip.fines_ded_amount ?? payslip.fines_deducted ?? 0),
       pf_deduction: Number(payslip.pfDeduction ?? payslip.pf_deduction ?? 0),
@@ -565,6 +583,7 @@ export async function syncPayslipToSupabase(payslip: any) {
       sent_to_email: payslip.sentToEmail || payslip.sent_to_email || ""
     };
     const { error } = await supabase.from("payslips").upsert(record, { onConflict: "id" });
+
     if (error) {
       console.warn("Supabase payslips table upsert error:", error.message, error.details);
     } else {

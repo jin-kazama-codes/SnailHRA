@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import {
   Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
   CheckCircle2, Users, FileText, AlertCircle, IndianRupee, Package, Briefcase, Home,
-  Award, ChevronRight, Activity, TrendingUp, Cake
+  Award, ChevronRight, Activity, TrendingUp, Cake, LogOut, ShieldCheck
 } from "lucide-react";
-import { Employee, Designation, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine } from "../types";
+import { Employee, Designation, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine, ChecklistItemTemplate } from "../types";
+import ChecklistCard from "./ChecklistCard";
 
 interface DashboardViewProps {
   currentEmployee: Employee;
@@ -21,7 +22,15 @@ interface DashboardViewProps {
   fines?: Fine[];
   role: "admin" | "hr" | "employee";
   companyName?: string;
+  onboardingChecklistTemplates?: ChecklistItemTemplate[];
+  exitChecklistTemplates?: ChecklistItemTemplate[];
   onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
+  onUploadChecklistDocument?: (employeeId: string, itemId: string, file: File, category?: string) => Promise<void> | void;
+  onReviewChecklistItem?: (employeeId: string, itemId: string, action: "approve" | "reject", comments?: string) => Promise<void> | void;
+  onCreateChecklistTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => Promise<void> | void;
+  onDeleteChecklistTemplate?: (templateId: string) => Promise<void> | void;
+  onGrantExitClearance?: (employeeId: string) => Promise<void> | void;
+  onInitiateResignation?: (employeeId: string) => Promise<void> | void;
   setCurrentView?: (view: string) => void;
 }
 
@@ -38,10 +47,19 @@ export default function DashboardView({
   fines = [],
   role,
   companyName = "Your Company",
+  onboardingChecklistTemplates = [],
+  exitChecklistTemplates = [],
   onPunchAction,
+  onUploadChecklistDocument,
+  onReviewChecklistItem,
+  onCreateChecklistTemplate,
+  onDeleteChecklistTemplate,
+  onGrantExitClearance,
+  onInitiateResignation,
   setCurrentView
 }: DashboardViewProps) {
   const [time, setTime] = useState(new Date());
+  const [dashboardChecklistTab, setDashboardChecklistTab] = useState<"onboarding" | "exit">("onboarding");
 
   // Keep digital clock ticking
   useEffect(() => {
@@ -328,37 +346,49 @@ export default function DashboardView({
           {/* Top Dynamic Stat Bento Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("directory")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Company Roster</span>
-                <Users className="w-4 h-4 text-emerald-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Company Roster</span>
+                <Users className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-slate-800 dark:text-white font-mono">{adminTotalUsers}</p>
               <p className="text-xs text-slate-400 mt-1">{adminTotalHrs} HR Staff • {adminTotalEmps} Employees</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("attendance")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Attendance Today</span>
-                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Attendance Today</span>
+                <Clock className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{adminTodayPresent}</p>
               <p className="text-xs text-slate-400 mt-1">{adminTodayWfh} Work From Home</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("leaves")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Pending Approvals</span>
-                <ShieldAlert className="w-4 h-4 text-amber-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">Pending Approvals</span>
+                <ShieldAlert className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-amber-500 font-mono">{adminPendingLeaves + adminPendingExpenses}</p>
               <p className="text-xs text-slate-400 mt-1">{adminPendingLeaves} Leaves • {adminPendingExpenses} Expenses</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("inventory")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Allocated Assets</span>
-                <Package className="w-4 h-4 text-indigo-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Allocated Assets</span>
+                <Package className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-indigo-500 font-mono">{adminTotalAssetsAssigned}</p>
               <p className="text-xs text-slate-400 mt-1">Hardware inventory items</p>
@@ -372,37 +402,49 @@ export default function DashboardView({
         <div className="space-y-6">
           {/* HR Branch Stat Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("directory")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Branch Staff</span>
-                <Users className="w-4 h-4 text-emerald-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Branch Staff</span>
+                <Users className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-slate-800 dark:text-white font-mono">{hrBranchUsers}</p>
               <p className="text-xs text-slate-400 mt-1">{userBranch} Employees</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("attendance")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Branch Present</span>
-                <Clock className="w-4 h-4 text-blue-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Branch Present</span>
+                <Clock className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{hrBranchPresentToday}</p>
               <p className="text-xs text-slate-400 mt-1">{hrBranchWfhToday} WFH Logs</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("leaves")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Pending Branch Leaves</span>
-                <ShieldAlert className="w-4 h-4 text-amber-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">Pending Branch Leaves</span>
+                <ShieldAlert className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-amber-500 font-mono">{hrBranchPendingLeaves}</p>
               <p className="text-xs text-slate-400 mt-1">Awaiting HR review</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("expenses")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-teal-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Branch Expense Claims</span>
-                <IndianRupee className="w-4 h-4 text-teal-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Branch Expense Claims</span>
+                <IndianRupee className="w-4 h-4 text-teal-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-teal-600 font-mono">{hrBranchPendingExpenses}</p>
               <p className="text-xs text-slate-400 mt-1">Claims submitted</p>
@@ -417,37 +459,49 @@ export default function DashboardView({
           {/* Employee Personal Bento Stat Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("attendance")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-emerald-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">My Present Days</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">My Present Days</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">{myPresentDays}</p>
               <p className="text-xs text-slate-400 mt-1">{myWfhDays} Work From Home (WFH)</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("attendance")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-amber-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">My Late Logins</span>
-                <Clock className="w-4 h-4 text-amber-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">My Late Logins</span>
+                <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-amber-500 font-mono">{myLateLogins}</p>
               <p className="text-xs text-slate-400 mt-1">Logins after 09:30 AM</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("leaves")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Leave Balance</span>
-                <Calendar className="w-4 h-4 text-indigo-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Leave Balance</span>
+                <Calendar className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-indigo-500 font-mono">14 Days</p>
               <p className="text-xs text-slate-400 mt-1">{myPendingLeaves} leave request pending</p>
             </div>
 
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+            <div
+              onClick={() => setCurrentView?.("payroll")}
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-teal-500 hover:shadow-md transition-all group"
+            >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider">Net Monthly Pay</span>
-                <IndianRupee className="w-4 h-4 text-teal-500" />
+                <span className="font-bold uppercase tracking-wider group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Net Monthly Pay</span>
+                <IndianRupee className="w-4 h-4 text-teal-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-2xl font-extrabold text-slate-800 dark:text-white font-mono">
                 ₹ {displaySalary.toLocaleString('en-IN')}
@@ -689,6 +743,271 @@ export default function DashboardView({
           </div>
         </div>
       </div>
+
+      {/* Onboarding & Exit Document Checklists Section with Toggle Switch */}
+      {currentEmployee && (() => {
+        const isExitDoc = (doc: any) => {
+          const cat = (doc.category || "").toLowerCase();
+          const name = (doc.name || "").toLowerCase();
+          return (
+            cat.includes("exit") ||
+            cat.includes("resignation") ||
+            cat.includes("separation") ||
+            cat.includes("no dues") ||
+            cat.includes("asset handover") ||
+            name.includes("(exit)") ||
+            name.includes("resignation") ||
+            name.includes("no dues") ||
+            name.includes("exit clearance") ||
+            name.includes("clearance")
+          );
+        };
+
+        const onboardingDocs = (currentEmployee.documents || []).filter((doc: any) => !isExitDoc(doc));
+        const exitDocs = (currentEmployee.documents || []).filter((doc: any) => isExitDoc(doc));
+
+        return (
+          <div className="space-y-4 w-full">
+            {/* Header & Toggle Switch */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] p-4 rounded-2xl border border-slate-200 dark:border-[#222] shadow-xs">
+              <div className="flex items-center space-x-3">
+                <div className={`p-2.5 rounded-xl text-white font-bold ${dashboardChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-base sm:text-lg">
+                    {dashboardChecklistTab === "exit" ? "Employee Exit & Separation Clearance Checklist & Vault" : "Onboarding Document Checklist & Vault"}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-gray-400">
+                    {dashboardChecklistTab === "exit"
+                      ? "Exit separation requirements paired with approved exit document vault"
+                      : "Mandatory employee KYC requirements paired with approved onboarding document vault"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setDashboardChecklistTab("onboarding")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    dashboardChecklistTab === "onboarding"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <span>Onboarding Checklist &amp; Vault</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDashboardChecklistTab("exit")}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    dashboardChecklistTab === "exit"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <span>Exit Clearance Checklist &amp; Vault</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 2-Column Paired Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+              {dashboardChecklistTab === "onboarding" ? (
+                <>
+                  <ChecklistCard
+                    type="onboarding"
+                    employee={currentEmployee}
+                    templates={onboardingChecklistTemplates}
+                    currentUserRole={role}
+                    currentUserId={currentEmployee.id}
+                    onCreateTemplate={onCreateChecklistTemplate}
+                    onDeleteTemplate={onDeleteChecklistTemplate}
+                    onUploadDocument={async (empId, itemId, file, category) => {
+                      if (onUploadChecklistDocument) await onUploadChecklistDocument(empId, itemId, file, category);
+                    }}
+                    onReviewItem={async (empId, itemId, action, comments) => {
+                      if (onReviewChecklistItem) await onReviewChecklistItem(empId, itemId, action, comments);
+                    }}
+                  />
+
+                  {/* Onboarding Vault Card */}
+                  <div className="bg-gradient-to-br from-emerald-500/5 via-white to-teal-500/5 dark:from-[#081b14] dark:via-[#0f0f0f] dark:to-[#091618] border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-4 border-b border-emerald-100 dark:border-emerald-950/60 pb-3 gap-2">
+                        <div className="flex items-start space-x-3 min-w-0 flex-1">
+                          <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                              Onboarding Document Checklist
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                              Aadhaar, PAN, contracts, tax forms &amp; clearance logs
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-3">
+                          {onboardingDocs.map((doc: any) => {
+                            const cleanName = (doc.name || "").replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+                            const matchingItem = ((currentEmployee?.onboardingChecklist as any[]) || [])
+                              .concat((currentEmployee?.exitChecklist as any[]) || [])
+                              .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
+                            const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
+                            const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
+
+                            return (
+                              <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-emerald-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-800 transition-all hover:shadow-xs">
+                                <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                  <div className="p-2.5 bg-emerald-100/80 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 rounded-xl shrink-0">
+                                    <FileText className="w-4.5 h-4.5" />
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
+                                      {cleanName}
+                                    </p>
+                                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 inline-block whitespace-nowrap">
+                                        Approved Vault Document
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
+                                      {uploadDate && (
+                                        <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
+                                          <Clock className="w-3 h-3 text-blue-500 shrink-0" />
+                                          <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
+                                        </span>
+                                      )}
+                                      {approveDate && (
+                                        <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                          <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {onboardingDocs.length === 0 && (
+                            <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-emerald-200/60 dark:border-emerald-950">
+                              No approved onboarding compliance documents in vault yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ChecklistCard
+                    type="exit"
+                    employee={currentEmployee}
+                    templates={exitChecklistTemplates}
+                    currentUserRole={role}
+                    currentUserId={currentEmployee.id}
+                    onCreateTemplate={onCreateChecklistTemplate}
+                    onDeleteTemplate={onDeleteChecklistTemplate}
+                    onUploadDocument={async (empId, itemId, file, category) => {
+                      if (onUploadChecklistDocument) await onUploadChecklistDocument(empId, itemId, file, category);
+                    }}
+                    onReviewItem={async (empId, itemId, action, comments) => {
+                      if (onReviewChecklistItem) await onReviewChecklistItem(empId, itemId, action, comments);
+                    }}
+                    onGrantExitClearance={async (empId) => {
+                      if (onGrantExitClearance) await onGrantExitClearance(empId);
+                    }}
+                    onInitiateResignation={async (empId) => {
+                      if (onInitiateResignation) await onInitiateResignation(empId);
+                    }}
+                  />
+
+                  {/* Exit Vault Card */}
+                  <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
+                        <div className="flex items-start space-x-3 min-w-0 flex-1">
+                          <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                              Employee Exit &amp; Separation Clearance Checklist
+                            </h3>
+                            <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                              Resignation copy, no-dues certificate, asset handover &amp; exit logs
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                        <div className="grid grid-cols-1 gap-3">
+                          {exitDocs.map((doc: any) => {
+                            const cleanName = (doc.name || "").replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+                            const matchingItem = ((currentEmployee?.onboardingChecklist as any[]) || [])
+                              .concat((currentEmployee?.exitChecklist as any[]) || [])
+                              .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
+                            const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
+                            const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
+
+                            return (
+                              <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-amber-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800 transition-all hover:shadow-xs">
+                                <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                  <div className="p-2.5 bg-amber-100/80 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 rounded-xl shrink-0">
+                                    <FileText className="w-4.5 h-4.5" />
+                                  </div>
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
+                                      {cleanName}
+                                    </p>
+                                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 inline-block whitespace-nowrap">
+                                        Approved Exit Clearance
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
+                                      {uploadDate && (
+                                        <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
+                                          <Clock className="w-3 h-3 text-blue-500 shrink-0" />
+                                          <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
+                                        </span>
+                                      )}
+                                      {approveDate && (
+                                        <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                          <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {exitDocs.length === 0 && (
+                            <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-amber-200/60 dark:border-amber-950">
+                              No uploaded exit &amp; separation clearance documents yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Leave Status Monitoring Row (Filtered by Role) */}
       <div id="leaves-summary-row" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">

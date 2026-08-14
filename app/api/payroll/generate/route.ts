@@ -24,13 +24,22 @@ async function syncLocalDbWithSupabase(db: any) {
           salary: {
             basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? 45000),
             hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? 18000),
-            allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? 10000),
-            pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 3200),
-            tdsDeduction: Number(row.salary_tds_deduction ?? salaryFromRow?.tdsDeduction ?? 0)
+            allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? 0),
+            telephone: Number(salaryFromRow?.telephone ?? 0),
+            fuel: Number(salaryFromRow?.fuel ?? 0),
+            professionalDev: Number(salaryFromRow?.professionalDev ?? 0),
+            lta: Number(salaryFromRow?.lta ?? 0),
+            pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? 0),
+            pfMode: salaryFromRow?.pfMode || undefined,
+            tdsDeduction: Number(row.salary_tds_deduction ?? salaryFromRow?.tdsDeduction ?? 0),
+            tdsOptIn: salaryFromRow?.tdsOptIn !== undefined ? salaryFromRow.tdsOptIn : true,
+            tdsMode: salaryFromRow?.tdsMode || "slab",
+            esiOptIn: salaryFromRow?.esiOptIn !== undefined ? salaryFromRow.esiOptIn : true,
+            esiDeduction: Number(salaryFromRow?.esiDeduction ?? 0),
           },
           bankDetails: {
             accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
-            bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+            bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? ""),
             ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
           },
           companyId: row.company_id || row.companyId || "a1b2c3d4-0001-0001-0001-000000000001",
@@ -146,13 +155,42 @@ export async function POST(request: Request) {
       ? Math.round(basic * (config.hraValue / 100))
       : config.hraValue;
 
-    const allowances = config.allowancesType === "percentage"
-      ? Math.round(basic * (config.allowancesValue / 100))
-      : config.allowancesValue;
+    // For each allowance component: use employee's individually-set value first (from "Adjust Allowances" modal save),
+    // if not set fall back to the tenant config formula (same as the Live Salary Simulator)
+    const storedTel = Number(employee.salary?.telephone);
+    const storedFuel = Number(employee.salary?.fuel);
+    const storedProfDev = Number(employee.salary?.professionalDev);
+    const storedLta = Number(employee.salary?.lta);
 
-    const gross = basic + hra + allowances;
+    const configTelephone = config.telephoneType === "percentage"
+      ? Math.round(basic * ((config.telephoneValue || 0) / 100))
+      : (config.telephoneValue || 0);
+    const configFuel = config.fuelType === "percentage"
+      ? Math.round(basic * ((config.fuelValue || 0) / 100))
+      : (config.fuelValue || 0);
+    const configProfDev = config.professionalDevType === "percentage"
+      ? Math.round(basic * ((config.professionalDevValue || 0) / 100))
+      : (config.professionalDevValue || 0);
+    const configLta = config.ltaType === "percentage"
+      ? Math.round(basic * ((config.ltaValue || 0) / 100))
+      : (config.ltaValue || 0);
 
-    // Calculate PF Deduction (Check exemption list for this employee across all tenant configs)
+    const telephone = storedTel > 0 ? storedTel : configTelephone;
+    const fuel = storedFuel > 0 ? storedFuel : configFuel;
+    const professionalDev = storedProfDev > 0 ? storedProfDev : configProfDev;
+    const lta = storedLta > 0 ? storedLta : configLta;
+
+    // Special/general allowances: use employee's stored value, or compute from config
+    const storedAllowances = Number(employee.salary?.allowances);
+    const allowances = storedAllowances > 0
+      ? storedAllowances
+      : (config.allowancesType === "percentage"
+          ? Math.round(basic * (config.allowancesValue / 100))
+          : config.allowancesValue);
+
+    const gross = basic + hra + telephone + fuel + professionalDev + lta + allowances;
+
+    // Calculate PF Deduction
     const isPfExempt = (
       (Array.isArray(config?.pfExemptEmployeeIds) && config.pfExemptEmployeeIds.includes(employeeId)) ||
       Object.values(db.payrollConfigs || {}).some((c: any) =>
@@ -160,23 +198,54 @@ export async function POST(request: Request) {
       )
     );
 
-    const pf = isPfExempt
-      ? 0
-      : config.pfType === "percentage"
-      ? Math.round(basic * (config.pfValue / 100))
-      : config.pfValue;
-
+    let pf = 0;
+    if (isPfExempt) {
+      pf = 0;
+    } else if (employee.salary?.pfMode === "fixed_1800") {
+      pf = 1800;
+    } else if (employee.salary?.pfMode === "custom" && employee.salary.pfDeduction !== undefined) {
+      pf = employee.salary.pfDeduction;
+    } else if (config.pfModeDefault === "fixed_1800") {
+      pf = 1800;
+    } else {
+      pf = employee.salary?.pfDeduction || (
+        config.pfType === "percentage"
+          ? Math.round(basic * (config.pfValue / 100))
+          : config.pfValue
+      );
+    }
 
     // Find pending fines for this employee to deduct
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Deducted From Payroll");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
     // Calculate Tax/TDS
-    const tax = config.taxType === "percentage"
-      ? Math.round(gross * (config.taxValue / 100))
-      : config.taxValue;
+    let tax = 0;
+    if (employee.salary?.tdsOptIn === false) {
+      tax = 0;
+    } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined) {
+      tax = employee.salary.tdsDeduction;
+    } else if (employee.salary?.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
+      tax = employee.salary.tdsDeduction;
+    } else {
+      tax = config.taxType === "percentage"
+        ? Math.round(gross * (config.taxValue / 100))
+        : config.taxValue;
+    }
 
-    const netPay = gross - pf - finesDeduction - tax;
+    // Calculate ESI Deduction
+    let esi = 0;
+    if (employee.salary?.esiOptIn === false) {
+      esi = 0;
+    } else if (employee.salary?.esiDeduction !== undefined && employee.salary.esiDeduction > 0) {
+      esi = employee.salary.esiDeduction;
+    } else if (config.esiEnabled !== false && gross <= (config.esiGrossCeiling || 21000)) {
+      esi = Math.round(gross * ((config.esiRatePercentage || 0.75) / 100));
+    } else {
+      esi = 0;
+    }
+
+    const netPay = gross - pf - finesDeduction - tax - esi;
 
     const newPayslip: Payslip = {
       id: "pay-" + Date.now(),
@@ -184,10 +253,15 @@ export async function POST(request: Request) {
       month,
       basic,
       hra,
+      telephone,
+      fuel,
+      professionalDev,
+      lta,
       allowances,
       finesDeducted: finesDeduction,
       pfDeduction: pf,
       taxDeduction: tax,
+      esiDeduction: esi,
       netPay,
       status: "Generated",
       generatedAt: new Date().toISOString(),

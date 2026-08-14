@@ -5,7 +5,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType
+  SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType, ChecklistItemTemplate
 } from "../types";
 
 export interface AppState {
@@ -39,6 +39,9 @@ export interface AppState {
   roomBookings?: RoomBooking[];
   customAmenities?: string[];
   wifiRestrictionSettings?: WifiRestrictionSettings;
+  showLeaveCount?: boolean;
+  onboardingChecklistTemplates?: ChecklistItemTemplate[];
+  exitChecklistTemplates?: ChecklistItemTemplate[];
 }
 
 
@@ -49,6 +52,100 @@ const initialHolidays: Holiday[] = [];
 const initialPolicies: Policy[] = [];
 
 export const initialCorporateAllowanceFaqs: CorporateAllowanceFaq[] = [];
+
+export const initialOnboardingChecklistTemplates: ChecklistItemTemplate[] = [
+  {
+    id: "onb-tmpl-1",
+    title: "Aadhaar Card Copy",
+    description: "Government Identity Proof for mandatory KYC verification",
+    category: "Identity Proof",
+    required: true,
+    type: "onboarding"
+  },
+  {
+    id: "onb-tmpl-2",
+    title: "PAN Card Copy",
+    description: "Permanent Account Number card for income tax deduction & compliance",
+    category: "Tax Document",
+    required: true,
+    type: "onboarding"
+  },
+  {
+    id: "onb-tmpl-3",
+    title: "Educational Certificates & Marksheets",
+    description: "Copy of highest degree or professional qualification certificate",
+    category: "Educational",
+    required: true,
+    type: "onboarding"
+  },
+  {
+    id: "onb-tmpl-4",
+    title: "Previous Relieving / Experience Letter",
+    description: "Relieving letter and last 3 months pay slips from previous organization",
+    category: "Contract",
+    required: false,
+    type: "onboarding"
+  },
+  {
+    id: "onb-tmpl-5",
+    title: "Cancelled Cheque or Bank Passbook",
+    description: "Bank account proof with IFSC code for salary transfer",
+    category: "Other",
+    required: true,
+    type: "onboarding"
+  },
+  {
+    id: "onb-tmpl-6",
+    title: "Signed Employment Contract / Offer Letter",
+    description: "Countersigned copy of the employment appointment agreement",
+    category: "Contract",
+    required: true,
+    type: "onboarding"
+  }
+];
+
+export const initialExitChecklistTemplates: ChecklistItemTemplate[] = [
+  {
+    id: "exit-tmpl-1",
+    title: "Resignation Letter Copy",
+    description: "Formal submitted resignation letter with effective last working date",
+    category: "Contract",
+    required: true,
+    type: "exit"
+  },
+  {
+    id: "exit-tmpl-2",
+    title: "Company Asset Return Form",
+    description: "Signed asset return clearance (Laptop, Access Card, Mobile, WiFi Dongle, etc.)",
+    category: "Other",
+    required: true,
+    type: "exit"
+  },
+  {
+    id: "exit-tmpl-3",
+    title: "Department No-Dues Certificate",
+    description: "Departmental clearance sign-off from HOD / Reporting Manager",
+    category: "Other",
+    required: true,
+    type: "exit"
+  },
+  {
+    id: "exit-tmpl-4",
+    title: "Knowledge Transfer (KT) Sign-off Document",
+    description: "Documented project & operational handover signed by replacement/manager",
+    category: "Other",
+    required: true,
+    type: "exit"
+  },
+  {
+    id: "exit-tmpl-5",
+    title: "Finance & Accounts Clearance Form",
+    description: "No-dues sign-off confirming zero pending loans, advances, or unpaid fines",
+    category: "Tax Document",
+    required: true,
+    type: "exit"
+  }
+];
 
 const initialEmployees: Employee[] = [];
 
@@ -87,12 +184,15 @@ export function getInitialState(): AppState {
       allowedIp: "",
       allowedIps: []
     },
+    showLeaveCount: true,
     attendanceBreaks: [],
     excelUploads: [],
     meetings: [],
     seatLayouts: [],
     rooms: [],
-    roomBookings: []
+    roomBookings: [],
+    onboardingChecklistTemplates: initialOnboardingChecklistTemplates,
+    exitChecklistTemplates: initialExitChecklistTemplates
   };
 }
 
@@ -153,7 +253,10 @@ export function loadDatabase(): AppState {
         rooms: parsed.rooms || [],
         roomBookings: parsed.roomBookings || [],
         customAmenities: parsed.customAmenities || getInitialState().customAmenities,
-        wifiRestrictionSettings: parsed.wifiRestrictionSettings || getInitialState().wifiRestrictionSettings
+        wifiRestrictionSettings: parsed.wifiRestrictionSettings || getInitialState().wifiRestrictionSettings,
+        showLeaveCount: parsed.showLeaveCount !== undefined ? parsed.showLeaveCount : true,
+        onboardingChecklistTemplates: (parsed.onboardingChecklistTemplates && parsed.onboardingChecklistTemplates.length > 0) ? parsed.onboardingChecklistTemplates : initialOnboardingChecklistTemplates,
+        exitChecklistTemplates: (parsed.exitChecklistTemplates && parsed.exitChecklistTemplates.length > 0) ? parsed.exitChecklistTemplates : initialExitChecklistTemplates
       };
       return cachedState;
     }

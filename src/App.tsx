@@ -11,7 +11,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
-  SeatLayout, Room, RoomBooking, InfractionType
+  SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate
 } from "./types";
 
 // Import Modular Views
@@ -125,6 +125,25 @@ export default function App() {
     return "";
   });
 
+  // Employee Code Prefix — configured by admin in System Settings, stored in localStorage
+  const [empCodePrefix, setEmpCodePrefix] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_empCodePrefix") || "EMP";
+    }
+    return "EMP";
+  });
+
+  // Listen for storage events so prefix updates from ConfigurationView propagate
+  React.useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "snailhr_empCodePrefix" && e.newValue) {
+        setEmpCodePrefix(e.newValue);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const [subscriptionModel, setSubscriptionModel] = useState<1 | 2 | 3 | 4>(() => {
     if (typeof window !== "undefined") {
       return (Number(localStorage.getItem("snailhr_subscriptionModel")) as 1 | 2 | 3 | 4) || 1; // Default Basic
@@ -209,6 +228,8 @@ export default function App() {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [infractionTypes, setInfractionTypes] = useState<InfractionType[]>([]);
   const [corporateAllowancesFaqs, setCorporateAllowancesFaqs] = useState<CorporateAllowanceFaq[]>([]);
+  const [onboardingChecklistTemplates, setOnboardingChecklistTemplates] = useState<ChecklistItemTemplate[]>([]);
+  const [exitChecklistTemplates, setExitChecklistTemplates] = useState<ChecklistItemTemplate[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; synced: boolean; error?: string }>({
     connected: false,
     synced: false
@@ -239,6 +260,8 @@ export default function App() {
     allowedIps: []
   });
 
+  const [showLeaveCount, setShowLeaveCount] = useState<boolean>(true);
+
   // Global Toast State
   const [toast, setToast] = useState<{ id: string; message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -253,6 +276,21 @@ export default function App() {
       localStorage.setItem("snailhr_currentView", currentView);
     }
   }, [currentView, isLoggedIn]);
+
+  // Re-fetch showLeaveCount from server each time user navigates to leaves
+  // This ensures employees always reflect admin's latest setting
+  useEffect(() => {
+    if (currentView === "leaves" && isLoggedIn) {
+      fetch(`/api/config/leave-count-visibility?companyId=${companyId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && typeof data.showLeaveCount === "boolean") {
+            setShowLeaveCount(data.showLeaveCount);
+          }
+        })
+        .catch(() => {}); // silent fail — state stays as is
+    }
+  }, [currentView, isLoggedIn, companyId]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && isLoggedIn) {
@@ -298,6 +336,8 @@ export default function App() {
       });
       setEmployees(fetchedEmployees);
       setDesignations(data.designations || []);
+      setOnboardingChecklistTemplates(data.onboardingChecklistTemplates || []);
+      setExitChecklistTemplates(data.exitChecklistTemplates || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
       }
@@ -392,6 +432,10 @@ export default function App() {
       setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
       if (data.wifiRestrictionSettings) {
         setWifiRestrictionSettings(data.wifiRestrictionSettings);
+      }
+      // Load server-side showLeaveCount so all users see the same setting
+      if (data.showLeaveCount !== undefined) {
+        setShowLeaveCount(data.showLeaveCount);
       }
 
       // Check Supabase Synchronization Status
@@ -1221,6 +1265,235 @@ export default function App() {
     }
   };
 
+  // 17b. Checklist Template Management & Document Submission Handlers
+  const handleAddChecklistTemplate = async (template: Omit<ChecklistItemTemplate, "id">) => {
+    try {
+      const res = await fetch("/api/checklist-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...template, companyId })
+      });
+      const data = await res.json();
+      if (res.ok && data.template) {
+        if (template.type === "onboarding") {
+          setOnboardingChecklistTemplates(prev => [...prev, data.template]);
+        } else {
+          setExitChecklistTemplates(prev => [...prev, data.template]);
+        }
+        showToast(`${template.type === "onboarding" ? "Onboarding" : "Exit"} checklist item created!`, "success");
+        await refreshDatabase();
+      } else {
+        showToast(data.error || "Failed to add checklist item", "error");
+      }
+    } catch (err) {
+      showToast("Failed to add checklist item", "error");
+    }
+  };
+
+  const handleRemoveChecklistTemplate = async (id: string) => {
+    try {
+      const res = await fetch(`/api/checklist-templates?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setOnboardingChecklistTemplates(prev => prev.filter(t => t.id !== id));
+        setExitChecklistTemplates(prev => prev.filter(t => t.id !== id));
+        showToast("Checklist item removed", "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to remove checklist item", "error");
+      }
+    } catch (err) {
+      showToast("Failed to remove checklist item", "error");
+    }
+  };
+
+  const handleUploadChecklistDocument = async (employeeId: string, itemId: string, file: File, category?: string) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "employee-documents");
+      formData.append("folder", "onboarding-checklist-documents");
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok || !uploadData.url) {
+        throw new Error(uploadData.error || "File upload failed");
+      }
+
+      const isExit = itemId.startsWith("exit") || exitChecklistTemplates.some(t => t.id === itemId);
+      const type = isExit ? "exit" : "onboarding";
+
+      const res = await fetch(`/api/employees/${employeeId}/checklist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId,
+          type,
+          fileUrl: uploadData.url,
+          fileName: file.name,
+          category: category || (type === "onboarding" ? "ID Proof" : "Contract")
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.item || json.checklist) {
+          setEmployees(prev => prev.map(emp => {
+            if (emp.id === employeeId) {
+              const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
+              const currentList = emp[listKey] || [];
+              const itemToPut = json.item;
+              const exists = itemToPut ? currentList.some(i => i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) : false;
+              const updatedList = json.checklist || (exists
+                ? currentList.map(i => (i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) ? itemToPut : i)
+                : [...currentList, itemToPut]);
+              return {
+                ...emp,
+                [listKey]: updatedList
+              };
+            }
+            return emp;
+          }));
+        }
+        showToast("Checklist document uploaded successfully!", "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to record checklist document", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Failed to upload document", "error");
+    }
+  };
+
+  const handleReviewChecklistItem = async (employeeId: string, itemId: string, action: "approve" | "reject", comments?: string) => {
+    try {
+      const isExit = itemId.startsWith("exit") || exitChecklistTemplates.some(t => t.id === itemId);
+      const type = isExit ? "exit" : "onboarding";
+      const currentEmp = employees.find(e => e.id === currentEmployeeId);
+      const reviewerName = currentEmp ? currentEmp.fullName : (activeRole === "admin" ? "Administrator" : "HR Manager");
+
+      const res = await fetch(`/api/employees/${employeeId}/checklist`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemId,
+          type,
+          action,
+          comments,
+          reviewerName
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.item || json.checklist) {
+          setEmployees(prev => prev.map(emp => {
+            if (emp.id === employeeId) {
+              const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
+              const currentList = emp[listKey] || [];
+              const itemToPut = json.item;
+              const exists = itemToPut ? currentList.some(i => i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) : false;
+              const updatedList = json.checklist || (exists
+                ? currentList.map(i => (i.id === itemToPut.id || i.templateId === itemToPut.templateId || (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())) ? itemToPut : i)
+                : [...currentList, itemToPut]);
+              return {
+                ...emp,
+                [listKey]: updatedList,
+                documents: json.employee?.documents || emp.documents
+              };
+            }
+            return emp;
+          }));
+        }
+        showToast(`Document ${action === "approve" ? "approved" : "rejected"} successfully`, "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to review document", "error");
+      }
+    } catch (err) {
+      showToast("Failed to review document", "error");
+    }
+  };
+
+  const handleGrantExitClearance = async (employeeId: string) => {
+    try {
+      const currentEmp = employees.find(e => e.id === currentEmployeeId);
+      const reviewerName = currentEmp ? currentEmp.fullName : (activeRole === "admin" ? "Administrator" : "HR Manager");
+
+      const res = await fetch(`/api/employees/${employeeId}/checklist`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant_clearance",
+          reviewerName
+        })
+      });
+
+      if (res.ok) {
+        showToast("Final Exit Clearance granted successfully!", "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to grant exit clearance", "error");
+      }
+    } catch (err) {
+      showToast("Failed to grant exit clearance", "error");
+    }
+  };
+
+  const handleInitiateResignation = async (employeeId: string) => {
+    try {
+      const targetEmp = employees.find(e => e.id === employeeId);
+      if (!targetEmp) return;
+      const updatedEmp = {
+        ...targetEmp,
+        status: "Resigned" as const
+      };
+      const res = await fetch("/api/employees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedEmp)
+      });
+      if (res.ok) {
+        showToast("Resignation status updated! Exit document clearance checklist is now active.", "info");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to update status to Resigned", "error");
+      }
+    } catch (err) {
+      showToast("Failed to submit resignation", "error");
+    }
+  };
+
+  const handleCreateChecklistTemplate = async (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => {
+    try {
+      const res = await fetch("/api/checklist-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...template, companyId })
+      });
+      if (res.ok) {
+        showToast(`Added "${template.title}" to ${template.type} checklist templates!`, "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to create checklist requirement", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Failed to create requirement", "error");
+    }
+  };
+
+  const handleDeleteChecklistTemplate = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/checklist-templates?id=${templateId}`, { method: "DELETE" });
+      if (res.ok) {
+        showToast("Checklist requirement template removed", "info");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to delete checklist requirement", "error");
+      }
+    } catch (err) {
+      showToast("Failed to delete requirement", "error");
+    }
+  };
+
   // 18. Generate payslip (and automatically trigger welcome sequence email)
   const handleGeneratePayslip = async (employeeId: string, month: string) => {
     try {
@@ -1393,6 +1666,26 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast("Error saving WiFi restriction settings.", "error");
+    }
+  };
+
+  const handleToggleLeaveCount = async (val: boolean) => {
+    setShowLeaveCount(val); // optimistic update
+    try {
+      const activeCompanyId = (typeof window !== "undefined" && localStorage.getItem("snailhr_companyId")) || companyId;
+      const res = await fetch("/api/config/leave-count-visibility", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showLeaveCount: val, companyId: activeCompanyId })
+      });
+      if (res.ok) {
+        showToast(val ? "Leave counts are now VISIBLE to all employees" : "Leave counts are now HIDDEN from all employees", "success");
+      } else {
+        showToast("Failed to update leave count visibility setting.", "error");
+      }
+    } catch (err) {
+      console.error("Failed to save leave count visibility setting:", err);
+      showToast("Failed to save leave count visibility setting.", "error");
     }
   };
 
@@ -2140,7 +2433,15 @@ export default function App() {
               fines={fines}
               role={activeRole}
               companyName={companyName}
+              onboardingChecklistTemplates={onboardingChecklistTemplates}
+              exitChecklistTemplates={exitChecklistTemplates}
               onPunchAction={handlePunchAction}
+              onUploadChecklistDocument={handleUploadChecklistDocument}
+              onReviewChecklistItem={handleReviewChecklistItem}
+              onCreateChecklistTemplate={handleCreateChecklistTemplate}
+              onDeleteChecklistTemplate={handleDeleteChecklistTemplate}
+              onGrantExitClearance={handleGrantExitClearance}
+              onInitiateResignation={handleInitiateResignation}
               setCurrentView={setCurrentView}
             />
           )}
@@ -2156,6 +2457,8 @@ export default function App() {
               companyId={companyId}
               companyName={companyName}
               subscriptionModel={subscriptionModel}
+              onboardingChecklistTemplates={onboardingChecklistTemplates}
+              exitChecklistTemplates={exitChecklistTemplates}
               onOnboardEmployee={handleOnboardEmployee}
               onBulkOnboardEmployee={handleBulkOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
@@ -2180,6 +2483,12 @@ export default function App() {
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
               onToggleOnboardingTask={handleToggleOnboardingTask}
+              onUploadChecklistDocument={handleUploadChecklistDocument}
+              onReviewChecklistItem={handleReviewChecklistItem}
+              onCreateChecklistTemplate={handleCreateChecklistTemplate}
+              onDeleteChecklistTemplate={handleDeleteChecklistTemplate}
+              onGrantExitClearance={handleGrantExitClearance}
+              onInitiateResignation={handleInitiateResignation}
               onUpdateCollection={handleUpdateCollection}
             />
           )}
@@ -2211,6 +2520,7 @@ export default function App() {
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               customLeaveTypes={customLeaveTypes}
+              showLeaveCount={showLeaveCount}
               onApplyLeave={handleApplyLeave}
               onReviewLeave={handleReviewLeave}
               onAddHoliday={handleAddHoliday}
@@ -2229,11 +2539,32 @@ export default function App() {
               currentEmployeeId={currentEmployeeId}
               companyName={companyName}
               companyId={companyId}
+              companyLogoUrl={companyLogoUrl}
+              empCodePrefix={empCodePrefix}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onGeneratePayslip={handleGeneratePayslip}
               onPayAllPayslips={handlePayAllPayslips}
               onResetPayslip={handleResetPayslip}
+              onUpdateEmployee={async (id, updatedData) => {
+                showToast("Saving employee allowances...", "info");
+                try {
+                  const res = await fetch(`/api/employees/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatedData)
+                  });
+                  if (res.ok) {
+                    await refreshDatabase();
+                    showToast("Allowances updated successfully!", "success");
+                  } else {
+                    showToast("Failed to update employee allowances", "error");
+                  }
+                } catch (err) {
+                  console.error(err);
+                  showToast("Error updating employee allowances", "error");
+                }
+              }}
             />
           )}
 
@@ -2356,6 +2687,12 @@ export default function App() {
               onAddCorporateAllowanceFaq={handleAddCorporateAllowanceFaq}
               onRemoveCorporateAllowanceFaq={handleRemoveCorporateAllowanceFaq}
               onSaveWifiSettings={handleSaveWifiSettings}
+              showLeaveCount={showLeaveCount}
+              onToggleLeaveCount={handleToggleLeaveCount}
+              onboardingChecklistTemplates={onboardingChecklistTemplates}
+              exitChecklistTemplates={exitChecklistTemplates}
+              onAddChecklistTemplate={handleAddChecklistTemplate}
+              onRemoveChecklistTemplate={handleRemoveChecklistTemplate}
             />
           )}
 

@@ -2,14 +2,39 @@
 
 import React, { useState, useRef } from "react";
 import {
-  UserPlus, Eye, EyeOff, Sparkles, Camera, X, RefreshCw
+  UserPlus, Eye, EyeOff, Sparkles, Camera, X, RefreshCw, ShieldAlert, CheckCircle2
 } from "lucide-react";
+
+const isValidPAN = (p: string) => !p.trim() || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(p.trim().toUpperCase());
+const isValidUAN = (u: string) => !u.trim() || /^[0-9]{12}$/.test(u.trim());
+const isValidPhoneNumber = (p: string) => {
+  if (!p.trim()) return true;
+  const cleaned = p.trim().replace(/[\s\-\(\)]/g, "");
+  const digits = cleaned.replace(/\D/g, "");
+  if (cleaned.startsWith("+91") || cleaned.startsWith("91")) {
+    return digits.length === 12;
+  }
+  return digits.length === 10 && !cleaned.startsWith("+");
+};
+const checkPasswordStrength = (pwd: string) => {
+  return {
+    hasMinLength: pwd.length >= 6,
+    hasUpper: /[A-Z]/.test(pwd),
+    hasNumber: /[0-9]/.test(pwd),
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+  };
+};
+const isValidPassword = (pwd: string) => {
+  const s = checkPasswordStrength(pwd);
+  return s.hasMinLength && s.hasUpper && s.hasNumber && s.hasSpecial;
+};
 
 interface OnboardAgentSlideoverProps {
   companyId: string;
   companyName: string;
   /** role forced at open — "admin" | "hr" | "employee" */
   defaultRole?: "admin" | "hr" | "employee";
+  customDepartments?: string[];
   customBranches?: string[];
   onClose: () => void;
   onSuccess: () => void;
@@ -19,6 +44,7 @@ export default function OnboardAgentSlideover({
   companyId,
   companyName,
   defaultRole = "admin",
+  customDepartments,
   customBranches,
   onClose,
   onSuccess,
@@ -31,21 +57,32 @@ export default function OnboardAgentSlideover({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [empRole, setEmpRole] = useState<"admin" | "hr" | "employee">(defaultRole);
   const [dateOfBirth, setDateOfBirth] = useState("");
 
   // Section 2 — placement
-  const [department, setDepartment] = useState("Management");
+  const [department, setDepartment] = useState(customDepartments && customDepartments.length > 0 ? customDepartments[0] : "Information Technology");
   const [designation, setDesignation] = useState("Manager");
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split("T")[0]);
   const [branch, setBranch] = useState("Head Office");
+  const [employmentType, setEmploymentType] = useState<"contract" | "permanent" | "consultant" | "">("");
 
   // Section 3 — salary
   const [salaryBasic, setSalaryBasic] = useState("");
   const [salaryHra, setSalaryHra] = useState("");
+  const [salaryTelephone, setSalaryTelephone] = useState("");
+  const [salaryFuel, setSalaryFuel] = useState("");
+  const [salaryProfDev, setSalaryProfDev] = useState("");
+  const [salaryLta, setSalaryLta] = useState("");
   const [salaryAllowances, setSalaryAllowances] = useState("");
   const [salaryPf, setSalaryPf] = useState("");
+  const [salaryPfMode, setSalaryPfMode] = useState<"percentage" | "fixed_1800" | "custom">("percentage");
   const [salaryTds, setSalaryTds] = useState("");
+  const [salaryTdsOptIn, setSalaryTdsOptIn] = useState<boolean>(true);
+  const [salaryTdsMode, setSalaryTdsMode] = useState<"slab" | "custom">("slab");
+  const [salaryEsiOptIn, setSalaryEsiOptIn] = useState<boolean>(true);
+  const [salaryEsi, setSalaryEsi] = useState("");
 
   // Section 4 — bank
   const [bankAccount, setBankAccount] = useState("");
@@ -60,7 +97,11 @@ export default function OnboardAgentSlideover({
   const [emergencyRelation, setEmergencyRelation] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
 
-  // Section 7 — bio
+  // Section 7 — PAN & UAN
+  const [pan, setPan] = useState("");
+  const [uan, setUan] = useState("");
+
+  // Section 8 — bio
   const [bio, setBio] = useState("");
 
   // Profile photo
@@ -86,10 +127,43 @@ export default function OnboardAgentSlideover({
       setError("Full name, email, and password are required.");
       return;
     }
+    if (phone.trim() && !isValidPhoneNumber(phone)) {
+      const is91 = phone.trim().startsWith("+91") || phone.trim().startsWith("91");
+      setError(is91 ? "Invalid Phone Number! Numbers with +91 must contain exactly 10 digits after +91 (total 12 digits)." : "Invalid Phone Number! Numbers without +91 must contain exactly 10 digits.");
+      return;
+    }
+    if (!isValidPassword(password)) {
+      setError("Password must be at least 6 characters and contain at least 1 capital letter, 1 number, and 1 special symbol (!@#$%^&*).");
+      return;
+    }
+    if (pan.trim() && !isValidPAN(pan)) {
+      setError("Invalid PAN Number format! PAN must be 5 letters, 4 numbers, and 1 letter (e.g. ABCDE1234F).");
+      return;
+    }
+    if (uan.trim() && !isValidUAN(uan)) {
+      setError("Invalid UAN Number format! UAN must be 12 digits (e.g. 101146669488).");
+      return;
+    }
     setError(null);
     setSubmitting(true);
 
     try {
+      let finalAvatarUrl = profileImagePreview || undefined;
+      if (profileImageFile) {
+        try {
+          const formData = new FormData();
+          formData.append("file", profileImageFile);
+          formData.append("bucket", "employee-avatars");
+          const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+          const uploadData = await uploadRes.json();
+          if (uploadRes.ok && uploadData.url) {
+            finalAvatarUrl = uploadData.url;
+          }
+        } catch (uploadErr) {
+          console.error("Failed to upload avatar in slideover:", uploadErr);
+        }
+      }
+
       const res = await fetch(`/api/superadmin/companies/${companyId}/admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,11 +180,21 @@ export default function OnboardAgentSlideover({
           joiningDate,
           dateOfBirth,
           branch,
+          employmentType,
           salaryBasic: Number(salaryBasic) || 0,
           salaryHra: Number(salaryHra) || 0,
+          salaryTelephone: Number(salaryTelephone) || 0,
+          salaryFuel: Number(salaryFuel) || 0,
+          salaryProfDev: Number(salaryProfDev) || 0,
+          salaryLta: Number(salaryLta) || 0,
           salaryAllowances: Number(salaryAllowances) || 0,
           salaryPf: Number(salaryPf) || 0,
+          salaryPfMode,
           salaryTds: Number(salaryTds) || 0,
+          salaryTdsMode,
+          salaryTdsOptIn,
+          salaryEsi: Number(salaryEsi) || 0,
+          salaryEsiOptIn,
           bankAccount,
           bankName,
           bankIfsc,
@@ -119,7 +203,11 @@ export default function OnboardAgentSlideover({
           emergencyRelation,
           emergencyPhone,
           bio,
-          avatarUrl: profileImagePreview || undefined,
+          avatarUrl: finalAvatarUrl,
+          customFields: {
+            pan: pan.trim().toUpperCase(),
+            uan: uan.trim(),
+          },
         }),
       });
 
@@ -201,21 +289,91 @@ export default function OnboardAgentSlideover({
               </div>
               <div>
                 <label className={labelCls}>Phone Number</label>
-                <input type="text" value={phone} onChange={e => setPhone(e.target.value)}
-                  placeholder="e.g. +91 99999 88888" className={inputCls} />
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={e => {
+                    setPhone(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="e.g. +91 99999 88888"
+                  className={`${inputCls} ${
+                    phone.trim() && !isValidPhoneNumber(phone)
+                      ? "border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-50/20"
+                      : phone.trim() && isValidPhoneNumber(phone)
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                      : ""
+                  }`}
+                />
+                {phone.trim() && !isValidPhoneNumber(phone) ? (
+                  <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3 shrink-0" />
+                    {phone.trim().startsWith("+91") || phone.trim().startsWith("91")
+                      ? "Phone with +91 must have exactly 10 digits after country code (total 12 digits)"
+                      : "Phone number without +91 must be exactly 10 digits"}
+                  </p>
+                ) : phone.trim() && isValidPhoneNumber(phone) ? (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    Valid Phone Number format ({phone.trim().startsWith("+91") || phone.trim().startsWith("91") ? "12 digits with +91" : "10 digits"})
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label className={labelCls}>Password *</label>
                 <div className="relative">
-                  <input type={showPassword ? "text" : "password"} value={password}
-                    onChange={e => setPassword(e.target.value)}
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={e => {
+                      setPassword(e.target.value);
+                      if (error) setError(null);
+                    }}
+                    onFocus={() => setIsPasswordFocused(true)}
+                    onBlur={() => setIsPasswordFocused(false)}
                     placeholder="Set login password"
-                    className={`${inputCls} pr-10`} required />
+                    className={`${inputCls} pr-10 ${
+                      password && !isValidPassword(password)
+                        ? "border-amber-500 focus:border-amber-500"
+                        : password && isValidPassword(password)
+                        ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                        : ""
+                    }`}
+                    required
+                  />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-violet-500 transition-colors cursor-pointer" tabIndex={-1}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+
+                {/* Live Password Strength Requirements Checklist — Shown when field is focused or being typed */}
+                {(isPasswordFocused || (password.length > 0 && !isValidPassword(password))) && (() => {
+                  const s = checkPasswordStrength(password);
+                  return (
+                    <div className="mt-2 p-2.5 bg-slate-50 dark:bg-[#0c0c0c] rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-1 text-[10px] animate-in fade-in slide-in-from-top-1 duration-150">
+                      <p className="font-bold text-slate-500 dark:text-gray-400 mb-1 uppercase tracking-wider text-[9px]">Password Requirements:</p>
+                      <div className="grid grid-cols-2 gap-1.5 font-medium">
+                        <div className={`flex items-center gap-1.5 ${s.hasUpper ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                          {s.hasUpper ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">A</span>}
+                          <span>1 Capital Letter (A-Z)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${s.hasNumber ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                          {s.hasNumber ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">1</span>}
+                          <span>1 Numeric Digit (0-9)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${s.hasSpecial ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                          {s.hasSpecial ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">#</span>}
+                          <span>1 Special Symbol (!@#$)</span>
+                        </div>
+                        <div className={`flex items-center gap-1.5 ${s.hasMinLength ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                          {s.hasMinLength ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">6</span>}
+                          <span>Min 6 Characters</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <label className={labelCls}>Role Type</label>
@@ -274,7 +432,10 @@ export default function OnboardAgentSlideover({
               <div>
                 <label className={labelCls}>Department</label>
                 <select value={department} onChange={e => setDepartment(e.target.value)} className={inputCls}>
-                  {["Management", "Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"].map(d => (
+                  {(customDepartments && customDepartments.length > 0
+                    ? customDepartments
+                    : ["Information Technology", "Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales", "Finance", "Executive"]
+                  ).map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -297,19 +458,30 @@ export default function OnboardAgentSlideover({
                   ))}
                 </select>
               </div>
+              <div>
+                <label className={labelCls}>Employment Type *</label>
+                <select value={employmentType} onChange={e => setEmploymentType(e.target.value as any)} className={inputCls}>
+                  <option value="">Select Employment Type...</option>
+                  <option value="permanent">Permanent</option>
+                  <option value="contract">Contract</option>
+                  <option value="consultant">Consultant</option>
+                </select>
+              </div>
             </div>
           </div>
 
           {/* 3. Salary */}
           <div>
             <h4 className={sectionTitle}>3. Salary Allocation Break-up (Monthly)</h4>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {[
                 { label: "Basic Salary (INR)", value: salaryBasic, set: setSalaryBasic, ph: "45000" },
                 { label: "HRA (INR)", value: salaryHra, set: setSalaryHra, ph: "18000" },
-                { label: "Allowances (INR)", value: salaryAllowances, set: setSalaryAllowances, ph: "10000" },
-                { label: "PF Deduction (INR)", value: salaryPf, set: setSalaryPf, ph: "3200" },
-                { label: "TDS / Prof. Tax (INR)", value: salaryTds, set: setSalaryTds, ph: "6150" },
+                { label: "Telephone Allowance (INR)", value: salaryTelephone, set: setSalaryTelephone, ph: "1000" },
+                { label: "Fuel Allowance (INR)", value: salaryFuel, set: setSalaryFuel, ph: "8000" },
+                { label: "Professional Dev. (INR)", value: salaryProfDev, set: setSalaryProfDev, ph: "1000" },
+                { label: "LTA (INR)", value: salaryLta, set: setSalaryLta, ph: "1650" },
+                { label: "Special Allowance (INR)", value: salaryAllowances, set: setSalaryAllowances, ph: "10000" },
               ].map(f => (
                 <div key={f.label} className="flex flex-col justify-end">
                   <label className="block text-[10px] font-semibold text-slate-500 dark:text-gray-400 mb-1">{f.label}</label>
@@ -317,6 +489,92 @@ export default function OnboardAgentSlideover({
                     className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 p-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono focus:outline-none focus:border-violet-500" />
                 </div>
               ))}
+            </div>
+
+            {/* Statutory Deductions: PF, TDS, ESI */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3">
+              {/* PF Mode */}
+              <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-1.5">
+                <label className="block text-[10px] font-bold text-slate-600 dark:text-gray-300">Provident Fund (PF)</label>
+                <select
+                  value={salaryPfMode}
+                  onChange={e => setSalaryPfMode(e.target.value as any)}
+                  className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-2 py-1 text-xs rounded-lg border border-slate-200 dark:border-[#222]"
+                >
+                  <option value="percentage">12% of Basic</option>
+                  <option value="fixed_1800">Fixed ₹1,800 Cap</option>
+                  <option value="custom">Custom ₹</option>
+                </select>
+                {salaryPfMode === "custom" && (
+                  <input
+                    type="number"
+                    value={salaryPf}
+                    onChange={e => setSalaryPf(e.target.value)}
+                    placeholder="PF ₹"
+                    className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 p-1 text-xs rounded border"
+                  />
+                )}
+              </div>
+
+              {/* TDS Opt-In */}
+              <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="block text-[10px] font-bold text-slate-600 dark:text-gray-300">TDS Income Tax</label>
+                  <button
+                    type="button"
+                    onClick={() => setSalaryTdsOptIn(!salaryTdsOptIn)}
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${salaryTdsOptIn ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400" : "bg-slate-200 text-slate-600"}`}
+                  >
+                    {salaryTdsOptIn ? "Opted IN" : "Opted OUT"}
+                  </button>
+                </div>
+                {salaryTdsOptIn ? (
+                  <select
+                    value={salaryTdsMode}
+                    onChange={e => setSalaryTdsMode(e.target.value as any)}
+                    className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-2 py-1 text-xs rounded-lg border border-slate-200 dark:border-[#222]"
+                  >
+                    <option value="slab">Auto Tax Slab (5%)</option>
+                    <option value="custom">Manual TDS ₹</option>
+                  </select>
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">No TDS deducted</p>
+                )}
+                {salaryTdsOptIn && salaryTdsMode === "custom" && (
+                  <input
+                    type="number"
+                    value={salaryTds}
+                    onChange={e => setSalaryTds(e.target.value)}
+                    placeholder="TDS ₹"
+                    className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 p-1 text-xs rounded border"
+                  />
+                )}
+              </div>
+
+              {/* ESI Opt-In */}
+              <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="block text-[10px] font-bold text-slate-600 dark:text-gray-300">ESI Deduction</label>
+                  <button
+                    type="button"
+                    onClick={() => setSalaryEsiOptIn(!salaryEsiOptIn)}
+                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${salaryEsiOptIn ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400" : "bg-slate-200 text-slate-600"}`}
+                  >
+                    {salaryEsiOptIn ? "ESI Active" : "ESI Exempt"}
+                  </button>
+                </div>
+                {salaryEsiOptIn ? (
+                  <input
+                    type="number"
+                    value={salaryEsi}
+                    onChange={e => setSalaryEsi(e.target.value)}
+                    placeholder="Auto ~0.75% or custom ₹"
+                    className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 p-1.5 text-xs rounded-lg border font-mono"
+                  />
+                ) : (
+                  <p className="text-[10px] text-slate-400 italic">ESI Exempted</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -373,7 +631,80 @@ export default function OnboardAgentSlideover({
             </div>
           </div>
 
-          {/* 7. Bio */}
+          {/* 7. PAN & UAN */}
+          <div>
+            <h4 className={sectionTitle}>7. Identity &amp; Compliance Documents</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>PAN Number</label>
+                <input
+                  type="text"
+                  value={pan}
+                  onChange={e => {
+                    setPan(e.target.value.toUpperCase().trim());
+                    if (error) setError(null);
+                  }}
+                  placeholder="e.g. ABCDE1234F"
+                  maxLength={10}
+                  className={`${inputCls} font-mono tracking-widest uppercase transition-colors ${
+                    pan.trim() && !isValidPAN(pan)
+                      ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                      : pan.trim() && isValidPAN(pan)
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                      : "border-slate-100 dark:border-[#1a1a1a]"
+                  }`}
+                />
+                {pan.trim() && !isValidPAN(pan) ? (
+                  <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3 shrink-0" />
+                    Invalid PAN format (5 letters, 4 numbers, 1 letter)
+                  </p>
+                ) : pan.trim() && isValidPAN(pan) ? (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    Valid PAN Number format
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 mt-1">Permanent Account Number (10 characters, e.g. ABCDE1234F)</p>
+                )}
+              </div>
+              <div>
+                <label className={labelCls}>UAN Number</label>
+                <input
+                  type="text"
+                  value={uan}
+                  onChange={e => {
+                    setUan(e.target.value.replace(/\D/g, ""));
+                    if (error) setError(null);
+                  }}
+                  placeholder="e.g. 101146669488"
+                  maxLength={12}
+                  className={`${inputCls} font-mono tracking-widest transition-colors ${
+                    uan.trim() && !isValidUAN(uan)
+                      ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                      : uan.trim() && isValidUAN(uan)
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                      : "border-slate-100 dark:border-[#1a1a1a]"
+                  }`}
+                />
+                {uan.trim() && !isValidUAN(uan) ? (
+                  <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3 shrink-0" />
+                    Invalid UAN format (Must be 12 digits)
+                  </p>
+                ) : uan.trim() && isValidUAN(uan) ? (
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    Valid UAN Number format
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 mt-1">Universal Account Number (12 digits) for PF</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 8. Bio */}
           <div>
             <label className={labelCls}>Employee Bio / Profile Summary</label>
             <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2}

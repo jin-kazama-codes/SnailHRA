@@ -341,49 +341,118 @@ export async function GET(request: Request) {
                 name: d.name,
                 category: d.category || "ID Proof",
                 uploadedAt: d.uploaded_at || d.uploadedAt || new Date().toISOString().split('T')[0],
-                size: d.size || "1.5 MB",
-                fileUrl: d.file_url || d.fileUrl || ""
+                size: d.size || "1.2 MB",
+                fileUrl: d.file_url || d.fileUrl || d.url || ""
               }));
             const docMap = new Map();
             docList.forEach(d => docMap.set(d.id, d));
             relDocs.forEach(d => docMap.set(d.id, d));
             docList = Array.from(docMap.values());
           }
+          docList = docList.map((d: any) => ({
+            id: d.id || `doc-${Math.random()}`,
+            name: d.name || "Document",
+            category: d.category || "ID Proof",
+            uploadedAt: d.uploadedAt || d.uploaded_at || new Date().toISOString().split('T')[0],
+            size: d.size || "1.2 MB",
+            fileUrl: d.fileUrl || d.file_url || d.url || ""
+          }));
+
+          const customFieldsFromRow = typeof row.custom_fields === "string" ? JSON.parse(row.custom_fields) : row.custom_fields;
+          const panVal = String(row.pan || customFieldsFromRow?.pan || fallbackEmp?.customFields?.pan || (fallbackEmp as any)?.pan || "");
+          const uanVal = String(row.uan || customFieldsFromRow?.uan || fallbackEmp?.customFields?.uan || (fallbackEmp as any)?.uan || "");
 
           return {
             id: row.id,
             companyId: row.company_id || row.companyId || fallbackEmp?.companyId || "",
+            prefix: row.prefix || fallbackEmp?.prefix || "Mr",
             fullName: capitalizeName(row.full_name || row.fullName || fallbackEmp?.fullName || ""),
+            gender: row.gender || fallbackEmp?.gender || "Male",
             email: row.email || fallbackEmp?.email || "",
             phone: row.phone || fallbackEmp?.phone || "",
             role: row.role || fallbackEmp?.role || "employee",
             designationId: row.designation_id || row.designationId || fallbackEmp?.designationId || "des-4",
-            department: row.department || fallbackEmp?.department || "Loans",
+            department: row.department || fallbackEmp?.department || "Information Technology",
             branch: row.branch || row.branch_name || fallbackEmp?.branch || "Mumbai Branch",
+            employmentType: row.employment_type || row.employmentType || fallbackEmp?.employmentType || "",
             joiningDate: row.joining_date || row.joiningDate || fallbackEmp?.joiningDate || "2024-03-15",
             status: row.status || fallbackEmp?.status || "Active",
             salary: {
               basic: Number(row.salary_basic ?? salaryFromRow?.basic ?? fallbackEmp?.salary?.basic ?? 45000),
               hra: Number(row.salary_hra ?? salaryFromRow?.hra ?? fallbackEmp?.salary?.hra ?? 18000),
+              telephone: Number(row.salary_telephone ?? salaryFromRow?.telephone ?? fallbackEmp?.salary?.telephone ?? 0),
+              fuel: Number(row.salary_fuel ?? salaryFromRow?.fuel ?? fallbackEmp?.salary?.fuel ?? 0),
+              professionalDev: Number(row.salary_professional_dev ?? salaryFromRow?.professionalDev ?? fallbackEmp?.salary?.professionalDev ?? 0),
+              lta: Number(row.salary_lta ?? salaryFromRow?.lta ?? fallbackEmp?.salary?.lta ?? 0),
               allowances: Number(row.salary_allowances ?? salaryFromRow?.allowances ?? fallbackEmp?.salary?.allowances ?? 10000),
               pfDeduction: Number(row.salary_pf_deduction ?? salaryFromRow?.pfDeduction ?? fallbackEmp?.salary?.pfDeduction ?? 3200),
-              tdsDeduction: Number(row.salary_tds_deduction ?? salaryFromRow?.tdsDeduction ?? fallbackEmp?.salary?.tdsDeduction ?? 0)
+              pfMode: row.salary_pf_mode || salaryFromRow?.pfMode || fallbackEmp?.salary?.pfMode || "percentage",
+              tdsDeduction: Number(row.salary_tds_deduction ?? salaryFromRow?.tds_deduction ?? fallbackEmp?.salary?.tdsDeduction ?? 0),
+              tdsMode: row.salary_tds_mode || salaryFromRow?.tdsMode || fallbackEmp?.salary?.tdsMode || "slab",
+              tdsOptIn: row.salary_tds_opt_in !== undefined ? Boolean(row.salary_tds_opt_in) : (salaryFromRow?.tdsOptIn !== undefined ? Boolean(salaryFromRow.tdsOptIn) : (fallbackEmp?.salary?.tdsOptIn !== undefined ? fallbackEmp.salary.tdsOptIn : true)),
+              esiOptIn: row.salary_esi_opt_in !== undefined ? Boolean(row.salary_esi_opt_in) : (salaryFromRow?.esiOptIn !== undefined ? Boolean(salaryFromRow.esiOptIn) : (fallbackEmp?.salary?.esiOptIn !== undefined ? fallbackEmp.salary.esiOptIn : true)),
+              esiDeduction: Number(row.salary_esi_deduction ?? salaryFromRow?.esiDeduction ?? fallbackEmp?.salary?.esiDeduction ?? 0)
             },
             bankDetails: {
               accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? fallbackEmp?.bankDetails?.accountNumber ?? ""),
-              bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? fallbackEmp?.bankDetails?.bankName ?? "State Bank of India"),
+              bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? fallbackEmp?.bankDetails?.bankName ?? ""),
               ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? fallbackEmp?.bankDetails?.ifsc ?? "")
             },
-            address: row.address || fallbackEmp?.address || "",
+            address: (() => {
+              const a = String(row.address || fallbackEmp?.address || "").trim();
+              return a ? (a.charAt(0).toUpperCase() + a.slice(1)) : "";
+            })(),
             emergencyContact: {
               name: row.emergency_contact_name || emergencyFromRow?.name || fallbackEmp?.emergencyContact?.name || "",
               relation: row.emergency_contact_relation || emergencyFromRow?.relation || fallbackEmp?.emergencyContact?.relation || "",
               phone: row.emergency_contact_phone || emergencyFromRow?.phone || fallbackEmp?.emergencyContact?.phone || ""
             },
+            customFields: {
+              pan: panVal,
+              uan: uanVal
+            },
+            pan: panVal,
+            uan: uanVal,
             documents: docList,
-            onboardingTasks: typeof row.onboarding_tasks === "string" ? JSON.parse(row.onboarding_tasks) : (row.onboardingTasks || fallbackEmp?.onboardingTasks || []),
+            onboardingChecklist: (() => {
+              let list: any[] = [];
+              const raw = row.onboarding_checklist ?? row.onboardingChecklist;
+              if (Array.isArray(raw) && raw.length > 0) list = raw;
+              else if (typeof raw === "string" && raw.trim()) {
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
+                } catch (e) {}
+              }
+              if (list.length === 0) list = fallbackEmp?.onboardingChecklist || [];
+              return list.map((i: any) => ({
+                ...i,
+                fileUrl: i.fileUrl || i.file_url || i.url || ""
+              }));
+            })(),
+            exitChecklist: (() => {
+              let list: any[] = [];
+              const raw = row.exit_checklist ?? row.exitChecklist;
+              if (Array.isArray(raw) && raw.length > 0) list = raw;
+              else if (typeof raw === "string" && raw.trim()) {
+                try {
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed) && parsed.length > 0) list = parsed;
+                } catch (e) {}
+              }
+              if (list.length === 0) list = fallbackEmp?.exitChecklist || [];
+              return list.map((i: any) => ({
+                ...i,
+                fileUrl: i.fileUrl || i.file_url || i.url || ""
+              }));
+            })(),
+            exitClearedAt: row.exit_cleared_at || row.exitClearedAt || fallbackEmp?.exitClearedAt || undefined,
+            exitClearedBy: row.exit_cleared_by || row.exitClearedBy || fallbackEmp?.exitClearedBy || undefined,
             avatarUrl: row.avatar_url || row.avatarUrl || fallbackEmp?.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-            bio: row.bio || fallbackEmp?.bio || "",
+            bio: (() => {
+              const b = String(row.bio || fallbackEmp?.bio || "").trim();
+              return b ? (b.charAt(0).toUpperCase() + b.slice(1)) : "";
+            })(),
             password: row.password || fallbackEmp?.password || "",
             dateOfBirth: row.date_of_birth || fallbackEmp?.dateOfBirth || undefined
           };
@@ -594,6 +663,10 @@ export async function GET(request: Request) {
             allowedIps: parsedIps,
             companyId: wifiData.company_id || undefined
           };
+          // Dynamically load show_leave_count from Supabase column
+          if (wifiData.show_leave_count !== null && wifiData.show_leave_count !== undefined) {
+            db.showLeaveCount = wifiData.show_leave_count;
+          }
         }
       } catch (err) {
         console.warn("Supabase wifi_restriction_settings hydration error:", err);

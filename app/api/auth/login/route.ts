@@ -58,7 +58,7 @@ export async function POST(request: Request) {
             },
             bankDetails: {
               accountNumber: String(data.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
-              bankName: String(data.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+              bankName: String(data.bank_name ?? bankDetailsFromRow?.bankName ?? ""),
               ifsc: String(data.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
             },
             address: data.address || "",

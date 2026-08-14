@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         },
         bankDetails: {
           accountNumber: String(item.bankDetails?.accountNumber ?? item.bankAccount ?? `999${Math.floor(10000000 + Math.random() * 90000000)}`),
-          bankName: String(item.bankDetails?.bankName ?? item.bankName ?? "State Bank of India"),
+          bankName: String(item.bankDetails?.bankName ?? item.bankName ?? ""),
           ifsc: String(item.bankDetails?.ifsc ?? item.bankIfsc ?? "SBIN0001234")
         },
         address: item.address || "N/A",

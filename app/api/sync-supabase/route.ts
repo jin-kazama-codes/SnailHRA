@@ -80,6 +80,7 @@ export async function POST() {
         designation_id: emp.designationId,
         department: emp.department,
         branch: emp.branch,
+        employment_type: emp.employmentType || null,
         joining_date: emp.joiningDate,
         status: emp.status,
         address: emp.address,

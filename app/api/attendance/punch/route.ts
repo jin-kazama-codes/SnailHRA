@@ -49,25 +49,49 @@ function getLocalMachineIps(): string[] {
   return ips;
 }
 
+/**
+ * Checks whether a given IPv4 address falls within a CIDR subnet.
+ * e.g. isIpInCidr("223.233.66.140", "223.233.66.0/24") => true
+ */
+function isIpInCidr(ip: string, cidr: string): boolean {
+  try {
+    const [network, prefixStr] = cidr.split("/");
+    const prefix = parseInt(prefixStr, 10);
+    if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
+
+    const ipToInt = (addr: string): number => {
+      return addr.split(".").reduce((acc, octet) => (acc << 8) | parseInt(octet, 10), 0) >>> 0;
+    };
+
+    const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
+    return (ipToInt(ip) & mask) === (ipToInt(network) & mask);
+  } catch {
+    return false;
+  }
+}
+
 function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
   const clientIp = normalizeIp(rawClientIp);
   if (!clientIp) return false;
 
-  const normalizedAllowed = allowedIpsList.map(normalizeIp).filter(Boolean);
+  for (const entry of allowedIpsList) {
+    const normalized = normalizeIp(entry);
+    if (!normalized) continue;
 
-  // 1. Direct exact match
-  if (normalizedAllowed.includes(clientIp)) {
-    return true;
-  }
+    // CIDR range match (e.g. 223.233.66.0/24)
+    if (normalized.includes("/")) {
+      if (isIpInCidr(clientIp, normalized)) return true;
+      // Also check all local machine IPs for localhost scenario
+      if (clientIp === "127.0.0.1") {
+        const machineIps = getLocalMachineIps();
+        if (machineIps.some(mIp => isIpInCidr(mIp, normalized))) return true;
+      }
+    } else {
+      // 1. Exact match
+      if (normalized === clientIp) return true;
 
-  // 2. Localhost requests (localhost:3000):
-  // clientIp evaluates to 127.0.0.1. We check if ANY active IPv4 network interface IP of the machine
-  // or 127.0.0.1 is in the allowed list!
-  if (clientIp === "127.0.0.1") {
-    const machineIps = getLocalMachineIps();
-    const hasMatch = machineIps.some(mIp => normalizedAllowed.includes(mIp));
-    if (hasMatch) {
-      return true;
+      // 2. Localhost: check machine IPs against exact allowed entry
+      if (clientIp === "127.0.0.1" && getLocalMachineIps().includes(normalized)) return true;
     }
   }
 

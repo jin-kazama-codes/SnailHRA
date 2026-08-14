@@ -26,7 +26,13 @@ export async function PUT(
 
     let emp: any;
     if (index >= 0) {
-      db.employees[index] = { ...db.employees[index], ...body };
+      const existingSalary = db.employees[index].salary || {};
+      const mergedSalary = body.salary ? { ...existingSalary, ...body.salary } : existingSalary;
+      db.employees[index] = {
+        ...db.employees[index],
+        ...body,
+        salary: mergedSalary
+      };
       emp = db.employees[index];
     } else {
       emp = { ...body, id: empId };
@@ -46,6 +52,7 @@ export async function PUT(
           designation_id: emp.designationId,
           department: emp.department,
           branch: emp.branch,
+          employment_type: emp.employmentType || emp.employment_type || null,
           joining_date: emp.joiningDate,
           date_of_birth: emp.dateOfBirth || null,
           company_id: emp.companyId || emp.company_id || null,
@@ -58,6 +65,10 @@ export async function PUT(
           bio: emp.bio,
           salary_basic: emp.salary?.basic,
           salary_hra: emp.salary?.hra,
+          salary_telephone: emp.salary?.telephone || 0,
+          salary_fuel: emp.salary?.fuel || 0,
+          salary_professional_dev: emp.salary?.professionalDev || 0,
+          salary_lta: emp.salary?.lta || 0,
           salary_allowances: emp.salary?.allowances,
           salary_pf_deduction: emp.salary?.pfDeduction,
           salary_tds_deduction: emp.salary?.tdsDeduction,

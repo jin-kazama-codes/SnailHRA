@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const bucketOverride = (formData.get("bucket") as string) || BUCKET;
-    const folder = (formData.get("folder") as string) || ""; // e.g. "company-logos"
+    const folder = (formData.get("folder") as string) || "checklist-documents";
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });

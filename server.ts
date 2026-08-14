@@ -349,7 +349,7 @@ async function fetchAllFromSupabase(): Promise<AppState> {
           },
           bankDetails: {
             accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
-            bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+            bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? ""),
             ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
           },
           address: row.address || "",
@@ -1054,24 +1054,32 @@ async function startServer() {
     const newEmp: Employee = {
       id: newEmpId,
       companyId: empData.companyId || MGM_COMPANY_ID,
+      prefix: empData.prefix,
       fullName: empData.fullName,
+      gender: empData.gender,
       email: empData.email,
       phone: empData.phone || "+91 99999 88888",
       role: empData.role || "employee",
       designationId: empData.designationId || "des-4",
       department: empData.department || "Loans",
       joiningDate: empData.joiningDate || new Date().toISOString().split('T')[0],
+      dateOfBirth: empData.dateOfBirth,
+      branch: empData.branch,
       status: empData.status || "Active",
       salary: {
         basic: Number(empData.salaryBasic) || 40000,
         hra: Number(empData.salaryHra) || 16000,
+        telephone: Number(empData.salaryTelephone) || 0,
+        fuel: Number(empData.salaryFuel) || 0,
+        professionalDev: Number(empData.salaryProfDev) || 0,
+        lta: Number(empData.salaryLta) || 0,
         allowances: Number(empData.salaryAllowances) || 8000,
         pfDeduction: Number(empData.salaryPf) || 3600,
         tdsDeduction: Number(empData.salaryTds) || 0
       },
       bankDetails: {
         accountNumber: empData.bankAccount || "112233445566",
-        bankName: empData.bankName || "State Bank of India",
+        bankName: empData.bankName || "",
         ifsc: empData.bankIfsc || "SBIN0000001"
       },
       address: empData.address || "Main Street, Financial Hub",
@@ -1079,6 +1087,10 @@ async function startServer() {
         name: empData.emergencyName || "Guardian",
         relation: empData.emergencyRelation || "Spouse",
         phone: empData.emergencyPhone || "+91 99999 88888"
+      },
+      customFields: empData.customFields || {
+        pan: (empData.pan || "").toUpperCase(),
+        uan: (empData.uan || "")
       },
       documents: [],
       onboardingTasks: [
@@ -1903,7 +1915,15 @@ async function startServer() {
     }
 
     // Calculate deductions
-    const pf = employee.salary.pfDeduction || Math.round(employee.salary.basic * 0.08);
+    const basic = employee.salary.basic;
+    const hra = employee.salary.hra;
+    const telephone = employee.salary.telephone || 0;
+    const fuel = employee.salary.fuel || 0;
+    const professionalDev = employee.salary.professionalDev || 0;
+    const lta = employee.salary.lta || 0;
+    const allowances = employee.salary.allowances;
+    const grossEarnings = basic + hra + telephone + fuel + professionalDev + lta + allowances;
+    const pf = employee.salary.pfDeduction || Math.round(basic * 0.08);
     
     // Find pending fines for this employee to deduct
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Pending");
@@ -1912,17 +1932,21 @@ async function startServer() {
     // Use configured TDS/Profession Tax if available, otherwise calculate roughly
     const tax = typeof employee.salary.tdsDeduction === "number"
       ? employee.salary.tdsDeduction
-      : Math.round((employee.salary.basic + employee.salary.hra + employee.salary.allowances) * 0.05);
+      : Math.round(grossEarnings * 0.05);
 
-    const netPay = (employee.salary.basic + employee.salary.hra + employee.salary.allowances) - pf - finesDeduction - tax;
+    const netPay = grossEarnings - pf - finesDeduction - tax;
 
     const newPayslip: Payslip = {
       id: "pay-" + Date.now(),
       employeeId,
       month,
-      basic: employee.salary.basic,
-      hra: employee.salary.hra,
-      allowances: employee.salary.allowances,
+      basic,
+      hra,
+      telephone,
+      fuel,
+      professionalDev,
+      lta,
+      allowances,
       finesDeducted: finesDeduction,
       pfDeduction: pf,
       taxDeduction: tax,

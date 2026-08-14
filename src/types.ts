@@ -39,8 +39,10 @@ export interface CorporateAllowanceFaq {
 export interface EmployeeDocument {
   id: string;
   name: string;
-  category: "ID Proof" | "Contract" | "Tax Document" | "Educational" | "Other";
+  category: "ID Proof" | "Contract" | "Tax Document" | "Educational" | "Other" | "Onboarding Document Checklist" | "Employee Exit & Separation Clearance Checklist" | string;
   uploadedAt: string;
+  approvedAt?: string;
+  reviewedBy?: string;
   size: string;
   fileUrl?: string;
 }
@@ -55,6 +57,7 @@ export interface OnboardingTask {
 export interface Employee {
   id: string;
   companyId?: string; // tenant company reference
+  employeeNumber?: number; // sequential integer, used for employee code display (e.g. MGMDIR0003)
   prefix?: "Mr" | "Mrs" | "Miss" | "Ms"; // honorific prefix
   fullName: string;
   gender?: "Male" | "Female" | "Other";
@@ -65,13 +68,22 @@ export interface Employee {
   department: string;
   joiningDate: string;
   dateOfBirth?: string;
-  status: "Active" | "Probation" | "Suspended";
+  status: "Active" | "Probation" | "Suspended" | "Resigned";
   salary: {
     basic: number;
     hra: number;
-    allowances: number;
+    telephone?: number;       // Telephone / communication allowance
+    fuel?: number;            // Fuel / conveyance allowance
+    professionalDev?: number; // Professional development allowance
+    lta?: number;             // Leave Travel Allowance
+    allowances: number;       // Special allowance (catch-all)
     pfDeduction: number;
+    pfMode?: "percentage" | "fixed_1800" | "custom";
     tdsDeduction?: number;
+    tdsMode?: "slab" | "custom";
+    tdsOptIn?: boolean;
+    esiOptIn?: boolean;
+    esiDeduction?: number;
   };
   bankDetails: {
     accountNumber: string;
@@ -86,11 +98,41 @@ export interface Employee {
   };
   documents: EmployeeDocument[];
   onboardingTasks: OnboardingTask[];
+  onboardingChecklist?: EmployeeChecklistItem[];
+  exitChecklist?: EmployeeChecklistItem[];
+  exitClearedAt?: string;
+  exitClearedBy?: string;
   avatarUrl?: string;
   bio?: string;
   branch?: string;
   password?: string;
+  employmentType?: "contract" | "permanent" | "consultant" | "";
   customFields?: Record<string, string | number | boolean>;
+}
+
+export interface ChecklistItemTemplate {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  required: boolean;
+  type: "onboarding" | "exit";
+  companyId?: string;
+}
+
+export interface EmployeeChecklistItem {
+  id: string;
+  templateId: string;
+  title: string;
+  description?: string;
+  type: "onboarding" | "exit";
+  status: "Pending" | "Uploaded" | "Approved" | "Rejected";
+  fileUrl?: string;
+  fileName?: string;
+  uploadedAt?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  comments?: string;
 }
 
 export interface AttendanceBreak {
@@ -223,10 +265,15 @@ export interface Payslip {
   month: string; // "July 2026"
   basic: number;
   hra: number;
-  allowances: number;
+  telephone: number;       // Telephone allowance
+  fuel: number;            // Fuel allowance
+  professionalDev: number; // Professional development
+  lta: number;             // Leave Travel Allowance
+  allowances: number;      // Special allowance
   finesDeducted: number;
   pfDeduction: number;
   taxDeduction: number;
+  esiDeduction?: number;
   netPay: number;
   status: "Draft" | "Generated" | "Paid";
   generatedAt: string;
@@ -248,11 +295,25 @@ export interface PayrollConfig {
   hraValue: number;
   pfType: "percentage" | "fixed";
   pfValue: number;
+  pfModeDefault?: "percentage" | "fixed_1800";
   pfExemptEmployeeIds: string[];
   allowancesType: "percentage" | "fixed";
   allowancesValue: number;
   taxType: "percentage" | "fixed";
   taxValue: number;
+  tdsOptInDefault?: boolean;
+  tdsModeDefault?: "slab" | "custom";
+  esiEnabled?: boolean;
+  esiRatePercentage?: number;
+  esiGrossCeiling?: number;
+  ltaValue?: number;
+  ltaType?: "percentage" | "fixed";
+  telephoneValue?: number;
+  telephoneType?: "percentage" | "fixed";
+  fuelValue?: number;
+  fuelType?: "percentage" | "fixed";
+  professionalDevValue?: number;
+  professionalDevType?: "percentage" | "fixed";
   updatedAt?: string;
 }
 

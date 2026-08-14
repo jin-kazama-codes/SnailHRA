@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { 
   IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText, 
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
-  ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X
+  ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X, Pencil
 } from "lucide-react";
 import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig } from "../types";
 
@@ -21,8 +21,11 @@ interface PayrollViewProps {
   onGeneratePayslip: (employeeId: string, month: string) => Promise<void> | void;
   onPayAllPayslips: (month: string) => void;
   onResetPayslip?: (employeeId: string, month: string) => Promise<void> | void;
+  onUpdateEmployee?: (id: string, updatedData: any) => Promise<void> | void;
   companyName?: string;
   companyId?: string;
+  companyLogoUrl?: string;
+  empCodePrefix?: string; // e.g. "MGMDIR" — set by admin in System Settings
 }
 
 export default function PayrollView({
@@ -38,8 +41,11 @@ export default function PayrollView({
   onGeneratePayslip,
   onPayAllPayslips,
   onResetPayslip,
+  onUpdateEmployee,
   companyName = "Your Company",
-  companyId = "a1b2c3d4-0001-0001-0001-000000000001"
+  companyId = "a1b2c3d4-0001-0001-0001-000000000001",
+  companyLogoUrl,
+  empCodePrefix = "EMP",
 }: PayrollViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"payslips" | "config">(() => {
     if (typeof window !== "undefined") {
@@ -58,8 +64,107 @@ export default function PayrollView({
     }
   }, [activeSubTab]);
 
-  const [selectedMonth, setSelectedMonth] = useState("July 2026");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return now.toLocaleString("en-IN", { month: "long", year: "numeric" });
+  });
   const [compilingEmpId, setCompilingEmpId] = useState<string | null>(null);
+
+  // Edit Allowances State before compiling slip
+  const [editingEmpForSalary, setEditingEmpForSalary] = useState<Employee | null>(null);
+  const [editTel, setEditTel] = useState("");
+  const [editFuel, setEditFuel] = useState("");
+  const [editProfDev, setEditProfDev] = useState("");
+  const [editLta, setEditLta] = useState("");
+  const [editSpAllow, setEditSpAllow] = useState("");
+  const [editPfMode, setEditPfMode] = useState<"percentage" | "fixed_1800" | "custom">("percentage");
+  const [editPfCustom, setEditPfCustom] = useState("");
+  const [editTdsOptIn, setEditTdsOptIn] = useState(true);
+  const [editTdsMode, setEditTdsMode] = useState<"slab" | "custom">("slab");
+  const [editTdsCustom, setEditTdsCustom] = useState("");
+  const [editEsiOptIn, setEditEsiOptIn] = useState(true);
+  const [editEsiCustom, setEditEsiCustom] = useState("");
+  const [isSavingSalary, setIsSavingSalary] = useState(false);
+
+  const openEditAllowancesModal = (emp: Employee) => {
+    setEditingEmpForSalary(emp);
+
+    // Helper: compute config-derived value for an allowance field
+    const basic = emp.salary?.basic || 0;
+    const configTel = config?.telephoneType === "percentage"
+      ? Math.round(basic * ((config.telephoneValue || 0) / 100))
+      : (config?.telephoneValue || 0);
+    const configFuel = config?.fuelType === "percentage"
+      ? Math.round(basic * ((config.fuelValue || 0) / 100))
+      : (config?.fuelValue || 0);
+    const configProfDev = config?.professionalDevType === "percentage"
+      ? Math.round(basic * ((config.professionalDevValue || 0) / 100))
+      : (config?.professionalDevValue || 0);
+    const configLta = config?.ltaType === "percentage"
+      ? Math.round(basic * ((config.ltaValue || 0) / 100))
+      : (config?.ltaValue || 0);
+    const configSpAllow = config?.allowancesType === "percentage"
+      ? Math.round(basic * ((config.allowancesValue || 0) / 100))
+      : (config?.allowancesValue || 0);
+
+    // Use employee's stored value if set, otherwise fall back to config-calculated default
+    setEditTel(emp.salary?.telephone ? String(emp.salary.telephone) : configTel ? String(configTel) : "");
+    setEditFuel(emp.salary?.fuel ? String(emp.salary.fuel) : configFuel ? String(configFuel) : "");
+    setEditProfDev(emp.salary?.professionalDev ? String(emp.salary.professionalDev) : configProfDev ? String(configProfDev) : "");
+    setEditLta(emp.salary?.lta ? String(emp.salary.lta) : configLta ? String(configLta) : "");
+    setEditSpAllow(emp.salary?.allowances ? String(emp.salary.allowances) : configSpAllow ? String(configSpAllow) : "");
+    setEditPfMode(emp.salary?.pfMode || (config?.pfModeDefault === "fixed_1800" ? "fixed_1800" : "percentage"));
+    setEditPfCustom(emp.salary?.pfDeduction ? String(emp.salary.pfDeduction) : "");
+    setEditTdsOptIn(emp.salary?.tdsOptIn !== undefined ? emp.salary.tdsOptIn : true);
+    setEditTdsMode(emp.salary?.tdsMode || "slab");
+    setEditTdsCustom(emp.salary?.tdsDeduction ? String(emp.salary.tdsDeduction) : "");
+    setEditEsiOptIn(emp.salary?.esiOptIn !== undefined ? emp.salary.esiOptIn : true);
+    setEditEsiCustom(emp.salary?.esiDeduction ? String(emp.salary.esiDeduction) : "");
+  };
+
+  const handleSaveAllowances = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmpForSalary || !onUpdateEmployee) return;
+
+    setIsSavingSalary(true);
+    try {
+      const basic = editingEmpForSalary.salary.basic || 0;
+      let calculatedPf = editingEmpForSalary.salary.pfDeduction;
+      if (editPfMode === "fixed_1800") {
+        calculatedPf = 1800;
+      } else if (editPfMode === "custom") {
+        calculatedPf = Number(editPfCustom) || 0;
+      } else {
+        calculatedPf = Math.round(basic * ((config?.pfValue || 12) / 100));
+      }
+
+      const updatedSalary = {
+        ...editingEmpForSalary.salary,
+        telephone: Number(editTel) || 0,
+        fuel: Number(editFuel) || 0,
+        professionalDev: Number(editProfDev) || 0,
+        lta: Number(editLta) || 0,
+        allowances: Number(editSpAllow) || 0,
+        pfMode: editPfMode,
+        pfDeduction: calculatedPf,
+        tdsOptIn: editTdsOptIn,
+        tdsMode: editTdsMode,
+        tdsDeduction: editTdsOptIn ? (editTdsMode === "custom" ? (Number(editTdsCustom) || 0) : editingEmpForSalary.salary.tdsDeduction) : 0,
+        esiOptIn: editEsiOptIn,
+        esiDeduction: editEsiOptIn ? (Number(editEsiCustom) || 0) : 0,
+      };
+
+      await onUpdateEmployee(editingEmpForSalary.id, {
+        salary: updatedSalary,
+      });
+
+      setEditingEmpForSalary(null);
+    } catch (err) {
+      console.error("Error saving allowances:", err);
+    } finally {
+      setIsSavingSalary(false);
+    }
+  };
 
   // Payroll Configuration State
   const [config, setConfig] = useState<PayrollConfig>({
@@ -143,6 +248,41 @@ export default function PayrollView({
   // Selected payslip for detailed view modal
   const [activeSlip, setActiveSlip] = useState<Payslip | null>(null);
 
+  // Number to Indian Rupees words converter
+  const numberToWordsIndian = (amount: number): string => {
+    if (!amount || amount <= 0 || isNaN(amount)) return "Zero";
+    const num = Math.floor(amount);
+    const singleDigits = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tensDigits = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+    const convertTwoDigits = (n: number): string => {
+      if (n < 20) return singleDigits[n];
+      const tens = Math.floor(n / 10);
+      const units = n % 10;
+      return tensDigits[tens] + (units ? " " + singleDigits[units] : "");
+    };
+
+    let str = "";
+    const crore = Math.floor(num / 10000000);
+    let remainder = num % 10000000;
+    const lakh = Math.floor(remainder / 100000);
+    remainder = remainder % 100000;
+    const thousand = Math.floor(remainder / 1000);
+    remainder = remainder % 1000;
+    const hundred = Math.floor(remainder / 100);
+    remainder = remainder % 100;
+
+    if (crore > 0) str += convertTwoDigits(crore) + " Crore ";
+    if (lakh > 0) str += convertTwoDigits(lakh) + " Lakh ";
+    if (thousand > 0) str += convertTwoDigits(thousand) + " Thousand ";
+    if (hundred > 0) str += convertTwoDigits(hundred) + " Hundred ";
+    if (remainder > 0) {
+      if (str.length > 0) str += "and ";
+      str += convertTwoDigits(remainder) + " ";
+    }
+    return str.trim();
+  };
+
   // Pagination state for Payroll Center list (9 items per page)
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 9;
@@ -183,6 +323,44 @@ export default function PayrollView({
     return emp ? `${emp.bankDetails.bankName} - A/C ****${emp.bankDetails.accountNumber.slice(-4)}` : "HDFC Bank";
   };
 
+  // Generate employee code: PREFIX + 4-digit zero-padded number
+  const getEmployeeCode = (emp: Employee): string => {
+    const prefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") || empCodePrefix : empCodePrefix).toUpperCase();
+    const num = emp.employeeNumber || (employees.findIndex(e => e.id === emp.id) + 1);
+    return `${prefix}${String(num).padStart(4, "0")}`;
+  };
+
+  // Get all salary components with defaults — falls back to config-derived values when employee has no per-field override
+  const getEmpSalaryComponents = (emp: Employee) => {
+    const basic = emp.salary.basic || 0;
+    const configTel = config?.telephoneType === "percentage"
+      ? Math.round(basic * ((config.telephoneValue || 0) / 100))
+      : (config?.telephoneValue || 0);
+    const configFuel = config?.fuelType === "percentage"
+      ? Math.round(basic * ((config.fuelValue || 0) / 100))
+      : (config?.fuelValue || 0);
+    const configProfDev = config?.professionalDevType === "percentage"
+      ? Math.round(basic * ((config.professionalDevValue || 0) / 100))
+      : (config?.professionalDevValue || 0);
+    const configLta = config?.ltaType === "percentage"
+      ? Math.round(basic * ((config.ltaValue || 0) / 100))
+      : (config?.ltaValue || 0);
+    const configSpAllow = config?.allowancesType === "percentage"
+      ? Math.round(basic * ((config.allowancesValue || 0) / 100))
+      : (config?.allowancesValue || 0);
+    return {
+      basic,
+      hra: emp.salary.hra || 0,
+      telephone: emp.salary.telephone || configTel,
+      fuel: emp.salary.fuel || configFuel,
+      professionalDev: emp.salary.professionalDev || configProfDev,
+      lta: emp.salary.lta || configLta,
+      allowances: emp.salary.allowances || configSpAllow,
+      pfDeduction: emp.salary.pfDeduction || 0,
+      tdsDeduction: emp.salary.tdsDeduction || 0,
+    };
+  };
+
   const currentMonthPayslips = payslips.filter(p => p.month === selectedMonth);
 
   return (
@@ -220,9 +398,21 @@ export default function PayrollView({
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-1.5 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-bold focus:outline-hidden"
             >
-              {Array.from(new Set(["June 2026", "July 2026", "August 2026", ...payslips.map(p => p.month)])).map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
+              {(() => {
+                // Generate a rolling 6-month window: 3 prior + current + 2 upcoming
+                const now = new Date();
+                const dynamicMonths: string[] = [];
+                for (let i = -3; i <= 2; i++) {
+                  const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                  dynamicMonths.push(d.toLocaleString("en-IN", { month: "long", year: "numeric" }));
+                }
+                const allMonths = Array.from(new Set([...dynamicMonths, ...payslips.map(p => p.month)]));
+                // Sort chronologically
+                allMonths.sort((a, b) => new Date(`1 ${a}`) > new Date(`1 ${b}`) ? 1 : -1);
+                return allMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ));
+              })()}
             </select>
           </div>
         )}
@@ -333,70 +523,90 @@ export default function PayrollView({
                   <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the employee's email address.</span>
                 </div>
 
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse text-xs">
+                <div className="w-full overflow-hidden">
+                  <table className="w-full text-left border-collapse text-xs table-auto">
                     <thead>
-                      <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
-                        <th className="py-2.5 px-3 whitespace-nowrap">Employee Name</th>
-                        <th className="py-2.5 px-3 whitespace-nowrap">Base Compensation</th>
-                        <th className="py-2.5 px-3 whitespace-nowrap">HRA + Allowances</th>
-                        <th className="py-2.5 px-3 whitespace-nowrap">Fines Deducted</th>
-                        <th className="py-2.5 px-3 whitespace-nowrap">Net Disbursed</th>
-                        <th className="py-2.5 px-3 whitespace-nowrap">Status</th>
-                        <th className="py-2.5 px-3 text-right whitespace-nowrap">Actions</th>
+                      <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase text-[10px] tracking-tight font-semibold">
+                        <th className="py-2.5 px-2 text-left">Employee &amp; Code</th>
+                        <th className="py-2.5 px-1.5 text-right">Basic</th>
+                        <th className="py-2.5 px-1.5 text-right">HRA</th>
+                        <th className="py-2.5 px-1.5 text-right">Tel.</th>
+                        <th className="py-2.5 px-1.5 text-right">Fuel</th>
+                        <th className="py-2.5 px-1.5 text-right">Prof Dev</th>
+                        <th className="py-2.5 px-1.5 text-right">LTA</th>
+                        <th className="py-2.5 px-1.5 text-right">Sp. Allow</th>
+                        <th className="py-2.5 px-1.5 text-right">PF+TDS</th>
+                        <th className="py-2.5 px-1.5 text-right text-rose-500">Fines</th>
+                        <th className="py-2.5 px-1.5 text-right text-emerald-600">Net Pay</th>
+                        <th className="py-2.5 px-2 text-center">Status</th>
+                        <th className="py-2.5 px-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
                       {paginatedEmployees.map(emp => {
                         const hasSlip = currentMonthPayslips.find(p => p.employeeId === emp.id);
-                        const grossEarnings = emp.salary.basic + emp.salary.hra + emp.salary.allowances;
-                        const pfDeduction = emp.salary.pfDeduction || Math.round(emp.salary.basic * 0.08);
+                        const sal = getEmpSalaryComponents(emp);
+                        const grossEarnings = sal.basic + sal.hra + sal.telephone + sal.fuel + sal.professionalDev + sal.lta + sal.allowances;
+                        const pfDeduction = sal.pfDeduction || Math.round(sal.basic * 0.08);
                         const empPendingFines = (fines || [])
                           .filter(f => f.employeeId === emp.id && f.status === "Deducted From Payroll")
                           .reduce((sum, f) => sum + f.amount, 0);
-                        const defaultTaxes = typeof emp.salary.tdsDeduction === "number"
-                          ? emp.salary.tdsDeduction
-                          : Math.round(grossEarnings * 0.05);
+                        const defaultTaxes = sal.tdsDeduction || Math.round(grossEarnings * 0.05);
                         const netSalaryEstimate = Math.max(0, grossEarnings - pfDeduction - empPendingFines - defaultTaxes);
 
                         return (
                           <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
-                            <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2 whitespace-nowrap">
-                              <div className="w-5.5 h-5.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase shrink-0">
-                                {emp.fullName.charAt(0)}
-                              </div>
-                              <div>
-                                <span className="block leading-tight">{emp.fullName}</span>
-                                <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal">{emp.department}</span>
+                            <td className="py-2 px-2">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
+                                  {emp.fullName.charAt(0)}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-slate-800 dark:text-gray-100 text-xs truncate leading-tight">
+                                    {emp.fullName}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="font-mono text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200/60 dark:border-amber-800/40">
+                                      {getEmployeeCode(emp)}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal truncate">• {emp.department}</span>
+                                  </div>
+                                </div>
                               </div>
                             </td>
-                            <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400 font-semibold whitespace-nowrap">₹{emp.salary.basic.toLocaleString()}</td>
-                            <td className="py-3 px-3 font-mono text-slate-500 dark:text-gray-500 whitespace-nowrap">₹{(emp.salary.hra + emp.salary.allowances).toLocaleString()}</td>
-                            <td className="py-3 px-3 font-mono text-rose-500 whitespace-nowrap">
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-700 dark:text-gray-300 font-semibold whitespace-nowrap">₹{sal.basic.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.hra.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.telephone.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.fuel.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.professionalDev.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.lta.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.allowances.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
                             </td>
-                            <td className="py-3 px-3 font-mono text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
                             </td>
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase ${
+                            <td className="py-2 px-2 text-center whitespace-nowrap">
+                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${
                                 hasSlip?.status === "Paid" 
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
                                   : hasSlip?.status === "Generated"
-                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
-                                  : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400"
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
+                                  : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
                               }`}>
                                 {hasSlip ? hasSlip.status : "Pending Run"}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <td className="py-2 px-2 text-right whitespace-nowrap">
                               {hasSlip ? (
-                                <div className="flex items-center justify-end space-x-2">
+                                <div className="flex items-center justify-end space-x-1.5">
                                   <button
                                     onClick={() => setActiveSlip(hasSlip)}
-                                    className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold inline-flex items-center space-x-1 cursor-pointer"
+                                    className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold text-[11px] inline-flex items-center space-x-1 cursor-pointer"
                                   >
-                                    <span>Review Slip</span>
+                                    <span>Review</span>
                                   </button>
                                   {(role === "admin" || role === "hr") && onResetPayslip && (
                                     <button
@@ -405,7 +615,7 @@ export default function PayrollView({
                                           onResetPayslip(emp.id, selectedMonth);
                                         }
                                       }}
-                                      className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-2"
+                                      className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-1 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition-colors"
                                       title="Reset compiled slip to regenerate"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -413,23 +623,34 @@ export default function PayrollView({
                                   )}
                                 </div>
                               ) : (
-                                <button
-                                  onClick={() => handleCompileSlip(emp.id)}
-                                  disabled={compilingEmpId === emp.id}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {compilingEmpId === emp.id ? (
-                                    <>
-                                      <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin" />
-                                      <span>Compiling...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                                      <span>Compile Slip</span>
-                                    </>
+                                <div className="flex items-center justify-end space-x-1">
+                                  {(role === "admin" || role === "hr") && onUpdateEmployee && (
+                                    <button
+                                      onClick={() => openEditAllowancesModal(emp)}
+                                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-[#1a1a1a] dark:hover:bg-amber-950/40 text-slate-600 hover:text-amber-600 dark:text-gray-300 dark:hover:text-amber-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                      title="Edit Monthly Allowances (Tel, Fuel, Prof Dev, LTA)"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
                                   )}
-                                </button>
+                                  <button
+                                    onClick={() => handleCompileSlip(emp.id)}
+                                    disabled={compilingEmpId === emp.id}
+                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs shrink-0"
+                                  >
+                                    {compilingEmpId === emp.id ? (
+                                      <>
+                                        <RefreshCw className="w-3 h-3 shrink-0 animate-spin" />
+                                        <span>Compiling</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="w-3 h-3 shrink-0" />
+                                        <span>Compile</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -521,7 +742,7 @@ export default function PayrollView({
 
           {/* Floating Toast Notification on Success */}
           {saveSuccessMsg && (
-            <div className="fixed top-20 right-6 z-50 bg-slate-900/95 text-white dark:bg-[#0a0a0a]/95 dark:text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center space-x-3 backdrop-blur-md animate-in slide-in-from-top-4 fade-in duration-300">
+            <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white dark:bg-[#0a0a0a]/95 dark:text-white px-4 py-3 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center space-x-3 backdrop-blur-md animate-in slide-in-from-top-4 fade-in duration-300 whitespace-nowrap">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
                 <CheckCircle className="w-5 h-5 text-emerald-400" />
               </div>
@@ -644,6 +865,153 @@ export default function PayrollView({
                     </p>
                   </div>
                 </div>
+
+                {/* Additional Specific Allowances: LTA, Telephone, Fuel, Professional Dev */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                  {/* Telephone Allowance */}
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 dark:text-gray-200 text-xs block">Telephone Allowance</label>
+                      <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, telephoneType: "percentage" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.telephoneType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          % of Basic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, telephoneType: "fixed" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.telephoneType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          ₹ Fixed
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={config.telephoneValue ? config.telephoneValue : ""}
+                        onChange={e => setConfig(prev => ({ ...prev, telephoneValue: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                        placeholder={config.telephoneType === "percentage" ? "e.g. 5%" : "e.g. 1500"}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.telephoneType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Fuel Allowance */}
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 dark:text-gray-200 text-xs block">Fuel Allowance</label>
+                      <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, fuelType: "percentage" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.fuelType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          % of Basic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, fuelType: "fixed" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.fuelType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          ₹ Fixed
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={config.fuelValue ? config.fuelValue : ""}
+                        onChange={e => setConfig(prev => ({ ...prev, fuelValue: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                        placeholder={config.fuelType === "percentage" ? "e.g. 10%" : "e.g. 2000"}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.fuelType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Professional Dev. / Tax */}
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 dark:text-gray-200 text-xs block">Professional Dev. / Tax</label>
+                      <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, professionalDevType: "percentage" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.professionalDevType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          % of Basic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, professionalDevType: "fixed" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.professionalDevType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          ₹ Fixed
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={config.professionalDevValue ? config.professionalDevValue : ""}
+                        onChange={e => setConfig(prev => ({ ...prev, professionalDevValue: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                        placeholder={config.professionalDevType === "percentage" ? "e.g. 5%" : "e.g. 3000"}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.professionalDevType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Leave Travel Allowance (LTA) */}
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 dark:text-gray-200 text-xs block">Leave Travel Allowance (LTA)</label>
+                      <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, ltaType: "percentage" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.ltaType === "percentage" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          % of Basic
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfig(prev => ({ ...prev, ltaType: "fixed" }))}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${config.ltaType === "fixed" ? "bg-emerald-600 text-white shadow-xs font-bold" : "text-slate-500 hover:text-slate-700 dark:hover:text-gray-300"}`}
+                        >
+                          ₹ Fixed
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={config.ltaValue ? config.ltaValue : ""}
+                        onChange={e => setConfig(prev => ({ ...prev, ltaValue: e.target.value === "" ? 0 : Number(e.target.value) }))}
+                        placeholder={config.ltaType === "percentage" ? "e.g. 10%" : "e.g. 2500"}
+                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                        {config.ltaType === "percentage" ? "%" : "₹"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Deductions Rules Card */}
@@ -651,7 +1019,7 @@ export default function PayrollView({
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
                   <div className="flex items-center space-x-2">
                     <ShieldAlert className="w-4 h-4 text-rose-500" />
-                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">Deduction Rules (PF & TDS/Tax)</h4>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm">Deduction Rules (PF, ESI & TDS/Tax)</h4>
                   </div>
                   <span className="text-[10px] text-slate-400 font-mono">Government & Statutory Deductions</span>
                 </div>
@@ -664,23 +1032,23 @@ export default function PayrollView({
                         <span>Provident Fund (PF) Contribution</span>
                         <span className="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-[9px] px-2 py-0.5 rounded-full font-extrabold">Statutory</span>
                       </p>
-                      <p className="text-[11px] text-slate-400">Employee PF contribution deducted monthly</p>
+                      <p className="text-[11px] text-slate-400">Default rule: 12% of Basic vs Fixed ₹1,800</p>
                     </div>
                     
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
                       <button
                         type="button"
-                        onClick={() => setConfig(prev => ({ ...prev, pfType: "percentage" }))}
-                        className={`px-3 py-1 rounded-md transition-all ${config.pfType === "percentage" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                        onClick={() => setConfig(prev => ({ ...prev, pfModeDefault: "percentage", pfType: "percentage" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.pfModeDefault !== "fixed_1800" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
                       >
-                        % of Basic
+                        12% of Basic
                       </button>
                       <button
                         type="button"
-                        onClick={() => setConfig(prev => ({ ...prev, pfType: "fixed" }))}
-                        className={`px-3 py-1 rounded-md transition-all ${config.pfType === "fixed" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                        onClick={() => setConfig(prev => ({ ...prev, pfModeDefault: "fixed_1800", pfType: "fixed", pfValue: 1800 }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.pfModeDefault === "fixed_1800" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
                       >
-                        ₹ Fixed
+                        Fixed ₹1,800
                       </button>
                     </div>
                   </div>
@@ -698,17 +1066,62 @@ export default function PayrollView({
                       </span>
                     </div>
                     <p className="text-xs text-slate-400">
-                      {config.pfType === "percentage" ? `PF = ${config.pfValue}% of Basic` : `Fixed ₹${config.pfValue.toLocaleString()} per month`}
+                      {config.pfModeDefault === "fixed_1800" ? "Fixed statutory PF cap: ₹1,800 / month" : `PF = ${config.pfValue}% of Basic`}
                     </p>
                   </div>
+                </div>
+
+                {/* ESI Deduction Rules */}
+                <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs flex items-center gap-1.5">
+                        <span>Employee State Insurance (ESI)</span>
+                        <span className="bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 text-[9px] px-2 py-0.5 rounded-full font-extrabold">Statutory</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400">Calculated on Gross pay (typically for Gross ≤ ₹21,000)</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, esiEnabled: !prev.esiEnabled }))}
+                      className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all ${config.esiEnabled !== false ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}
+                    >
+                      {config.esiEnabled !== false ? "ESI Enabled" : "ESI Disabled"}
+                    </button>
+                  </div>
+
+                  {config.esiEnabled !== false && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">ESI Rate (%)</label>
+                        <input
+                          type="number"
+                          step="0.05"
+                          value={config.esiRatePercentage ?? 0.75}
+                          onChange={e => setConfig(prev => ({ ...prev, esiRatePercentage: Number(e.target.value) || 0 }))}
+                          className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Gross Salary Ceiling (₹)</label>
+                        <input
+                          type="number"
+                          value={config.esiGrossCeiling ?? 21000}
+                          onChange={e => setConfig(prev => ({ ...prev, esiGrossCeiling: Number(e.target.value) || 0 }))}
+                          className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Tax / TDS Setting */}
                 <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Income Tax (TDS) / Profession Tax</p>
-                      <p className="text-[11px] text-slate-400">Calculated on Gross Compensation</p>
+                      <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Income Tax (TDS) Default Rules</p>
+                      <p className="text-[11px] text-slate-400">Flexibility: Employees can opt in/out or set manual TDS</p>
                     </div>
                     
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
@@ -886,12 +1299,19 @@ export default function PayrollView({
                   const basic = simEmp.salary?.basic || 45000;
                   const hra = config.hraType === "percentage" ? Math.round(basic * (config.hraValue / 100)) : config.hraValue;
                   const allowances = config.allowancesType === "percentage" ? Math.round(basic * (config.allowancesValue / 100)) : config.allowancesValue;
-                  const gross = basic + hra + allowances;
+
+                  const telephone = config.telephoneType === "percentage" ? Math.round(basic * ((config.telephoneValue || 0) / 100)) : (config.telephoneValue || 0);
+                  const fuel = config.fuelType === "percentage" ? Math.round(basic * ((config.fuelValue || 0) / 100)) : (config.fuelValue || 0);
+                  const profDev = config.professionalDevType === "percentage" ? Math.round(basic * ((config.professionalDevValue || 0) / 100)) : (config.professionalDevValue || 0);
+                  const lta = config.ltaType === "percentage" ? Math.round(basic * ((config.ltaValue || 0) / 100)) : (config.ltaValue || 0);
+
+                  const gross = basic + hra + allowances + telephone + fuel + profDev + lta;
 
                   const isExempt = (config.pfExemptEmployeeIds || []).includes(simEmp.id);
-                  const pf = isExempt ? 0 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue);
+                  const pf = isExempt ? 0 : (config.pfModeDefault === "fixed_1800" ? 1800 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue));
                   const tax = config.taxType === "percentage" ? Math.round(gross * (config.taxValue / 100)) : config.taxValue;
-                  const net = gross - pf - tax;
+                  const esi = (config.esiEnabled !== false && gross <= (config.esiGrossCeiling || 21000)) ? Math.round(gross * ((config.esiRatePercentage || 0.75) / 100)) : 0;
+                  const net = Math.max(0, gross - pf - tax - esi);
 
                   return (
                     <div className="space-y-3 pt-2">
@@ -906,6 +1326,34 @@ export default function PayrollView({
                             <span>+ HRA ({config.hraType === "percentage" ? `${config.hraValue}%` : "Fixed"})</span>
                             <span className="font-mono text-slate-700 dark:text-gray-200">₹{hra.toLocaleString()}</span>
                           </div>
+
+                          {telephone > 0 && (
+                            <div className="flex justify-between">
+                              <span>+ Telephone ({config.telephoneType === "percentage" ? `${config.telephoneValue}%` : "Fixed"})</span>
+                              <span className="font-mono text-slate-700 dark:text-gray-200">₹{telephone.toLocaleString()}</span>
+                            </div>
+                          )}
+
+                          {fuel > 0 && (
+                            <div className="flex justify-between">
+                              <span>+ Fuel ({config.fuelType === "percentage" ? `${config.fuelValue}%` : "Fixed"})</span>
+                              <span className="font-mono text-slate-700 dark:text-gray-200">₹{fuel.toLocaleString()}</span>
+                            </div>
+                          )}
+
+                          {profDev > 0 && (
+                            <div className="flex justify-between">
+                              <span>+ Prof. Dev ({config.professionalDevType === "percentage" ? `${config.professionalDevValue}%` : "Fixed"})</span>
+                              <span className="font-mono text-slate-700 dark:text-gray-200">₹{profDev.toLocaleString()}</span>
+                            </div>
+                          )}
+
+                          {lta > 0 && (
+                            <div className="flex justify-between">
+                              <span>+ LTA ({config.ltaType === "percentage" ? `${config.ltaValue}%` : "Fixed"})</span>
+                              <span className="font-mono text-slate-700 dark:text-gray-200">₹{lta.toLocaleString()}</span>
+                            </div>
+                          )}
 
                           <div className="flex justify-between">
                             <span>+ Allowances ({config.allowancesType === "percentage" ? `${config.allowancesValue}%` : "Fixed"})</span>
@@ -938,6 +1386,13 @@ export default function PayrollView({
                           <span>- Tax / TDS ({config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
                           <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">₹{tax.toLocaleString()}</span>
                         </div>
+
+                        {esi > 0 && (
+                          <div className="flex justify-between text-slate-600 dark:text-gray-300">
+                            <span>- ESI ({config.esiRatePercentage ?? 0.75}%)</span>
+                            <span className="font-mono font-semibold text-blue-600 dark:text-blue-400">₹{esi.toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Net Disbursed Card */}
@@ -981,137 +1436,493 @@ export default function PayrollView({
       )}
 
       {/* Detailed Salary Slip Modal */}
-      {activeSlip && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
-            {/* Header */}
-            <div className="bg-emerald-600 p-5 text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Sparkles className="w-5 h-5 text-emerald-300" />
+      {activeSlip && (() => {
+        const emp = employees.find(e => e.id === activeSlip.employeeId);
+        const slipTelephone = activeSlip.telephone || 0;
+        const slipFuel = activeSlip.fuel || 0;
+        const slipProfDev = activeSlip.professionalDev || 0;
+        const slipLta = activeSlip.lta || 0;
+        const grossEarnings = activeSlip.basic + activeSlip.hra + slipTelephone + slipFuel + slipProfDev + slipLta + activeSlip.allowances;
+        const grossDeductions = activeSlip.pfDeduction + activeSlip.taxDeduction + activeSlip.finesDeducted;
+        const designation = getDesignationTitle(emp?.designationId || "");
+        const empCode = emp ? getEmployeeCode(emp) : activeSlip.employeeId;
+        
+        return (
+          <div className="fixed inset-0 bg-slate-100 dark:bg-[#0a0e17] z-50 flex flex-col w-full h-full min-h-screen overflow-hidden animate-in fade-in duration-200">
+            
+            {/* Full-Width Header Controls Bar */}
+            <div className="bg-slate-900 px-6 py-3.5 text-white flex items-center justify-between shadow-md shrink-0 print:hidden">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setActiveSlip(null)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white p-2 rounded-xl transition-colors cursor-pointer border border-slate-700"
+                  title="Back to Payroll Dashboard"
+                >
+                  <X className="w-5 h-5" />
+                </button>
                 <div>
-                  <h3 className="font-display font-bold text-md leading-none">{companyName} Compensation Audit</h3>
-                  <p className="text-[10px] text-emerald-100 mt-1 font-mono">ID: {activeSlip.id}</p>
+                  <h3 className="font-bold text-base leading-tight">Official Salary Payslip Statement</h3>
+                  <p className="text-[11px] text-slate-400 font-mono">ID: {activeSlip.id}</p>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-2">
+
+              <div className="flex items-center space-x-3">
                 <button
                   onClick={() => window.print()}
-                  className="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-white text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer shadow-md"
                 >
                   <Printer className="w-4 h-4" />
+                  <span>Print / Export PDF</span>
                 </button>
                 <button
                   onClick={() => setActiveSlip(null)}
-                  className="bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer"
+                  className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl text-slate-300 hover:text-white text-xs font-semibold cursor-pointer border border-slate-700 transition-colors"
                 >
                   Close
                 </button>
               </div>
             </div>
 
-            {/* Slip content */}
-            <div className="p-6 space-y-6 text-xs max-h-[500px] overflow-y-auto custom-scrollbar">
-              {/* Employer Info */}
-              <div className="flex justify-between items-start border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-800 dark:text-white">{companyName}</h2>
-                  <p className="text-slate-400 mt-0.5">Corporate Headquarters, Bandra-Kurla Complex</p>
-                  <p className="text-slate-400">Mumbai, MH - 400051</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-slate-800 dark:text-white">SALARY STATEMENT</p>
-                  <p className="text-slate-400 mt-0.5">Pay Month: <b>{activeSlip.month}</b></p>
-                  <p className="text-slate-400">Status: <span className="font-bold text-emerald-600 uppercase font-mono">{activeSlip.status}</span></p>
-                </div>
-              </div>
+            {/* FULL PAGE PAYSLIP DOCUMENT CONTAINER */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 flex justify-center custom-scrollbar">
+              <div className="bg-white text-slate-900 shadow-2xl border border-slate-300 rounded-2xl w-full max-w-4xl p-6 sm:p-10 my-auto printable-payslip font-sans space-y-6">
+                
+                {/* Document Top Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
+                  {/* Logo & Company Name */}
+                  <div className="flex items-center space-x-4">
+                    {companyLogoUrl ? (
+                      <img 
+                        src={companyLogoUrl} 
+                        alt={companyName || "Company Logo"} 
+                        className="h-12 max-w-[180px] object-contain shrink-0" 
+                      />
+                    ) : (
+                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                        <div className="absolute inset-0 border-[3.5px] border-amber-500 rotate-45 rounded-xs"></div>
+                        <div className="absolute inset-1.5 border-[3.5px] border-slate-900 rotate-45 rounded-xs"></div>
+                      </div>
+                    )}
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 font-sans">
+                        {companyName || "MGM FINANCIERS PRIVATE LIMITED"}
+                      </h2>
+                    </div>
+                  </div>
 
-              {/* Employee Detail Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-[#0a0a0a]/40 p-4 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a]/50">
-                <div>
-                  <span className="text-slate-400 block">Employee Name</span>
-                  <span className="font-semibold text-slate-700 dark:text-gray-300">{getEmployeeName(activeSlip.employeeId)}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block">Employee Code</span>
-                  <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">{activeSlip.employeeId}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block">Designation</span>
-                  <span className="font-semibold text-slate-700 dark:text-gray-300">
-                    {getDesignationTitle(employees.find(e => e.id === activeSlip.employeeId)?.designationId || "")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block">Bank Account</span>
-                  <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">****{employees.find(e => e.id === activeSlip.employeeId)?.bankDetails.accountNumber.slice(-4)}</span>
-                </div>
-              </div>
-
-              {/* Table of Earnings / Deductions */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                {/* Earnings */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-[#1a1a1a] pb-1.5 text-xs uppercase text-emerald-600">Earnings Detail</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Basic Salary</span>
-                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeSlip.basic.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">HRA Allowance</span>
-                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeSlip.hra.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Special Allowances</span>
-                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeSlip.allowances.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-bold border-t border-slate-100 dark:border-[#1a1a1a] pt-1.5">
-                      <span className="text-slate-800 dark:text-white">Gross Earnings</span>
-                      <span className="text-slate-800 dark:text-white font-mono">₹{(activeSlip.basic + activeSlip.hra + activeSlip.allowances).toLocaleString()}</span>
-                    </div>
+                  {/* Pay Slip Details */}
+                  <div className="sm:text-right space-y-0.5">
+                    <p className="text-xs font-bold text-slate-900">
+                      Pay Slip for: <span className="font-bold">{activeSlip.month}</span>
+                    </p>
+                    <p className="text-[10px] text-slate-500 italic">Amount in Rupees</p>
                   </div>
                 </div>
 
-                {/* Deductions */}
-                <div className="space-y-2">
-                  <h4 className="font-bold text-slate-800 dark:text-white border-b border-slate-100 dark:border-[#1a1a1a] pb-1.5 text-xs uppercase text-rose-600">Deductions Detail</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Employee PF</span>
-                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeSlip.pfDeduction.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">TDS / Profession Tax</span>
-                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeSlip.taxDeduction.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-rose-500">
-                      <span>Corporate Late Fines</span>
-                      <span className="font-semibold font-mono">₹{activeSlip.finesDeducted.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-bold border-t border-slate-100 dark:border-[#1a1a1a] pt-1.5">
-                      <span className="text-slate-800 dark:text-white">Total Deductions</span>
-                      <span className="text-slate-800 dark:text-white font-mono">₹{(activeSlip.pfDeduction + activeSlip.taxDeduction + activeSlip.finesDeducted).toLocaleString()}</span>
-                    </div>
-                  </div>
+                {/* Employee Info Grid Table */}
+                <div className="border border-slate-700 overflow-hidden">
+                  <table className="w-full text-xs text-left border-collapse font-sans">
+                    <tbody>
+                      <tr className="border-b border-slate-700">
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Employee Code</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono w-2/6">{empCode}</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Name</td>
+                        <td className="p-2.5 text-slate-900 font-semibold w-2/6">{emp?.fullName || getEmployeeName(activeSlip.employeeId)}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700">
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Email Id</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700 truncate max-w-[170px]">{emp?.email || getEmployeeEmail(activeSlip.employeeId)}</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Bank Account</td>
+                        <td className="p-2.5 text-slate-900 font-mono">{emp?.bankDetails?.accountNumber ? `****${emp.bankDetails.accountNumber.slice(-4)}` : <span className="text-slate-400 italic">Not provided</span>}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700">
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">DOJ</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.joiningDate || <span className="text-slate-400 italic">—</span>}</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Department</td>
+                        <td className="p-2.5 text-slate-900">{emp?.department || <span className="text-slate-400 italic">—</span>}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700">
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Designation</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{designation}</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">PAN</td>
+                        <td className="p-2.5 text-slate-900 font-mono">{(emp?.customFields?.pan as string) || <span className="text-slate-400 italic">Not provided</span>}</td>
+                      </tr>
+                      <tr className="border-b border-slate-700">
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Location</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.branch || emp?.address || <span className="text-slate-400 italic">—</span>}</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">UAN</td>
+                        <td className="p-2.5 text-slate-900 font-mono">{(emp?.customFields?.uan as string) || <span className="text-slate-400 italic">Not provided</span>}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">STD Days</td>
+                        <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">30</td>
+                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Worked Days</td>
+                        <td className="p-2.5 text-slate-900 font-mono">30</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Earnings & Deductions Grid Table */}
+                <div className="border border-slate-700 overflow-hidden">
+                  <table className="w-full text-xs text-left border-collapse font-sans">
+                    <thead>
+                      <tr className="border-b border-slate-700 bg-slate-100">
+                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 w-2/6">EARNINGS</th>
+                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 text-right w-1/6">AMOUNT</th>
+                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 w-2/6">DEDUCTIONS</th>
+                        <th className="p-2.5 font-bold text-slate-900 text-right w-1/6">AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700">
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">BASIC</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.basic.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">TDS</td>
+                        <td className="p-2.5 text-right font-mono">{activeSlip.taxDeduction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">HRA</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.hra.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">P.F.</td>
+                        <td className="p-2.5 text-right font-mono">{activeSlip.pfDeduction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">TELEPHONE</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipTelephone.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase text-rose-700">LATE FINES</td>
+                        <td className="p-2.5 text-right font-mono text-rose-700">{activeSlip.finesDeducted.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">FUEL</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipFuel.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700"></td>
+                        <td className="p-2.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">PROFESSIONAL DEV</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipProfDev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700"></td>
+                        <td className="p-2.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">LTA</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipLta.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700"></td>
+                        <td className="p-2.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">SPECIAL ALLOWANCE</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.allowances.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700"></td>
+                        <td className="p-2.5 text-right"></td>
+                      </tr>
+                      {/* Totals Row */}
+                      <tr className="border-t-2 border-slate-700 font-bold bg-slate-50">
+                        <td className="p-2.5 border-r border-slate-700 uppercase">GROSS EARNINGS</td>
+                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="p-2.5 border-r border-slate-700 uppercase">GROSS DEDUCTIONS</td>
+                        <td className="p-2.5 text-right font-mono">{grossDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      {/* Net Pay Row */}
+                      <tr className="border-t border-slate-700 font-bold">
+                        <td className="p-2.5 border-r border-slate-700 bg-white" colSpan={2}></td>
+                        <td className="p-2.5 border-r border-slate-700 uppercase font-extrabold text-slate-900 bg-slate-100">NET PAY</td>
+                        <td className="p-2.5 text-right font-mono font-black text-slate-900 bg-slate-100 text-sm">
+                          {activeSlip.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Net Pay In Words */}
+                <div className="pt-2 space-y-1">
+                  <p className="font-bold text-slate-900 text-xs">
+                    NET Pay for the Month: <span className="font-mono font-extrabold">{activeSlip.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /-</span> ({numberToWordsIndian(activeSlip.netPay)} Only)
+                  </p>
+                </div>
+
+                {/* Document Subtext Footer */}
+                <div className="pt-6 border-t border-slate-200">
+                  <p className="text-[11px] text-slate-600 italic">
+                    ** This is a computer generated payslip and does not require signature and stamp.
+                  </p>
                 </div>
               </div>
-
-              {/* Net disbursed */}
-              <div className="bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-xl flex items-center justify-between border border-emerald-100 dark:border-emerald-900/40 pt-3">
-                <div>
-                  <p className="font-semibold text-emerald-800 dark:text-emerald-400">Net Salary Disbursed (In Bank Account)</p>
-                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80">Cleared on H2 Automated Settlement Server</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{activeSlip.netPay.toLocaleString()}</p>
-                </div>
-              </div>
-
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 text-center leading-normal pt-2">
-                This is a computer-generated salary slip issued by {companyName}. No physical seal or handwritten signatures are required.
-              </p>
             </div>
+          </div>
+        );
+      })()}
+      {/* Adjust Monthly Allowances Modal */}
+      {editingEmpForSalary && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
+          onClick={() => setEditingEmpForSalary(null)}
+        >
+          <div 
+            className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] w-full max-w-2xl sm:max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-[#1a1a1a] p-5 pb-4 shrink-0 bg-slate-50/50 dark:bg-[#121212]/50">
+              <div>
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                  <Calculator className="w-5 h-5 text-emerald-500" />
+                  Adjust Allowances before Compiling
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
+                  {editingEmpForSalary.fullName} ({getEmployeeCode(editingEmpForSalary)}) — {editingEmpForSalary.department}
+                </p>
+              </div>
+              <button 
+                onClick={() => setEditingEmpForSalary(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a1a1a] text-slate-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAllowances} className="flex flex-col min-h-0 flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">Telephone Allowance (INR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editTel}
+                      onChange={(e) => setEditTel(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder="e.g. 1500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">Fuel Allowance (INR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editFuel}
+                      onChange={(e) => setEditFuel(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder="e.g. 2000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">Professional Dev. (INR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editProfDev}
+                      onChange={(e) => setEditProfDev(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder="e.g. 3000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">LTA Allowance (INR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editLta}
+                      onChange={(e) => setEditLta(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder="e.g. 2500"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-gray-400 mb-1">Special Allowance (INR)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={editSpAllow}
+                      onChange={(e) => setEditSpAllow(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-800 dark:text-gray-100 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold focus:outline-none focus:border-emerald-500"
+                      placeholder="e.g. 5000"
+                    />
+                  </div>
+                </div>
+
+                {/* PF Mode Selector */}
+                <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-gray-300">Provident Fund (PF) Rule</label>
+                  <div className="grid grid-cols-3 gap-1.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setEditPfMode("percentage")}
+                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "percentage" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                    >
+                      12% of Basic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPfMode("fixed_1800")}
+                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "fixed_1800" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                    >
+                      Fixed ₹1,800
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPfMode("custom")}
+                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "custom" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                    >
+                      Custom ₹
+                    </button>
+                  </div>
+                  {editPfMode === "custom" && (
+                    <input
+                      type="number"
+                      min="0"
+                      value={editPfCustom}
+                      onChange={e => setEditPfCustom(e.target.value)}
+                      placeholder="Enter custom PF amount (INR)"
+                      className="w-full bg-white dark:bg-[#151515] text-slate-800 dark:text-gray-100 p-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold mt-1"
+                    />
+                  )}
+                </div>
+
+                {/* TDS Opt-In & Mode Settings */}
+                <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">Income Tax (TDS) Status</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditTdsOptIn(!editTdsOptIn)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${editTdsOptIn ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}
+                    >
+                      {editTdsOptIn ? "✓ Opted IN (Tax Deducted)" : "✕ Opted OUT (No TDS)"}
+                    </button>
+                  </div>
+                  {editTdsOptIn && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="grid grid-cols-2 gap-1.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setEditTdsMode("slab")}
+                          className={`py-1 px-2 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editTdsMode === "slab" ? "bg-rose-600 text-white border-rose-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                        >
+                          Auto Tax Slab ({config?.taxValue || 5}%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditTdsMode("custom")}
+                          className={`py-1 px-2 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editTdsMode === "custom" ? "bg-rose-600 text-white border-rose-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                        >
+                          Manual Amount (₹)
+                        </button>
+                      </div>
+                      {editTdsMode === "custom" && (
+                        <input
+                          type="number"
+                          min="0"
+                          value={editTdsCustom}
+                          onChange={e => setEditTdsCustom(e.target.value)}
+                          placeholder="Enter manual TDS tax amount (INR)"
+                          className="w-full bg-white dark:bg-[#151515] text-slate-800 dark:text-gray-100 p-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ESI Opt-In & Amount */}
+                <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">ESI Deduction</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditEsiOptIn(!editEsiOptIn)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${editEsiOptIn ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}
+                    >
+                      {editEsiOptIn ? "✓ ESI Active" : "✕ ESI Exempt"}
+                    </button>
+                  </div>
+                  {editEsiOptIn && (
+                    <input
+                      type="number"
+                      min="0"
+                      value={editEsiCustom}
+                      onChange={e => setEditEsiCustom(e.target.value)}
+                      placeholder="Auto calculated (~0.75% of gross) or enter custom ESI ₹"
+                      className="w-full bg-white dark:bg-[#151515] text-slate-800 dark:text-gray-100 p-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold"
+                    />
+                  )}
+                </div>
+
+                {/* Live Gross & Net Pay preview box */}
+                {(() => {
+                  const basic = editingEmpForSalary.salary.basic || 0;
+                  const hra = editingEmpForSalary.salary.hra || 0;
+                  const tel = Number(editTel) || 0;
+                  const fuel = Number(editFuel) || 0;
+                  const profDev = Number(editProfDev) || 0;
+                  const lta = Number(editLta) || 0;
+                  const spAllow = Number(editSpAllow) || 0;
+                  const gross = basic + hra + tel + fuel + profDev + lta + spAllow;
+
+                  let pf = 0;
+                  if (editPfMode === "fixed_1800") pf = 1800;
+                  else if (editPfMode === "custom") pf = Number(editPfCustom) || 0;
+                  else pf = Math.round(basic * ((config?.pfValue || 12) / 100));
+
+                  let tds = 0;
+                  if (editTdsOptIn) {
+                    if (editTdsMode === "custom") tds = Number(editTdsCustom) || 0;
+                    else tds = Math.round(gross * ((config?.taxValue || 5) / 100));
+                  }
+
+                  let esi = 0;
+                  if (editEsiOptIn) {
+                    if (editEsiCustom) esi = Number(editEsiCustom) || 0;
+                    else if (gross <= (config?.esiGrossCeiling || 21000)) esi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
+                  }
+
+                  const pendingFines = (fines || [])
+                    .filter(f => f.employeeId === editingEmpForSalary.id && f.status === "Deducted From Payroll")
+                    .reduce((sum, f) => sum + f.amount, 0);
+                  const net = Math.max(0, gross - pf - tds - esi - pendingFines);
+
+                  return (
+                    <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a] rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs space-y-1">
+                      <div className="flex justify-between text-slate-500 dark:text-gray-400 text-[11px]">
+                        <span>PF: ₹{pf.toLocaleString()} | TDS: ₹{tds.toLocaleString()} | ESI: ₹{esi.toLocaleString()}</span>
+                        <span>Deductions: ₹{(pf + tds + esi + pendingFines).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-200/60 dark:border-[#1a1a1a] font-bold">
+                        <span className="text-slate-700 dark:text-gray-200">New Est. Gross: <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{gross.toLocaleString()}</span></span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-mono text-sm">Est. Net Pay: ₹{net.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex justify-end space-x-2 p-5 pt-3 border-t border-slate-100 dark:border-[#1a1a1a] shrink-0 bg-slate-50/50 dark:bg-[#121212]/50">
+                <button
+                  type="button"
+                  onClick={() => setEditingEmpForSalary(null)}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-[#0a0a0a] dark:hover:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSalary}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingSalary ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save &amp; Update</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

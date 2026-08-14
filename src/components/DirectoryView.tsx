@@ -5,11 +5,36 @@ import * as XLSX from "xlsx";
 import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
-  Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, Sparkles, Building, MapPin, Landmark, Pencil,
+  Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, ShieldAlert, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
-  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator
+  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut
 } from "lucide-react";
-import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig } from "../types";
+import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig, ChecklistItemTemplate } from "../types";
+import ChecklistCard from "./ChecklistCard";
+
+const isValidPAN = (p: string) => !p.trim() || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(p.trim().toUpperCase());
+const isValidUAN = (u: string) => !u.trim() || /^[0-9]{12}$/.test(u.trim());
+const isValidPhoneNumber = (p: string) => {
+  if (!p.trim()) return true;
+  const cleaned = p.trim().replace(/[\s\-\(\)]/g, "");
+  const digits = cleaned.replace(/\D/g, "");
+  if (cleaned.startsWith("+91") || cleaned.startsWith("91")) {
+    return digits.length === 12;
+  }
+  return digits.length === 10 && !cleaned.startsWith("+");
+};
+const checkPasswordStrength = (pwd: string) => {
+  return {
+    hasMinLength: pwd.length >= 6,
+    hasUpper: /[A-Z]/.test(pwd),
+    hasNumber: /[0-9]/.test(pwd),
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd),
+  };
+};
+const isValidPassword = (pwd: string) => {
+  const s = checkPasswordStrength(pwd);
+  return s.hasMinLength && s.hasUpper && s.hasNumber && s.hasSpecial;
+};
 
 
 interface DirectoryViewProps {
@@ -22,12 +47,20 @@ interface DirectoryViewProps {
   companyId?: string;
   companyName?: string;
   subscriptionModel?: number;
+  onboardingChecklistTemplates?: ChecklistItemTemplate[];
+  exitChecklistTemplates?: ChecklistItemTemplate[];
   onOnboardEmployee: (empData: any) => void;
   onBulkOnboardEmployee?: (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => Promise<void> | void;
   onUpdateEmployee: (id: string, updatedData: any) => Promise<void> | void;
   onAddDocument: (empId: string, docData: any) => void;
   onDeleteDocument: (empId: string, docId: string) => void;
   onToggleOnboardingTask: (empId: string, taskId: string, completed: boolean) => void;
+  onUploadChecklistDocument?: (employeeId: string, itemId: string, file: File, category?: string) => Promise<void> | void;
+  onReviewChecklistItem?: (employeeId: string, itemId: string, action: "approve" | "reject", comments?: string) => Promise<void> | void;
+  onCreateChecklistTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => Promise<void> | void;
+  onDeleteChecklistTemplate?: (templateId: string) => Promise<void> | void;
+  onGrantExitClearance?: (employeeId: string) => Promise<void> | void;
+  onInitiateResignation?: (employeeId: string) => Promise<void> | void;
   onUpdateCollection?: (
     type: "leaveTypes" | "departments" | "branches",
     updatedList: string[],
@@ -46,19 +79,28 @@ export default function DirectoryView({
   companyId = "",
   companyName = "SnailHRA Tenant",
   subscriptionModel = 1,
+  onboardingChecklistTemplates = [],
+  exitChecklistTemplates = [],
   onOnboardEmployee,
   onBulkOnboardEmployee,
   onUpdateEmployee,
   onAddDocument,
   onDeleteDocument,
   onToggleOnboardingTask,
+  onUploadChecklistDocument,
+  onReviewChecklistItem,
+  onCreateChecklistTemplate,
+  onDeleteChecklistTemplate,
+  onGrantExitClearance,
+  onInitiateResignation,
   onUpdateCollection
 }: DirectoryViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
   const [selectedBranch, setSelectedBranch] = useState("All");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended">("All");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended" | "Resigned">("All");
   const [activeEmpId, setActiveEmpId] = useState<string | null>(() => currentUserId || employees[0]?.id || null);
+  const [activeChecklistTab, setActiveChecklistTab] = useState<"onboarding" | "exit">("onboarding");
   const [showOnboardForm, setShowOnboardForm] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -438,6 +480,9 @@ export default function DirectoryView({
   const [editEmergencyRelation, setEditEmergencyRelation] = useState("");
   const [editEmergencyPhone, setEditEmergencyPhone] = useState("");
   const [editDateOfBirth, setEditDateOfBirth] = useState("");
+  const [editPan, setEditPan] = useState("");
+  const [editUan, setEditUan] = useState("");
+  const [editEmploymentType, setEditEmploymentType] = useState<"contract" | "permanent" | "consultant" | "">("");
 
   const [profileImageFile, setProfileImageFile] = useState<File | null>(null);
   const [profileImagePreview, setProfileImagePreview] = useState<string>("");
@@ -456,9 +501,11 @@ export default function DirectoryView({
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
   const [empRole, setEmpRole] = useState<UserRole>("employee");
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
-  const [department, setDepartment] = useState("Loans");
+  const [department, setDepartment] = useState("Information Technology");
+  const [employmentType, setEmploymentType] = useState<"contract" | "permanent" | "consultant" | "">("");
   const [onboardBranch, setOnboardBranch] = useState("");
   const [joiningDate, setJoiningDate] = useState(() => {
     const d = new Date();
@@ -467,6 +514,10 @@ export default function DirectoryView({
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [salaryBasic, setSalaryBasic] = useState("");
   const [salaryHra, setSalaryHra] = useState("");
+  const [salaryTelephone, setSalaryTelephone] = useState("");
+  const [salaryFuel, setSalaryFuel] = useState("");
+  const [salaryProfDev, setSalaryProfDev] = useState("");
+  const [salaryLta, setSalaryLta] = useState("");
   const [salaryAllowances, setSalaryAllowances] = useState("");
   const [salaryPf, setSalaryPf] = useState("");
   const [salaryTds, setSalaryTds] = useState("");
@@ -478,6 +529,11 @@ export default function DirectoryView({
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyRelation, setEmergencyRelation] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
+  const [pan, setPan] = useState("");
+  const [uan, setUan] = useState("");
+  const [onboardError, setOnboardError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSubmittingOnboard, setIsSubmittingOnboard] = useState(false);
 
   // Payroll Configuration integration for Onboarding Form
   const [onboardPayrollConfig, setOnboardPayrollConfig] = useState<PayrollConfig | null>(null);
@@ -491,41 +547,88 @@ export default function DirectoryView({
         .then(data => {
           if (data.config) {
             setOnboardPayrollConfig(data.config);
+            if (salaryBasic) {
+              recomputeOnboardSalaryComponentsWithConfig(salaryBasic, onboardIsPfExempt, data.config);
+            }
           }
         })
         .catch(err => console.warn("Failed to load payroll config for employee modal:", err));
     }
-  }, [showOnboardForm, showEditModal, companyId]);
+  }, [showOnboardForm, showEditModal, companyId, salaryBasic, onboardIsPfExempt]);
+
+  useEffect(() => {
+    if (customDepartments && customDepartments.length > 0) {
+      if (!department || !customDepartments.includes(department)) {
+        setDepartment(customDepartments[0]);
+      }
+    }
+  }, [customDepartments]);
 
   // Helper to recompute HRA, Allowances, PF, Tax dynamically when Basic salary or PF exemption toggle changes
-  const recomputeOnboardSalaryComponents = (basicStr: string, exemptFlag: boolean) => {
+  const recomputeOnboardSalaryComponentsWithConfig = (basicStr: string, exemptFlag: boolean, cfg: PayrollConfig | null) => {
     const basicVal = Number(basicStr) || 0;
-    if (!onboardPayrollConfig || basicVal <= 0) return;
+    if (!cfg || basicVal <= 0) {
+      setSalaryHra("0");
+      setSalaryTelephone("0");
+      setSalaryFuel("0");
+      setSalaryProfDev("0");
+      setSalaryLta("0");
+      setSalaryAllowances("0");
+      setSalaryPf("0");
+      setSalaryTds("0");
+      return;
+    }
 
-    const hra = onboardPayrollConfig.hraType === "percentage"
-      ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100))
-      : onboardPayrollConfig.hraValue;
+    const hra = cfg.hraType === "percentage"
+      ? Math.round(basicVal * (cfg.hraValue / 100))
+      : cfg.hraValue;
 
-    const allowances = onboardPayrollConfig.allowancesType === "percentage"
-      ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100))
-      : onboardPayrollConfig.allowancesValue;
+    const allowances = cfg.allowancesType === "percentage"
+      ? Math.round(basicVal * (cfg.allowancesValue / 100))
+      : cfg.allowancesValue;
 
-    const gross = basicVal + hra + allowances;
+    const telephone = cfg.telephoneType === "percentage"
+      ? Math.round(basicVal * ((cfg.telephoneValue || 0) / 100))
+      : (cfg.telephoneValue || 0);
+
+    const fuel = cfg.fuelType === "percentage"
+      ? Math.round(basicVal * ((cfg.fuelValue || 0) / 100))
+      : (cfg.fuelValue || 0);
+
+    const profDev = cfg.professionalDevType === "percentage"
+      ? Math.round(basicVal * ((cfg.professionalDevValue || 0) / 100))
+      : (cfg.professionalDevValue || 0);
+
+    const lta = cfg.ltaType === "percentage"
+      ? Math.round(basicVal * ((cfg.ltaValue || 0) / 100))
+      : (cfg.ltaValue || 0);
+
+    const gross = basicVal + hra + allowances + telephone + fuel + profDev + lta;
 
     const pf = exemptFlag
       ? 0
-      : onboardPayrollConfig.pfType === "percentage"
-        ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100))
-        : onboardPayrollConfig.pfValue;
+      : (cfg.pfModeDefault === "fixed_1800"
+        ? 1800
+        : (cfg.pfType === "percentage"
+          ? Math.round(basicVal * (cfg.pfValue / 100))
+          : cfg.pfValue));
 
-    const tax = onboardPayrollConfig.taxType === "percentage"
-      ? Math.round(gross * (onboardPayrollConfig.taxValue / 100))
-      : onboardPayrollConfig.taxValue;
+    const tax = cfg.taxType === "percentage"
+      ? Math.round(gross * (cfg.taxValue / 100))
+      : cfg.taxValue;
 
     setSalaryHra(String(hra));
+    setSalaryTelephone(String(telephone));
+    setSalaryFuel(String(fuel));
+    setSalaryProfDev(String(profDev));
+    setSalaryLta(String(lta));
     setSalaryAllowances(String(allowances));
     setSalaryPf(String(pf));
     setSalaryTds(String(tax));
+  };
+
+  const recomputeOnboardSalaryComponents = (basicStr: string, exemptFlag: boolean) => {
+    recomputeOnboardSalaryComponentsWithConfig(basicStr, exemptFlag, onboardPayrollConfig);
   };
 
 
@@ -580,53 +683,99 @@ export default function DirectoryView({
 
   const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingOnboard) return;
     if (!fullName || !email || !password) {
       return;
     }
 
-    let avatarUrl = "";
-    if (profileImageFile) {
-      avatarUrl = await uploadProfileImage();
+    if (phone.trim() && !isValidPhoneNumber(phone)) {
+      const is91 = phone.trim().startsWith("+91") || phone.trim().startsWith("91");
+      setOnboardError(is91 ? "Invalid Phone Number! Numbers with +91 must contain exactly 10 digits after +91 (total 12 digits)." : "Invalid Phone Number! Numbers without +91 must contain exactly 10 digits.");
+      return;
     }
+    if (!isValidPassword(password)) {
+      setOnboardError("Password must be at least 6 characters and contain at least 1 capital letter, 1 number, and 1 special symbol (!@#$%^&*).");
+      return;
+    }
+    if (pan.trim() && !isValidPAN(pan)) {
+      setOnboardError("Invalid PAN Number format! PAN must be 5 letters, 4 numbers, and 1 letter (e.g. ABCDE1234F).");
+      return;
+    }
+    if (uan.trim() && !isValidUAN(uan)) {
+      setOnboardError("Invalid UAN Number format! UAN must be exactly 12 digits (e.g. 101146669488).");
+      return;
+    }
+    setOnboardError(null);
 
-    const data = {
-      prefix, fullName, gender, email, phone, role: empRole, designationId: selectedDesgId, department,
-      branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
-      joiningDate, dateOfBirth, salaryBasic, salaryHra, salaryAllowances, salaryPf, salaryTds,
-      bankAccount, bankName, bankIfsc, address, bio, password,
-      emergencyName, emergencyRelation, emergencyPhone,
-      avatarUrl,
-      companyId: companyId
-    };
-    onOnboardEmployee(data);
+    setIsSubmittingOnboard(true);
+    try {
+      let avatarUrl = "";
+      if (profileImageFile) {
+        avatarUrl = await uploadProfileImage();
+      }
 
-    // Clear state & close
-    setPrefix("Mr");
-    setFullName("");
-    setGender("Male");
-    setEmail("");
-    setPhone("");
-    setPassword("");
-    setAddress("");
-    setBio("");
-    setEmergencyName("");
-    setEmergencyRelation("");
-    setEmergencyPhone("");
-    setDateOfBirth("");
-    setOnboardBranch("");
-    setSalaryBasic("");
-    setSalaryHra("");
-    setSalaryAllowances("");
-    setSalaryPf("");
-    setSalaryTds("");
-    setOnboardIsPfExempt(false);
+      const data = {
+        prefix, fullName, gender, email, phone, role: empRole, designationId: selectedDesgId, department, employmentType,
+        branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
+        joiningDate, dateOfBirth, salaryBasic, salaryHra,
+        salaryTelephone, salaryFuel, salaryProfDev, salaryLta,
+        salaryAllowances, salaryPf, salaryTds,
+        bankAccount, bankName, bankIfsc,
+        address: address.trim() ? (address.trim().charAt(0).toUpperCase() + address.trim().slice(1)) : "",
+        bio: bio.trim() ? (bio.trim().charAt(0).toUpperCase() + bio.trim().slice(1)) : "",
+        password,
+        emergencyName, emergencyRelation, emergencyPhone,
+        avatarUrl,
+        companyId: companyId,
+        customFields: {
+          pan: pan.trim().toUpperCase(),
+          uan: uan.trim(),
+        },
+        pan: pan.trim().toUpperCase(),
+        uan: uan.trim(),
+      };
+      await onOnboardEmployee(data);
 
-    setBankAccount("");
-    setBankName("");
-    setBankIfsc("");
-    setProfileImageFile(null);
-    setProfileImagePreview("");
-    setShowOnboardForm(false);
+      // Clear state & close
+      setPrefix("Mr");
+      setFullName("");
+      setGender("Male");
+      setEmail("");
+      setPhone("");
+      setPassword("");
+      setAddress("");
+      setBio("");
+      setEmergencyName("");
+      setEmergencyRelation("");
+      setEmergencyPhone("");
+      setDateOfBirth("");
+      setEmploymentType("");
+      setOnboardBranch("");
+      setSalaryBasic("");
+      setSalaryHra("");
+      setSalaryTelephone("");
+      setSalaryFuel("");
+      setSalaryProfDev("");
+      setSalaryLta("");
+      setSalaryAllowances("");
+      setSalaryPf("");
+      setSalaryTds("");
+      setPan("");
+      setUan("");
+      setOnboardIsPfExempt(false);
+
+      setBankAccount("");
+      setBankName("");
+      setBankIfsc("");
+      setProfileImageFile(null);
+      setProfileImagePreview("");
+      setShowOnboardForm(false);
+    } catch (err) {
+      console.error("Error onboarding employee:", err);
+      setOnboardError("Failed to onboard employee. Please try again.");
+    } finally {
+      setIsSubmittingOnboard(false);
+    }
   };
 
   const handleDocUpload = async (e: React.FormEvent) => {
@@ -697,6 +846,9 @@ export default function DirectoryView({
     setEditEmergencyRelation(emp.emergencyContact?.relation || "");
     setEditEmergencyPhone(emp.emergencyContact?.phone || "");
     setEditDateOfBirth(emp.dateOfBirth || "");
+    setEditEmploymentType(emp.employmentType || "");
+    setEditPan((emp.customFields?.pan as string) || emp.pan || "");
+    setEditUan((emp.customFields?.uan as string) || emp.uan || "");
     setEditProfileImageFile(null);
     setEditProfileImagePreview(emp.avatarUrl || "");
     setShowEditModal(true);
@@ -733,6 +885,16 @@ export default function DirectoryView({
     e.preventDefault();
     if (!activeEmployee || isSavingEdit) return;
 
+    if (editPan.trim() && !isValidPAN(editPan)) {
+      setEditError("Invalid PAN Number format! Must be 5 letters, 4 numbers, and 1 letter (e.g. ABCDE1234F).");
+      return;
+    }
+    if (editUan.trim() && !isValidUAN(editUan)) {
+      setEditError("Invalid UAN Number format! Must be exactly 12 digits (e.g. 101146669488).");
+      return;
+    }
+    setEditError(null);
+
     setIsSavingEdit(true);
     try {
       let avatarUrl = activeEmployee.avatarUrl || "";
@@ -752,8 +914,9 @@ export default function DirectoryView({
         department: editDept,
         branch: editBranch,
         status: editStatus,
-        address: editAddress,
-        bio: editBio,
+        employmentType: editEmploymentType,
+        address: editAddress.trim() ? (editAddress.trim().charAt(0).toUpperCase() + editAddress.trim().slice(1)) : "",
+        bio: editBio.trim() ? (editBio.trim().charAt(0).toUpperCase() + editBio.trim().slice(1)) : "",
         avatarUrl: avatarUrl,
         dateOfBirth: editDateOfBirth,
         salary: (() => {
@@ -792,6 +955,11 @@ export default function DirectoryView({
           name: editEmergencyName,
           relation: editEmergencyRelation,
           phone: editEmergencyPhone,
+        },
+        customFields: {
+          ...(activeEmployee.customFields || {}),
+          pan: editPan.trim().toUpperCase(),
+          uan: editUan.trim(),
         },
       };
 
@@ -1261,7 +1429,7 @@ export default function DirectoryView({
       {/* Main Grid: Directory List and Detail Profile Pane */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Employee List */}
-        <div className="lg:col-span-5 xl:col-span-5 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[650px] min-w-0">
+        <div className="lg:col-span-6 xl:col-span-6 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[650px] min-w-0">
           <div className="mb-3">
             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md sm:text-lg">
               {selectedStatusFilter === "All" ? "Employees Roster" : `${selectedStatusFilter} Employees Roster`}
@@ -1271,8 +1439,8 @@ export default function DirectoryView({
 
           {/* Segmented Status Filter Tabs */}
           {(role === "admin" || role === "hr") && (
-            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 dark:bg-[#141414] rounded-xl mb-3.5 border border-slate-200/60 dark:border-[#222] w-full box-border overflow-hidden">
-              {(["All", "Active", "Probation", "Suspended"] as const).map((st) => {
+            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100/90 dark:bg-[#141414] rounded-xl mb-3.5 border border-slate-200/60 dark:border-[#222] w-full box-border overflow-hidden">
+              {(["All", "Active", "Probation", "Suspended", "Resigned"] as const).map((st) => {
                 const isSelected = selectedStatusFilter === st;
                 const count = accessibleEmployees.filter(e => {
                   const matchesSearch = e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1289,6 +1457,7 @@ export default function DirectoryView({
                   Active: "bg-emerald-500",
                   Probation: "bg-amber-500",
                   Suspended: "bg-rose-500",
+                  Resigned: "bg-purple-500",
                 };
 
                 const activeStyles = {
@@ -1296,6 +1465,7 @@ export default function DirectoryView({
                   Active: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-800/50 shadow-xs font-bold",
                   Probation: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/50 shadow-xs font-bold",
                   Suspended: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/50 shadow-xs font-bold",
+                  Resigned: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/50 shadow-xs font-bold",
                 };
 
                 return (
@@ -1384,7 +1554,7 @@ export default function DirectoryView({
         </div>
 
         {/* Right Side: Tabular Profile Details */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+        <div className="lg:col-span-6 xl:col-span-6 h-[650px] min-h-[650px] flex flex-col justify-between space-y-6">
           {activeEmployee ? (
             <>
               {/* Profile Card Header */}
@@ -1438,185 +1608,86 @@ export default function DirectoryView({
                 {activeEmployee.bio && (
                   <div className="mt-5 pt-4 border-t border-slate-50 dark:border-gray-800">
                     <h4 className="text-xs font-semibold text-slate-400 dark:text-gray-400 uppercase tracking-wider mb-1.5">Employee Biography</h4>
-                    <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed font-sans">{activeEmployee.bio}</p>
+                    <p className="text-xs text-slate-600 dark:text-gray-300 leading-relaxed font-sans">
+                      {activeEmployee.bio ? (activeEmployee.bio.charAt(0).toUpperCase() + activeEmployee.bio.slice(1)) : ""}
+                    </p>
                   </div>
                 )}
               </div>
 
               {/* Bento Profile Tabulation */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Emergency & Financial Details */}
-                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-                  <div>
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
-                      <Landmark className="w-4.5 h-4.5 text-emerald-500 mr-2" /> Bank & Salary Specs
-                    </h3>
-                    <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 rounded-xl p-3 space-y-2 border border-slate-100/50 dark:border-[#1a1a1a]/50 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Basic Salary</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.basic.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">HRA Allowance</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.hra.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Other Allowances</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.allowances.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between border-t border-slate-100 dark:border-[#1a1a1a] pt-1.5">
-                        <span className="text-slate-400">Bank Account</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">****{activeEmployee.bankDetails.accountNumber.slice(-4)} ({activeEmployee.bankDetails.bankName})</span>
-                      </div>
+                {/* Bank & Salary Specs */}
+                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
+                    <Landmark className="w-4.5 h-4.5 text-emerald-500 mr-2" /> Bank & Salary Specs
+                  </h3>
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 rounded-xl p-3.5 space-y-2.5 border border-slate-100/50 dark:border-[#1a1a1a]/50 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Basic Salary</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.basic.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">HRA Allowance</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.hra.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Other Allowances</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">₹{activeEmployee.salary.allowances.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-t border-slate-100 dark:border-[#1a1a1a] pt-2">
+                      <span className="text-slate-400">Bank Account</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">****{activeEmployee.bankDetails.accountNumber.slice(-4)} ({activeEmployee.bankDetails.bankName})</span>
                     </div>
                   </div>
-
-                  <div>
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
-                      <MapPin className="w-4.5 h-4.5 text-emerald-500 mr-2" /> Emergency Contacts & Address
-                    </h3>
-                    <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 rounded-xl p-3 space-y-2 border border-slate-100/50 dark:border-[#1a1a1a]/50 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Contact Person</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300">{activeEmployee.emergencyContact.name} ({activeEmployee.emergencyContact.relation})</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Contact Phone</span>
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">{activeEmployee.emergencyContact.phone}</span>
-                      </div>
-                      <div className="border-t border-slate-100 dark:border-[#1a1a1a] pt-1.5">
-                        <span className="text-slate-400 block mb-1">Residential Address</span>
-                        <span className="text-slate-500 dark:text-gray-400 leading-tight block">{activeEmployee.address}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Custom & Dynamic Attributes Section */}
-                  {activeEmployee.customFields && Object.keys(activeEmployee.customFields).length > 0 && (
-                    <div>
-                      <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
-                        <Sparkles className="w-4.5 h-4.5 text-teal-500 mr-2" /> Custom & Dynamic Attributes
-                      </h3>
-                      <div className="bg-teal-50/40 dark:bg-teal-950/20 rounded-xl p-3 space-y-2 border border-teal-100 dark:border-teal-900/30 text-xs">
-                        {Object.entries(activeEmployee.customFields).map(([key, value]) => (
-                          <div key={key} className="flex justify-between items-center py-1 border-b last:border-b-0 border-teal-100/50 dark:border-teal-900/20">
-                            <span className="text-slate-500 dark:text-gray-400 font-medium">{key}</span>
-                            <span className="font-bold text-slate-800 dark:text-teal-200 bg-white dark:bg-[#0f0f0f] px-2 py-0.5 rounded-md border border-teal-100 dark:border-teal-900/40 font-mono text-[11px]">
-                              {String(value)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                {/* Onboarding Checklist Tracker */}
+                {/* Emergency Contacts & Address */}
                 <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm flex items-center">
-                      <ShieldCheck className="w-4.5 h-4.5 text-emerald-500 mr-2" /> Onboarding Checklist
-                    </h3>
-                    <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                      {activeEmployee.onboardingTasks.filter(t => t.completed).length}/{activeEmployee.onboardingTasks.length} Completed
-                    </span>
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
+                    <MapPin className="w-4.5 h-4.5 text-emerald-500 mr-2" /> Emergency Contacts & Address
+                  </h3>
+                  <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 rounded-xl p-3.5 space-y-2.5 border border-slate-100/50 dark:border-[#1a1a1a]/50 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Contact Person</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300">
+                        {activeEmployee.emergencyContact.name ? (activeEmployee.emergencyContact.name.charAt(0).toUpperCase() + activeEmployee.emergencyContact.name.slice(1)) : ""} {activeEmployee.emergencyContact.relation ? `(${activeEmployee.emergencyContact.relation.charAt(0).toUpperCase() + activeEmployee.emergencyContact.relation.slice(1)})` : ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Contact Phone</span>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">{activeEmployee.emergencyContact.phone}</span>
+                    </div>
+                    <div className="border-t border-slate-100 dark:border-[#1a1a1a] pt-2">
+                      <span className="text-slate-400 block mb-1">Residential Address</span>
+                      <span className="text-slate-500 dark:text-gray-400 leading-tight block">
+                        {activeEmployee.address ? (activeEmployee.address.charAt(0).toUpperCase() + activeEmployee.address.slice(1)) : ""}
+                      </span>
+                    </div>
                   </div>
+                </div>
+              </div>
 
-                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mb-3 leading-tight">Must be completed by newly onboarded NBFC employees during the 15-day probation window.</p>
-
-                  <div className="space-y-2.5">
-                    {activeEmployee.onboardingTasks.map(task => (
-                      <div
-                        key={task.id}
-                        onClick={() => {
-                          if (role === "admin" || role === "hr" || activeEmployee.id === currentUserId) {
-                            onToggleOnboardingTask(activeEmployee.id, task.id, !task.completed);
-                          }
-                        }}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${task.completed
-                          ? "bg-slate-50/50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a]/50 text-slate-500 dark:text-gray-400"
-                          : "bg-emerald-50/30 dark:bg-emerald-950/10 border-emerald-100 dark:border-emerald-900/40 text-slate-700 dark:text-gray-300 cursor-pointer hover:bg-emerald-50/50"
-                          }`}
-                      >
-                        <span className={`font-semibold ${task.completed ? "line-through text-slate-400 dark:text-gray-500" : ""}`}>{task.taskName}</span>
-                        <span className="flex items-center">
-                          {task.completed ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-slate-300 dark:text-gray-600" />
-                          )}
+              {/* Custom & Dynamic Attributes Section */}
+              {activeEmployee.customFields && Object.keys(activeEmployee.customFields).length > 0 && (
+                <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm mb-3 flex items-center">
+                    <Sparkles className="w-4.5 h-4.5 text-teal-500 mr-2" /> Custom & Dynamic Attributes
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {Object.entries(activeEmployee.customFields).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center p-3 rounded-xl bg-teal-50/40 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/30 text-xs">
+                        <span className="text-slate-500 dark:text-gray-400 font-bold uppercase tracking-wider text-[11px]">
+                          {key.toLowerCase() === "pan" ? "PAN Number" : key.toLowerCase() === "uan" ? "UAN Number" : key.toUpperCase()}
+                        </span>
+                        <span className="font-bold text-slate-800 dark:text-teal-200 bg-white dark:bg-[#0f0f0f] px-2.5 py-1 rounded-md border border-teal-100 dark:border-teal-900/40 font-mono text-[11px] uppercase tracking-wider">
+                          {String(value).toUpperCase()}
                         </span>
                       </div>
                     ))}
-                    {activeEmployee.onboardingTasks.length === 0 && (
-                      <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-4">No pending onboarding items.</p>
-                    )}
                   </div>
                 </div>
-              </div>
-
-              {/* Document Management Section */}
-              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-                <div className="flex items-center justify-between mb-4 border-b border-slate-50 dark:border-[#1a1a1a] pb-3">
-                  <div>
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Employee Document Vault</h3>
-                    <p className="text-xs text-slate-400 dark:text-gray-500">Aadhaar, PAN, and training clearance logs</p>
-                  </div>
-
-                  <button
-                    onClick={() => setShowUploadModal(true)}
-                    className="border border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/10 transition-colors cursor-pointer"
-                  >
-                    <FileUp className="w-4 h-4" />
-                    <span>Upload Document</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {activeEmployee.documents.map(doc => (
-                    <div key={doc.id} className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-2.5 min-w-0">
-                        <div className="bg-emerald-100/50 dark:bg-emerald-950/40 p-2 rounded-lg text-emerald-600 dark:text-emerald-400">
-                          <FileText className="w-4.5 h-4.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-slate-700 dark:text-gray-300 truncate">{doc.name}</p>
-                          <p className="text-[10px] text-slate-400 dark:text-gray-500 font-medium">Category: {doc.category} • {doc.size}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewDoc({
-                            name: doc.name,
-                            url: doc.fileUrl || "",
-                            category: doc.category,
-                            size: doc.size
-                          })}
-                          className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
-                          title="Preview Document"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
-                          <button
-                            type="button"
-                            onClick={() => onDeleteDocument(activeEmployee.id, doc.id || doc.name)}
-                            className="p-1 hover:bg-white dark:hover:bg-gray-800 rounded text-rose-400 hover:text-rose-600 dark:text-rose-500 dark:hover:text-rose-400 cursor-pointer"
-                            title="Delete Document"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {activeEmployee.documents.length === 0 && (
-                    <p className="col-span-2 text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No uploaded compliance documents yet.</p>
-                  )}
-                </div>
-              </div>
+              )}
             </>
           ) : (
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-12 text-center shadow-xs dark:neon-glow flex flex-col items-center justify-center min-h-[450px]">
@@ -1634,12 +1705,373 @@ export default function DirectoryView({
         </div>
       </div>
 
+      {/* Checklists & Document Vault Full Width Stack */}
+      {activeEmployee && (
+        <div className="space-y-4 mt-6 w-full">
+          {(() => {
+            const isExitDoc = (doc: EmployeeDocument) => {
+              const cat = (doc.category || "").toLowerCase();
+              const name = (doc.name || "").toLowerCase();
+              return (
+                cat.includes("exit") ||
+                cat.includes("resignation") ||
+                cat.includes("separation") ||
+                cat.includes("no dues") ||
+                cat.includes("asset handover") ||
+                name.includes("(exit)") ||
+                name.includes("resignation") ||
+                name.includes("no dues") ||
+                name.includes("exit clearance") ||
+                name.includes("clearance")
+              );
+            };
+
+            const onboardingDocs = activeEmployee.documents.filter(doc => !isExitDoc(doc));
+            const exitDocs = activeEmployee.documents.filter(doc => isExitDoc(doc));
+
+            return (
+              <div className="space-y-4 w-full">
+                {/* Header & Toggle Switch */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] p-4 rounded-2xl border border-slate-200 dark:border-[#222] shadow-xs">
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2.5 rounded-xl text-white font-bold ${activeChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
+                      {activeChecklistTab === "exit" ? <LogOut className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-base sm:text-lg">
+                        {activeChecklistTab === "exit" ? "Employee Exit & Separation Clearance Checklist & Vault" : "Onboarding Document Checklist & Vault"}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-gray-400">
+                        {activeChecklistTab === "exit"
+                          ? "Exit separation requirements paired with approved exit document vault"
+                          : "Mandatory employee KYC requirements paired with approved onboarding document vault"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Toggle Switch */}
+                  <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveChecklistTab("onboarding")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                        activeChecklistTab === "onboarding"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                      <span>Onboarding Checklist &amp; Vault</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveChecklistTab("exit")}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                        activeChecklistTab === "exit"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      }`}
+                    >
+                      <LogOut className="w-3.5 h-3.5 shrink-0" />
+                      <span>Exit Clearance Checklist &amp; Vault</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2-Column Paired Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+                  {activeChecklistTab === "onboarding" ? (
+                    <>
+                      {/* Left Column: Onboarding Document Checklist Card */}
+                      <ChecklistCard
+                        type="onboarding"
+                        employee={activeEmployee}
+                        templates={onboardingChecklistTemplates}
+                        currentUserRole={role}
+                        currentUserId={currentUserId}
+                        onCreateTemplate={onCreateChecklistTemplate}
+                        onDeleteTemplate={onDeleteChecklistTemplate}
+                        onUploadDocument={async (empId, itemId, file, category) => {
+                          if (onUploadChecklistDocument) {
+                            await onUploadChecklistDocument(empId, itemId, file, category);
+                          }
+                        }}
+                        onReviewItem={async (empId, itemId, action, comments) => {
+                          if (onReviewChecklistItem) {
+                            await onReviewChecklistItem(empId, itemId, action, comments);
+                          }
+                        }}
+                      />
+
+                      {/* Right Column: Onboarding Document Checklist Vault Card */}
+                      <div className="bg-gradient-to-br from-emerald-500/5 via-white to-teal-500/5 dark:from-[#081b14] dark:via-[#0f0f0f] dark:to-[#091618] border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4 border-b border-emerald-100 dark:border-emerald-950/60 pb-3 gap-2">
+                            <div className="flex items-start space-x-3 min-w-0 flex-1">
+                              <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                                  Onboarding Document Checklist
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                                  Aadhaar, PAN, contracts, tax forms &amp; clearance logs
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setDocCategory("Onboarding Document Checklist");
+                                setShowUploadModal(true);
+                              }}
+                              className="border border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                            >
+                              <FileUp className="w-4 h-4" />
+                              <span>Upload Document</span>
+                            </button>
+                          </div>
+
+                          <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                            <div className="grid grid-cols-1 gap-3">
+                              {onboardingDocs.map(doc => {
+                                const cleanName = doc.name.replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+                                const matchingItem = (activeEmployee.onboardingChecklist || [])
+                                  .concat(activeEmployee.exitChecklist || [])
+                                  .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
+                                const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
+                                const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
+
+                                return (
+                                  <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-emerald-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-emerald-300 dark:hover:border-emerald-800 transition-all hover:shadow-xs">
+                                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                      <div className="p-2.5 bg-emerald-100/80 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 rounded-xl shrink-0">
+                                        <FileText className="w-4.5 h-4.5" />
+                                      </div>
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
+                                          {cleanName}
+                                        </p>
+                                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 whitespace-nowrap">
+                                            {doc.category === "Onboarding Document Checklist" ? "Onboarding Document Checklist" : doc.category}
+                                          </span>
+                                          <span className="text-xs text-slate-400 font-mono">• {doc.size || "1.2 MB"}</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
+                                          {uploadDate && (
+                                            <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
+                                              <Clock className="w-3 h-3 text-blue-500 shrink-0" />
+                                              <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
+                                            </span>
+                                          )}
+                                          {approveDate && (
+                                            <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                              <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-1 shrink-0 pl-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewDoc({
+                                          name: cleanName,
+                                          url: doc.fileUrl || "",
+                                          category: doc.category,
+                                          size: doc.size
+                                        })}
+                                        className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer border border-emerald-200/50 dark:border-emerald-800/40"
+                                        title="Preview Document"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                      {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onDeleteDocument(activeEmployee.id, doc.id || doc.name)}
+                                          className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-rose-500 hover:text-rose-700 dark:text-rose-400 cursor-pointer border border-rose-200/50 dark:border-rose-900/40"
+                                          title="Delete Document"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {onboardingDocs.length === 0 && (
+                                <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-emerald-200/60 dark:border-emerald-950">
+                                  No uploaded onboarding compliance documents yet.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Left Column: Exit Document Clearance Checklist Card */}
+                      <ChecklistCard
+                        type="exit"
+                        employee={activeEmployee}
+                        templates={exitChecklistTemplates}
+                        currentUserRole={role}
+                        currentUserId={currentUserId}
+                        onCreateTemplate={onCreateChecklistTemplate}
+                        onDeleteTemplate={onDeleteChecklistTemplate}
+                        onUploadDocument={async (empId, itemId, file, category) => {
+                          if (onUploadChecklistDocument) {
+                            await onUploadChecklistDocument(empId, itemId, file, category);
+                          }
+                        }}
+                        onReviewItem={async (empId, itemId, action, comments) => {
+                          if (onReviewChecklistItem) {
+                            await onReviewChecklistItem(empId, itemId, action, comments);
+                          }
+                        }}
+                        onGrantExitClearance={async (empId) => {
+                          if (onGrantExitClearance) {
+                            await onGrantExitClearance(empId);
+                          }
+                        }}
+                        onInitiateResignation={async (empId) => {
+                          if (onInitiateResignation) {
+                            await onInitiateResignation(empId);
+                          }
+                        }}
+                      />
+
+                      {/* Right Column: Employee Exit & Separation Clearance Checklist Vault Card */}
+                      <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
+                            <div className="flex items-start space-x-3 min-w-0 flex-1">
+                              <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                                  Employee Exit &amp; Separation Clearance Checklist
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                                  Resignation copy, no-dues certificate, asset handover &amp; exit logs
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setDocCategory("Employee Exit & Separation Clearance Checklist");
+                                setShowUploadModal(true);
+                              }}
+                              className="border border-amber-600 text-amber-700 dark:border-amber-500 dark:text-amber-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                            >
+                              <FileUp className="w-4 h-4" />
+                              <span>Upload Document</span>
+                            </button>
+                          </div>
+
+                          <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                            <div className="grid grid-cols-1 gap-3">
+                              {exitDocs.map(doc => {
+                                const cleanName = doc.name.replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+                                const matchingItem = (activeEmployee.onboardingChecklist || [])
+                                  .concat(activeEmployee.exitChecklist || [])
+                                  .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
+                                const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
+                                const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
+
+                                return (
+                                  <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-amber-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800 transition-all hover:shadow-xs">
+                                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                      <div className="p-2.5 bg-amber-100/80 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 rounded-xl shrink-0">
+                                        <FileText className="w-4.5 h-4.5" />
+                                      </div>
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
+                                          {cleanName}
+                                        </p>
+                                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 whitespace-nowrap">
+                                            {doc.category === "Employee Exit & Separation Clearance Checklist" ? "Employee Exit Clearance Checklist" : doc.category}
+                                          </span>
+                                          <span className="text-xs text-slate-400 font-mono">• {doc.size || "1.2 MB"}</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
+                                          {uploadDate && (
+                                            <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
+                                              <Clock className="w-3 h-3 text-blue-500 shrink-0" />
+                                              <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
+                                            </span>
+                                          )}
+                                          {approveDate && (
+                                            <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                              <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-1 shrink-0 pl-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setPreviewDoc({
+                                          name: cleanName,
+                                          url: doc.fileUrl || "",
+                                          category: doc.category,
+                                          size: doc.size
+                                        })}
+                                        className="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-xl text-amber-600 dark:text-amber-400 transition-colors cursor-pointer border border-amber-200/50 dark:border-amber-800/40"
+                                        title="Preview Document"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                      {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onDeleteDocument(activeEmployee.id, doc.id || doc.name)}
+                                          className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-rose-500 hover:text-rose-700 dark:text-rose-400 cursor-pointer border border-rose-200/50 dark:border-rose-900/40"
+                                          title="Delete Document"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {exitDocs.length === 0 && (
+                                <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-amber-200/60 dark:border-amber-950">
+                                  No uploaded exit &amp; separation clearance documents yet.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Upload Document Modal */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 flex items-center">
-              <FileUp className="w-5 h-5 text-emerald-500 mr-2" /> Upload Security Document
+              <FileUp className="w-5 h-5 text-emerald-500 mr-2" /> Upload Document
             </h3>
 
             <form onSubmit={handleDocUpload} className="space-y-4">
@@ -1679,11 +2111,22 @@ export default function DirectoryView({
                   onChange={(e) => setDocCategory(e.target.value as any)}
                   className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
                 >
-                  <option value="ID Proof">ID Proof (Aadhaar, Passport, PAN)</option>
-                  <option value="Contract">Contract & Employment Agreement</option>
-                  <option value="Tax Document">Tax Document / Form 16</option>
-                  <option value="Educational">Educational & Certificates</option>
-                  <option value="Other">Other Miscellaneous</option>
+                  <optgroup label="Onboarding Document Checklist">
+                    <option value="Onboarding Document Checklist">Onboarding Document Checklist</option>
+                    <option value="ID Proof">ID Proof (Aadhaar, Passport, PAN)</option>
+                    <option value="Contract">Contract &amp; Employment Agreement</option>
+                    <option value="Tax Document">Tax Document / Form 16</option>
+                    <option value="Educational">Educational &amp; Certificates</option>
+                  </optgroup>
+                  <optgroup label="Employee Exit &amp; Separation Clearance Checklist">
+                    <option value="Employee Exit &amp; Separation Clearance Checklist">Employee Exit &amp; Separation Clearance Checklist</option>
+                    <option value="Resignation Letter">Resignation / Separation Letter</option>
+                    <option value="No Dues Certificate">No Dues Certificate</option>
+                    <option value="Asset Handover">Asset Handover Receipt</option>
+                  </optgroup>
+                  <optgroup label="General / Other">
+                    <option value="Other">Other Miscellaneous</option>
+                  </optgroup>
                 </select>
               </div>
 
@@ -1783,10 +2226,34 @@ export default function DirectoryView({
                       <input
                         type="text"
                         value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (onboardError) setOnboardError(null);
+                        }}
                         placeholder="e.g. +91 99999 88888"
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                        className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-medium transition-colors ${
+                          phone.trim() && !isValidPhoneNumber(phone)
+                            ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                            : phone.trim() && isValidPhoneNumber(phone)
+                            ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                            : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                        }`}
                       />
+                      {phone.trim() && !isValidPhoneNumber(phone) ? (
+                        <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3 shrink-0" />
+                          {phone.trim().startsWith("+91") || phone.trim().startsWith("91")
+                            ? "Phone with +91 must have exactly 10 digits after country code (total 12 digits)"
+                            : "Phone number without +91 must be exactly 10 digits"}
+                        </p>
+                      ) : phone.trim() && isValidPhoneNumber(phone) ? (
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          Valid Phone Number format ({phone.trim().startsWith("+91") || phone.trim().startsWith("91") ? "12 digits with +91" : "10 digits"})
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 mt-1">10 digits without +91 or 12 digits with +91</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Password *</label>
@@ -1794,9 +2261,20 @@ export default function DirectoryView({
                         <input
                           type={showPassword ? "text" : "password"}
                           value={password}
-                          onChange={(e) => setPassword(e.target.value)}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            if (onboardError) setOnboardError(null);
+                          }}
+                          onFocus={() => setIsPasswordFocused(true)}
+                          onBlur={() => setIsPasswordFocused(false)}
                           placeholder="Set login password"
-                          className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 pr-9 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                          className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 pr-9 text-xs rounded-xl border font-medium transition-colors ${
+                            password && !isValidPassword(password)
+                              ? "border-amber-500 focus:border-amber-500"
+                              : password && isValidPassword(password)
+                              ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                              : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                          }`}
                           required
                         />
                         <button
@@ -1808,6 +2286,34 @@ export default function DirectoryView({
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
+
+                      {/* Live Password Strength Requirements Checklist — Shown when field is focused or being typed */}
+                      {(isPasswordFocused || (password.length > 0 && !isValidPassword(password))) && (() => {
+                        const s = checkPasswordStrength(password);
+                        return (
+                          <div className="mt-2 p-2.5 bg-slate-50 dark:bg-[#0c0c0c] rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-1 text-[10px] animate-in fade-in slide-in-from-top-1 duration-150">
+                            <p className="font-bold text-slate-500 dark:text-gray-400 mb-1 uppercase tracking-wider text-[9px]">Password Requirements:</p>
+                            <div className="grid grid-cols-2 gap-1.5 font-medium">
+                              <div className={`flex items-center gap-1.5 ${s.hasUpper ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                                {s.hasUpper ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">A</span>}
+                                <span>1 Capital Letter (A-Z)</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 ${s.hasNumber ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                                {s.hasNumber ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">1</span>}
+                                <span>1 Numeric Digit (0-9)</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 ${s.hasSpecial ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                                {s.hasSpecial ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">#</span>}
+                                <span>1 Special Symbol (!@#$)</span>
+                              </div>
+                              <div className={`flex items-center gap-1.5 ${s.hasMinLength ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-gray-500"}`}>
+                                {s.hasMinLength ? <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" /> : <span className="w-3.5 h-3.5 rounded-full border border-slate-300 dark:border-gray-600 shrink-0 flex items-center justify-center text-[8px] font-bold">6</span>}
+                                <span>Min 6 Characters</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Gender *</label>
@@ -1892,7 +2398,7 @@ export default function DirectoryView({
                       >
                         {(customDepartments && customDepartments.length > 0
                           ? customDepartments
-                          : ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"]
+                          : ["Information Technology", "Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales", "Finance", "Executive"]
                         ).map((d) => (
                           <option key={d} value={d}>{d}</option>
                         ))}
@@ -1940,6 +2446,19 @@ export default function DirectoryView({
                         {(customBranches || []).map((b) => (
                           <option key={b} value={b}>{b}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Type *</label>
+                      <select
+                        value={employmentType}
+                        onChange={(e) => setEmploymentType(e.target.value as any)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                      >
+                        <option value="">Select Employment Type...</option>
+                        <option value="permanent">Permanent</option>
+                        <option value="contract">Contract</option>
+                        <option value="consultant">Consultant</option>
                       </select>
                     </div>
                   </div>
@@ -2022,10 +2541,26 @@ export default function DirectoryView({
                         <span className="text-emerald-500 font-mono">Tenant Rules Applied</span>
                       </p>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] pt-1">
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">HRA Allowance</span>
                           <span className="font-bold text-slate-700 dark:text-gray-200 font-mono">₹{Number(salaryHra).toLocaleString()}</span>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">Telephone Allow.</span>
+                          <input type="number" value={salaryTelephone} onChange={e => setSalaryTelephone(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">Fuel Allow.</span>
+                          <input type="number" value={salaryFuel} onChange={e => setSalaryFuel(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">Prof. Dev.</span>
+                          <input type="number" value={salaryProfDev} onChange={e => setSalaryProfDev(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">LTA</span>
+                          <input type="number" value={salaryLta} onChange={e => setSalaryLta(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">Special Allowances</span>
@@ -2047,10 +2582,10 @@ export default function DirectoryView({
 
                       <div className="bg-emerald-600/10 dark:bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/20 flex items-center justify-between font-bold text-xs pt-1.5">
                         <span className="text-slate-700 dark:text-gray-200">
-                          Gross Pay: <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{(Number(salaryBasic) + Number(salaryHra) + Number(salaryAllowances)).toLocaleString()}</span>
+                          Gross Pay: <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{(Number(salaryBasic) + Number(salaryHra) + Number(salaryTelephone) + Number(salaryFuel) + Number(salaryProfDev) + Number(salaryLta) + Number(salaryAllowances)).toLocaleString()}</span>
                         </span>
                         <span className="text-emerald-600 dark:text-emerald-400 font-mono">
-                          Est. Net Pay: ₹{((Number(salaryBasic) + Number(salaryHra) + Number(salaryAllowances)) - (Number(salaryPf) + Number(salaryTds))).toLocaleString()}
+                          Est. Net Pay: ₹{((Number(salaryBasic) + Number(salaryHra) + Number(salaryTelephone) + Number(salaryFuel) + Number(salaryProfDev) + Number(salaryLta) + Number(salaryAllowances)) - (Number(salaryPf) + Number(salaryTds))).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -2148,7 +2683,86 @@ export default function DirectoryView({
                   </div>
                 </div>
 
-                {/* Section 7: Biography */}
+                {/* Section 7: PAN & UAN Numbers */}
+                <div>
+                  <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">7. Identity &amp; Compliance Documents</h4>
+                  {onboardError && (
+                    <div className="mb-3 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 shrink-0" />
+                      <span>{onboardError}</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">PAN Number</label>
+                      <input
+                        type="text"
+                        value={pan}
+                        onChange={(e) => {
+                          setPan(e.target.value.toUpperCase().trim());
+                          if (onboardError) setOnboardError(null);
+                        }}
+                        placeholder="e.g. ABCDE1234F"
+                        maxLength={10}
+                        className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest uppercase font-medium transition-colors ${
+                          pan.trim() && !isValidPAN(pan)
+                            ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                            : pan.trim() && isValidPAN(pan)
+                            ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                            : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                        }`}
+                      />
+                      {pan.trim() && !isValidPAN(pan) ? (
+                        <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3 shrink-0" />
+                          Invalid PAN format (5 letters, 4 numbers, 1 letter)
+                        </p>
+                      ) : pan.trim() && isValidPAN(pan) ? (
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          Valid PAN Number format
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 mt-1">Permanent Account Number (10 characters, e.g. ABCDE1234F)</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">UAN Number</label>
+                      <input
+                        type="text"
+                        value={uan}
+                        onChange={(e) => {
+                          setUan(e.target.value.replace(/\D/g, ""));
+                          if (onboardError) setOnboardError(null);
+                        }}
+                        placeholder="e.g. 101146669488"
+                        maxLength={12}
+                        className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest font-medium transition-colors ${
+                          uan.trim() && !isValidUAN(uan)
+                            ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                            : uan.trim() && isValidUAN(uan)
+                            ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                            : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                        }`}
+                      />
+                      {uan.trim() && !isValidUAN(uan) ? (
+                        <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3 shrink-0" />
+                          Invalid UAN format (Must be 12 digits)
+                        </p>
+                      ) : uan.trim() && isValidUAN(uan) ? (
+                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 shrink-0" />
+                          Valid UAN Number format
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 mt-1">Universal Account Number (12 digits) for PF</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 8: Biography */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employee Bio / Profile Summary</label>
                   <textarea
@@ -2170,10 +2784,20 @@ export default function DirectoryView({
                   </button>
                   <button
                     type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
+                    disabled={isSubmittingOnboard}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-all"
                   >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Complete Onboarding</span>
+                    {isSubmittingOnboard ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                        <span>Creating Profile...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>Complete Onboarding</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
@@ -2297,6 +2921,21 @@ export default function DirectoryView({
                               <option value="Suspended">Suspended</option>
                             </select>
                           </div>
+                          {(role === "admin" || role === "hr") && (
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Employment Type</label>
+                              <select
+                                value={editEmploymentType}
+                                onChange={(e) => setEditEmploymentType(e.target.value as any)}
+                                className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              >
+                                <option value="">Select Employment Type...</option>
+                                <option value="permanent">Permanent</option>
+                                <option value="contract">Contract</option>
+                                <option value="consultant">Consultant</option>
+                              </select>
+                            </div>
+                          )}
                           <div>
                             <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Date of Birth</label>
                             <input
@@ -2533,6 +3172,85 @@ export default function DirectoryView({
                               onChange={(e) => setEditEmergencyPhone(e.target.value)}
                               className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
                             />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section: PAN & UAN Numbers */}
+                      <div>
+                        <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Identity &amp; Compliance Documents</h4>
+                        {editError && (
+                          <div className="mb-3 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 shrink-0" />
+                            <span>{editError}</span>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">PAN Number</label>
+                            <input
+                              type="text"
+                              value={editPan}
+                              onChange={(e) => {
+                                setEditPan(e.target.value.toUpperCase().trim());
+                                if (editError) setEditError(null);
+                              }}
+                              placeholder="e.g. ABCDE1234F"
+                              maxLength={10}
+                              className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest uppercase font-medium transition-colors ${
+                                editPan.trim() && !isValidPAN(editPan)
+                                  ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                                  : editPan.trim() && isValidPAN(editPan)
+                                  ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                                  : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                              }`}
+                            />
+                            {editPan.trim() && !isValidPAN(editPan) ? (
+                              <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3 shrink-0" />
+                                Invalid PAN format (5 letters, 4 numbers, 1 letter)
+                              </p>
+                            ) : editPan.trim() && isValidPAN(editPan) ? (
+                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                Valid PAN Number format
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 mt-1">Permanent Account Number (10 characters)</p>
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">UAN Number</label>
+                            <input
+                              type="text"
+                              value={editUan}
+                              onChange={(e) => {
+                                setEditUan(e.target.value.replace(/\D/g, ""));
+                                if (editError) setEditError(null);
+                              }}
+                              placeholder="e.g. 101146669488"
+                              maxLength={12}
+                              className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest font-medium transition-colors ${
+                                editUan.trim() && !isValidUAN(editUan)
+                                  ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
+                                  : editUan.trim() && isValidUAN(editUan)
+                                  ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 focus:border-emerald-500"
+                                  : "border-slate-100 dark:border-[#1a1a1a] focus:border-emerald-500"
+                              }`}
+                            />
+                            {editUan.trim() && !isValidUAN(editUan) ? (
+                              <p className="text-[10px] text-rose-500 font-semibold mt-1 flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3 shrink-0" />
+                                Invalid UAN format (Must be 12 digits)
+                              </p>
+                            ) : editUan.trim() && isValidUAN(editUan) ? (
+                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                Valid UAN Number format
+                              </p>
+                            ) : (
+                              <p className="text-[10px] text-slate-400 mt-1">Universal Account Number (12 digits) for PF</p>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -3019,7 +3737,7 @@ export default function DirectoryView({
                         <th className="p-2.5 font-bold">Phone</th>
                         {customFieldHeaders.map(ch => (
                           <th key={ch} className="p-2.5 font-bold text-teal-600 dark:text-teal-400">
-                            {ch} ⭐
+                            {ch.toLowerCase() === "pan" ? "PAN Number" : ch.toLowerCase() === "uan" ? "UAN Number" : ch.toUpperCase()} ⭐
                           </th>
                         ))}
                       </tr>

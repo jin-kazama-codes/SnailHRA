@@ -108,6 +108,7 @@ export async function POST(
       status: "Active",
       department,
       branch,
+      employment_type: body.employmentType || body.employment_type || null,
       joining_date: joiningDate || new Date().toISOString().split("T")[0],
       date_of_birth: dateOfBirth || null,
       designation_id: null,
@@ -117,6 +118,10 @@ export async function POST(
       // Salary
       salary_basic: Number(salaryBasic) || 0,
       salary_hra: Number(salaryHra) || 0,
+      salary_telephone: Number(body.salaryTelephone) || 0,
+      salary_fuel: Number(body.salaryFuel) || 0,
+      salary_professional_dev: Number(body.salaryProfDev) || 0,
+      salary_lta: Number(body.salaryLta) || 0,
       salary_allowances: Number(salaryAllowances) || 0,
       salary_pf_deduction: Number(salaryPf) || 0,
       salary_tds_deduction: Number(salaryTds) || 0,
@@ -128,6 +133,10 @@ export async function POST(
       emergency_contact_name: emergencyName || null,
       emergency_contact_relation: emergencyRelation || null,
       emergency_contact_phone: emergencyPhone || null,
+      // Compliance
+      pan: body.customFields?.pan || body.pan || null,
+      uan: body.customFields?.uan || body.uan || null,
+      custom_fields: body.customFields || { pan: body.pan || "", uan: body.uan || "" },
     }).select().single();
 
     if (error) {

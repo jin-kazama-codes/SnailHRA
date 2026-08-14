@@ -5,13 +5,21 @@ import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
 function parseIps(ipInput: string | string[] | undefined | null): string[] {
   if (!ipInput) return [];
-  if (Array.isArray(ipInput)) {
-    return ipInput.map(i => String(i).trim()).filter(Boolean);
-  }
-  return String(ipInput)
-    .split(",")
-    .map(i => i.trim())
-    .filter(Boolean);
+  const raw: string[] = Array.isArray(ipInput)
+    ? ipInput.map(i => String(i).trim())
+    : String(ipInput).split(",").map(i => i.trim());
+  // Allow plain IPs and CIDR notation (e.g. 192.168.1.0/24 or 10.0.0.0/8)
+  return raw.filter(entry => {
+    if (!entry) return false;
+    // CIDR format: x.x.x.x/prefix
+    if (entry.includes("/")) {
+      const [ip, prefix] = entry.split("/");
+      const num = parseInt(prefix, 10);
+      return ip && !isNaN(num) && num >= 0 && num <= 32;
+    }
+    // Plain IP: basic format check
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(entry);
+  });
 }
 
 export async function GET(request: Request) {

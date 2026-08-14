@@ -77,42 +77,58 @@ export async function POST(request: Request) {
     const newEmp: Employee = {
       id: empId,
       companyId: resolvedCompanyId,
+      prefix: body.prefix || "Mr",
       fullName: capitalizeName(body.fullName || "New Agent"),
+      gender: body.gender || "Male",
       email: body.email || "",
       phone: body.phone || "+91 99999 88888",
       role: body.role || "employee",
       designationId: body.designationId || "des-4",
-      department: body.department || "Loans",
+      department: body.department || "Information Technology",
       joiningDate: body.joiningDate || new Date().toISOString().split("T")[0],
       dateOfBirth: body.dateOfBirth || undefined,
       status: body.status || "Active",
       salary: body.salary || {
         basic: Number(body.salaryBasic) || 40000,
         hra: Number(body.salaryHra) || 16000,
+        telephone: Number(body.salaryTelephone) || 0,
+        fuel: Number(body.salaryFuel) || 0,
+        professionalDev: Number(body.salaryProfDev) || 0,
+        lta: Number(body.salaryLta) || 0,
         allowances: Number(body.salaryAllowances) || 8000,
         pfDeduction: Number(body.salaryPf) || 3600,
-        tdsDeduction: Number(body.salaryTds) || 0
+        pfMode: body.salaryPfMode || body.pfMode || "percentage",
+        tdsDeduction: Number(body.salaryTds) || 0,
+        tdsMode: body.salaryTdsMode || body.tdsMode || "slab",
+        tdsOptIn: body.salaryTdsOptIn !== undefined ? Boolean(body.salaryTdsOptIn) : (body.tdsOptIn !== undefined ? Boolean(body.tdsOptIn) : true),
+        esiOptIn: body.salaryEsiOptIn !== undefined ? Boolean(body.salaryEsiOptIn) : (body.esiOptIn !== undefined ? Boolean(body.esiOptIn) : true),
+        esiDeduction: Number(body.salaryEsi) || 0
       },
       bankDetails: body.bankDetails || {
         accountNumber: body.bankAccount || "",
-        bankName: body.bankName || "State Bank of India",
+        bankName: body.bankName || "",
         ifsc: body.bankIfsc || ""
       },
-      address: body.address || "",
+      address: (body.address || "").trim() ? ((body.address || "").trim().charAt(0).toUpperCase() + (body.address || "").trim().slice(1)) : "",
       emergencyContact: body.emergencyContact || {
         name: body.emergencyName || "Guardian",
         relation: body.emergencyRelation || "Spouse",
         phone: body.emergencyPhone || "+91 99999 88888"
       },
       documents: body.documents || [],
+      customFields: body.customFields || {
+        pan: (body.pan || "").trim().toUpperCase(),
+        uan: (body.uan || "").trim()
+      },
       onboardingTasks: body.onboardingTasks || [
         { id: `tsk-auto-${empId}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: body.joiningDate || "2026-07-25" },
         { id: `tsk-auto-${empId}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: body.joiningDate || "2026-07-27" },
         { id: `tsk-auto-${empId}-3`, taskName: `Allocate ${resolvedCompanyName} Credentials & Assets`, completed: false, dueDate: body.joiningDate || "2026-07-28" }
       ],
       avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-      bio: body.bio || "",
+      bio: (body.bio || "").trim() ? ((body.bio || "").trim().charAt(0).toUpperCase() + (body.bio || "").trim().slice(1)) : "",
       branch: body.branch || "Mumbai Branch",
+      employmentType: body.employmentType || body.employment_type || "",
       password: hashedPassword
     };
 
@@ -124,13 +140,16 @@ export async function POST(request: Request) {
         await supabase.from("employees").upsert({
           id: newEmp.id,
           company_id: newEmp.companyId,
+          prefix: newEmp.prefix || null,
           full_name: newEmp.fullName,
+          gender: newEmp.gender || null,
           email: newEmp.email,
           phone: newEmp.phone,
           role: newEmp.role,
           designation_id: newEmp.designationId,
           department: newEmp.department,
           branch: newEmp.branch,
+          employment_type: newEmp.employmentType || null,
           joining_date: newEmp.joiningDate,
           date_of_birth: newEmp.dateOfBirth || null,
           status: newEmp.status,
@@ -142,13 +161,23 @@ export async function POST(request: Request) {
           bio: newEmp.bio,
           salary_basic: newEmp.salary?.basic,
           salary_hra: newEmp.salary?.hra,
+          salary_telephone: newEmp.salary?.telephone || 0,
+          salary_fuel: newEmp.salary?.fuel || 0,
+          salary_professional_dev: newEmp.salary?.professionalDev || 0,
+          salary_lta: newEmp.salary?.lta || 0,
           salary_allowances: newEmp.salary?.allowances,
           salary_pf_deduction: newEmp.salary?.pfDeduction,
           salary_tds_deduction: newEmp.salary?.tdsDeduction,
           bank_account_number: newEmp.bankDetails?.accountNumber,
           bank_name: newEmp.bankDetails?.bankName,
           bank_ifsc: newEmp.bankDetails?.ifsc,
-          password: newEmp.password
+          password: newEmp.password,
+          pan: (newEmp.customFields?.pan as string) || (newEmp as any).pan || null,
+          uan: (newEmp.customFields?.uan as string) || (newEmp as any).uan || null,
+          custom_fields: newEmp.customFields || {
+            pan: (newEmp.customFields?.pan as string) || (newEmp as any).pan || "",
+            uan: (newEmp.customFields?.uan as string) || (newEmp as any).uan || ""
+          }
         });
       } catch (sbErr) {
         console.warn("Supabase sync warning:", sbErr);
@@ -188,13 +217,16 @@ export async function PUT(request: Request) {
         await supabase.from("employees").upsert({
           id: updatedEmp.id,
           company_id: updatedEmp.companyId,
+          prefix: updatedEmp.prefix || null,
           full_name: updatedEmp.fullName,
+          gender: updatedEmp.gender || null,
           email: updatedEmp.email,
           phone: updatedEmp.phone,
           role: updatedEmp.role,
           designation_id: updatedEmp.designationId,
           department: updatedEmp.department,
           branch: updatedEmp.branch,
+          employment_type: updatedEmp.employmentType || null,
           joining_date: updatedEmp.joiningDate,
           date_of_birth: updatedEmp.dateOfBirth || null,
           status: updatedEmp.status,
@@ -206,12 +238,22 @@ export async function PUT(request: Request) {
           bio: updatedEmp.bio,
           salary_basic: updatedEmp.salary?.basic,
           salary_hra: updatedEmp.salary?.hra,
+          salary_telephone: updatedEmp.salary?.telephone || 0,
+          salary_fuel: updatedEmp.salary?.fuel || 0,
+          salary_professional_dev: updatedEmp.salary?.professionalDev || 0,
+          salary_lta: updatedEmp.salary?.lta || 0,
           salary_allowances: updatedEmp.salary?.allowances,
           salary_pf_deduction: updatedEmp.salary?.pfDeduction,
           bank_account_number: updatedEmp.bankDetails?.accountNumber,
           bank_name: updatedEmp.bankDetails?.bankName,
           bank_ifsc: updatedEmp.bankDetails?.ifsc,
-          password: updatedEmp.password
+          password: updatedEmp.password,
+          pan: (updatedEmp.customFields?.pan as string) || (updatedEmp as any).pan || null,
+          uan: (updatedEmp.customFields?.uan as string) || (updatedEmp as any).uan || null,
+          custom_fields: updatedEmp.customFields || {
+            pan: (updatedEmp.customFields?.pan as string) || (updatedEmp as any).pan || "",
+            uan: (updatedEmp.customFields?.uan as string) || (updatedEmp as any).uan || ""
+          }
         });
       } catch (sbErr) {
         console.warn("Supabase PUT sync warning:", sbErr);

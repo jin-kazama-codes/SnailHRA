@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import {
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star, Scale, Loader2,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
-  Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2
+  Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2, ChevronDown,
+  ShieldCheck, LogOut, CheckSquare, FileCheck
 } from "lucide-react";
-import { Designation, ExpenseCategory, CorporateAllowanceFaq, InfractionType } from "../types";
+import { Designation, ExpenseCategory, CorporateAllowanceFaq, InfractionType, ChecklistItemTemplate } from "../types";
 
 const AMENITY_ICONS: Record<string, React.ReactNode> = {
   "Monitor": <Monitor className="w-3.5 h-3.5 text-slate-400" />,
@@ -81,6 +82,12 @@ interface ConfigurationViewProps {
     companyId?: string;
   };
   onSaveWifiSettings?: (settings: { enabled: boolean; allowedIp?: string; allowedIps: string[] }) => void;
+  showLeaveCount?: boolean;
+  onToggleLeaveCount?: (val: boolean) => void;
+  onboardingChecklistTemplates?: ChecklistItemTemplate[];
+  exitChecklistTemplates?: ChecklistItemTemplate[];
+  onAddChecklistTemplate?: (template: Omit<ChecklistItemTemplate, "id">) => void | Promise<void>;
+  onRemoveChecklistTemplate?: (id: string) => void | Promise<void>;
 }
 
 export default function ConfigurationView({
@@ -105,9 +112,15 @@ export default function ConfigurationView({
   onAddCorporateAllowanceFaq,
   onRemoveCorporateAllowanceFaq,
   wifiRestrictionSettings,
-  onSaveWifiSettings
+  onSaveWifiSettings,
+  showLeaveCount = true,
+  onToggleLeaveCount,
+  onboardingChecklistTemplates = [],
+  exitChecklistTemplates = [],
+  onAddChecklistTemplate,
+  onRemoveChecklistTemplate
 }: ConfigurationViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "infractions" | "allowancesFaq">(() => {
+  const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "infractions" | "allowancesFaq" | "checklists">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("snailhr_configSubTab") as any) || "general";
     }
@@ -119,6 +132,14 @@ export default function ConfigurationView({
       localStorage.setItem("snailhr_configSubTab", activeSubTab);
     }
   }, [activeSubTab]);
+
+  // Local Form States for Checklist Master
+  const [newChecklistTitle, setNewChecklistTitle] = useState("");
+  const [newChecklistDesc, setNewChecklistDesc] = useState("");
+  const [newChecklistCategory, setNewChecklistCategory] = useState("Identity Proof");
+  const [newChecklistType, setNewChecklistType] = useState<"onboarding" | "exit">("onboarding");
+  const [newChecklistRequired, setNewChecklistRequired] = useState(true);
+  const [isSubmittingChecklist, setIsSubmittingChecklist] = useState(false);
 
   // Local Form States
   const [newDesignationTitle, setNewDesignationTitle] = useState("");
@@ -251,6 +272,33 @@ export default function ConfigurationView({
     return [""];
   });
   const [wifiSaving, setWifiSaving] = useState(false);
+  const [wifiExpanded, setWifiExpanded] = useState(false);
+
+  // Employee Code Prefix State
+  const [empCodePrefix, setEmpCodePrefix] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_empCodePrefix") || "EMP";
+    }
+    return "EMP";
+  });
+  const [empCodePrefixInput, setEmpCodePrefixInput] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_empCodePrefix") || "EMP";
+    }
+    return "EMP";
+  });
+  const [empCodeSaved, setEmpCodeSaved] = useState(false);
+
+  const handleSaveEmpCodePrefix = () => {
+    const clean = empCodePrefixInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!clean) return;
+    setEmpCodePrefix(clean);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("snailhr_empCodePrefix", clean);
+    }
+    setEmpCodeSaved(true);
+    setTimeout(() => setEmpCodeSaved(false), 3000);
+  };
 
   // IP Fetching State
   const [fetchingIp, setFetchingIp] = useState(false);
@@ -572,24 +620,97 @@ export default function ConfigurationView({
           >
             Corporate Allowances FAQ
           </button>
+          <button
+            onClick={() => setActiveSubTab("checklists")}
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "checklists" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white font-bold" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            Checklist Master (Onboarding & Exit)
+          </button>
         </div>
       </div>
 
       {/* Sub Tab 1: General (Departments, Branches, Leave Types) */}
       {activeSubTab === "general" && (
         <div className="space-y-6">
-          {/* WiFi Attendance Restriction — Prominent Top Card */}
+
+          {/* ── Employee Code Prefix Card ── */}
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-4">
-              <div className="p-2 bg-violet-50 dark:bg-violet-950/30 rounded-xl">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-4">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-xl shrink-0">
+                  <Shield className="w-4.5 h-4.5 text-amber-500" />
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Employee Code Format</h3>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Set the prefix used in all employee ID codes and payslips (e.g. MGMDIR → MGMDIR0001)</p>
+                </div>
+              </div>
+              {empCodeSaved && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                  ✓ Saved
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Employee ID Prefix</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={empCodePrefixInput}
+                    onChange={e => setEmpCodePrefixInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                    maxLength={10}
+                    placeholder="e.g. MGMDIR"
+                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:border-amber-400 uppercase tracking-widest"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveEmpCodePrefix}
+                    className="bg-amber-500 hover:bg-amber-400 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Save
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1.5">Only letters and numbers. Max 10 characters. Changes apply immediately to all payslips.</p>
+              </div>
+              <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Preview</p>
+                <div className="space-y-1">
+                  {[1, 2, 3].map(n => (
+                    <div key={n} className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400">Employee {n}:</span>
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs">
+                        {(empCodePrefixInput.trim() || empCodePrefix).toUpperCase()}{String(n).padStart(4, "0")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* WiFi Attendance Restriction — Collapsible Card */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+            {/* ── Collapsed Header (always visible, clickable) ── */}
+            <button
+              type="button"
+              onClick={() => setWifiExpanded(prev => !prev)}
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+            >
+              <div className="p-2 bg-violet-50 dark:bg-violet-950/30 rounded-xl shrink-0">
                 <Router className="w-4.5 h-4.5 text-violet-500" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">WiFi Attendance Restriction</h3>
-                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">Restrict punch-in/out to employees connected to the designated office WiFi network only</p>
+                <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                  {wifiEnabled && wifiIpList.filter(ip => ip.trim()).length > 0
+                    ? `${wifiIpList.filter(ip => ip.trim()).length} network(s) allowed: ${wifiIpList.filter(ip => ip.trim()).slice(0, 2).join(", ")}${wifiIpList.filter(ip => ip.trim()).length > 2 ? " …" : ""}`
+                    : "Restrict punch-in/out to employees on designated office WiFi only"
+                  }
+                </p>
               </div>
-              {/* Live status badge */}
-              <div className="ml-auto shrink-0">
+              <div className="flex items-center gap-2.5 shrink-0">
                 {wifiEnabled ? (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
@@ -601,10 +722,16 @@ export default function ConfigurationView({
                     Disabled
                   </span>
                 )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${wifiExpanded ? "rotate-180" : ""}`}
+                />
               </div>
-            </div>
+            </button>
 
-            <form onSubmit={handleSaveWifi} className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            {/* ── Expanded Form ── */}
+            {wifiExpanded && (
+              <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                <form onSubmit={handleSaveWifi} className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
               {/* Toggle */}
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enable WiFi Restriction</label>
@@ -673,7 +800,7 @@ export default function ConfigurationView({
                         <Wifi className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         <input
                           type="text"
-                          placeholder="e.g. 192.168.1.11"
+                          placeholder="e.g. 223.233.66.0/24 or 223.233.66.140"
                           value={ip}
                           onChange={(e) => handleIpChange(idx, e.target.value)}
                           disabled={!wifiEnabled}
@@ -719,13 +846,31 @@ export default function ConfigurationView({
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       <span>Your Current Public IP: <strong className="font-mono text-emerald-800 dark:text-emerald-200">{detectedIp}</strong></span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleUseDetectedIp(detectedIp)}
-                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 shadow-xs"
-                    >
-                      + Put in List
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleUseDetectedIp(detectedIp)}
+                        className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 shadow-xs"
+                        title="Add exact IP"
+                      >
+                        + Exact IP
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Convert x.x.x.x → x.x.x.0/24
+                          const parts = detectedIp.split(".");
+                          if (parts.length === 4) {
+                            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+                            handleUseDetectedIp(subnet);
+                          }
+                        }}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700 shadow-xs"
+                        title="Add entire /24 subnet (handles dynamic IP changes)"
+                      >
+                        → /24 Subnet
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -736,8 +881,19 @@ export default function ConfigurationView({
                   </p>
                 )}
 
+                {/* CIDR Subnet Tip */}
+                <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-[11px] text-blue-800 dark:text-blue-300 leading-normal space-y-1">
+                  <p className="font-semibold flex items-center gap-1">
+                    <span>🔒 Tip: Use Subnet Range for Dynamic IPs</span>
+                  </p>
+                  <p>
+                    If your office router restarts and assigns a new IP, use <strong>CIDR notation</strong> to allow the whole subnet.<br />
+                    e.g. <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.0/24</code> allows any IP from <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.1</code> to <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.254</code>.
+                  </p>
+                </div>
+
                 <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">
-                  Add multiple IPs (e.g. main office, branch router, VPN gateway)
+                  Add exact IPs or subnets (e.g. main office, branch router, VPN). Use <code>/24</code> for dynamic IP coverage.
                 </p>
               </div>
 
@@ -774,7 +930,9 @@ export default function ConfigurationView({
                   </div>
                 )}
               </div>
-            </form>
+                </form>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -867,9 +1025,33 @@ export default function ConfigurationView({
             {/* Leave Types block */}
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
               <div>
-                <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
-                  <Calendar className="w-4.5 h-4.5 text-indigo-500" />
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4.5 h-4.5 text-indigo-500" />
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
+                  </div>
+                  {/* Show / Hide Leave Count Toggle */}
+                  <label className="flex items-center gap-2 cursor-pointer select-none" title="Toggle visibility of leave balance counts in the Leaves section">
+                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                      {showLeaveCount ? "Count Visible" : "Count Hidden"}
+                    </span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={!!showLeaveCount}
+                        onChange={(e) => onToggleLeaveCount?.(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className={`w-8 h-4.5 rounded-full transition-colors duration-200 ${
+                        showLeaveCount
+                          ? "bg-indigo-500"
+                          : "bg-slate-200 dark:bg-slate-700"
+                      }`} />
+                      <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform duration-200 ${
+                        showLeaveCount ? "translate-x-3.5" : "translate-x-0"
+                      }`} />
+                    </div>
+                  </label>
                 </div>
 
                 <form onSubmit={handleAddLeaveType} className="flex gap-2 mb-4">
@@ -1480,6 +1662,247 @@ export default function ConfigurationView({
                     <p className="text-[11px] text-slate-400 mt-1">Use the form on the left to add allowance policies & claim guidelines.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Tab 6: Checklist Master (Onboarding & Exit Checklists) */}
+      {activeSubTab === "checklists" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Form Column: Create New Checklist Item */}
+            <div className="lg:col-span-5 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+              <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                <CheckSquare className="w-5 h-5 text-emerald-500" />
+                <div>
+                  <h3 className="font-display font-bold text-slate-800 dark:text-white text-base">Add Checklist Master Item</h3>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">Configure Onboarding or Exit checklist items for employees</p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!newChecklistTitle.trim()) return;
+                  setIsSubmittingChecklist(true);
+                  try {
+                    await onAddChecklistTemplate?.({
+                      title: newChecklistTitle.trim(),
+                      description: newChecklistDesc.trim(),
+                      category: newChecklistCategory,
+                      type: newChecklistType,
+                      required: newChecklistRequired
+                    });
+                    setNewChecklistTitle("");
+                    setNewChecklistDesc("");
+                  } catch (err) {
+                    console.error("Failed to add checklist item:", err);
+                  } finally {
+                    setIsSubmittingChecklist(false);
+                  }
+                }}
+                className="space-y-3.5 text-xs"
+              >
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Checklist Target Window *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewChecklistType("onboarding")}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        newChecklistType === "onboarding"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                          : "bg-slate-50 dark:bg-[#141414] text-slate-500 border-slate-200 dark:border-[#222]"
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Onboarding Checklist</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewChecklistType("exit")}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        newChecklistType === "exit"
+                          ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                          : "bg-slate-50 dark:bg-[#141414] text-slate-500 border-slate-200 dark:border-[#222]"
+                      }`}
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Exit Clearance Checklist</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Document Item Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newChecklistTitle}
+                    onChange={(e) => setNewChecklistTitle(e.target.value)}
+                    placeholder="e.g. Aadhaar Card Copy or Asset Return Form"
+                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Document Category</label>
+                  <select
+                    value={newChecklistCategory}
+                    onChange={(e) => setNewChecklistCategory(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                  >
+                    <option value="Identity Proof">Identity Proof (Aadhaar, Passport, Voter ID)</option>
+                    <option value="Tax Document">Tax Document (PAN, Form 16, Tax Clearance)</option>
+                    <option value="Educational">Educational (Degree, Certificate, Transcript)</option>
+                    <option value="Contract">Contract & Legal (Offer Letter, Resignation Letter)</option>
+                    <option value="Other">Other Clearances & Forms (Asset Return, No Dues, KT)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Item Description / Instructions</label>
+                  <textarea
+                    rows={2}
+                    value={newChecklistDesc}
+                    onChange={(e) => setNewChecklistDesc(e.target.value)}
+                    placeholder="Provide guidelines for the employee when uploading this document..."
+                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="checklistRequired"
+                    checked={newChecklistRequired}
+                    onChange={(e) => setNewChecklistRequired(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                  />
+                  <label htmlFor="checklistRequired" className="font-semibold text-slate-700 dark:text-gray-300 cursor-pointer">
+                    Mandatory Requirement (Employee must upload to complete clearance)
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingChecklist || !newChecklistTitle.trim()}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingChecklist ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span>Add to {newChecklistType === "onboarding" ? "Onboarding" : "Exit"} Master List</span>
+                </button>
+              </form>
+            </div>
+
+            {/* List Column: View Onboarding & Exit Checklists */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Onboarding Checklist List */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
+                      Onboarding Document Checklist Master ({onboardingChecklistTemplates.length})
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    Visible to All Employees
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {onboardingChecklistTemplates.map(tmpl => (
+                    <div key={tmpl.id} className="p-3 bg-slate-50/70 dark:bg-[#141414]/70 border border-slate-200/80 dark:border-[#222] rounded-xl flex items-center justify-between text-xs">
+                      <div className="min-w-0 flex-1 pr-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-800 dark:text-gray-200">{tmpl.title}</span>
+                          {tmpl.required ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">Required</span>
+                          ) : (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Optional</span>
+                          )}
+                        </div>
+                        {tmpl.description && (
+                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 leading-tight">{tmpl.description}</p>
+                        )}
+                        <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-1">Category: {tmpl.category || "General"}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Remove "${tmpl.title}" from Onboarding Checklist?`)) {
+                            onRemoveChecklistTemplate?.(tmpl.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="Delete checklist template"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {onboardingChecklistTemplates.length === 0 && (
+                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6">No Onboarding Checklist items configured yet.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Exit Checklist List */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-amber-200/60 dark:border-amber-900/30 rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div className="flex items-center space-x-2">
+                    <LogOut className="w-5 h-5 text-amber-500" />
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
+                      Exit Clearance Document Checklist Master ({exitChecklistTemplates.length})
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                    Visible on Resignation
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {exitChecklistTemplates.map(tmpl => (
+                    <div key={tmpl.id} className="p-3 bg-amber-50/20 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/30 rounded-xl flex items-center justify-between text-xs">
+                      <div className="min-w-0 flex-1 pr-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-800 dark:text-gray-200">{tmpl.title}</span>
+                          {tmpl.required ? (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">Required</span>
+                          ) : (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Optional</span>
+                          )}
+                        </div>
+                        {tmpl.description && (
+                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 leading-tight">{tmpl.description}</p>
+                        )}
+                        <span className="inline-block text-[10px] text-amber-600 dark:text-amber-400 font-mono mt-1">Category: {tmpl.category || "General"}</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Remove "${tmpl.title}" from Exit Checklist?`)) {
+                            onRemoveChecklistTemplate?.(tmpl.id);
+                          }
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="Delete checklist template"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {exitChecklistTemplates.length === 0 && (
+                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6">No Exit Clearance Checklist items configured yet.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

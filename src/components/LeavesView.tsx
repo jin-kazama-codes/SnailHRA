@@ -14,6 +14,7 @@ interface LeavesViewProps {
   role: UserRole;
   currentEmployeeId: string;
   customLeaveTypes?: string[];
+  showLeaveCount?: boolean;
   onApplyLeave: (leaveData: any) => Promise<void> | void;
   onReviewLeave: (id: string, status: "Approved" | "Rejected") => Promise<void> | void;
   onAddHoliday?: (newHoliday: { name: string; date: string; type: "National" | "Regional" | "Restricted" }) => Promise<boolean>;
@@ -27,6 +28,7 @@ export default function LeavesView({
   role,
   currentEmployeeId,
   customLeaveTypes,
+  showLeaveCount = true,
   onApplyLeave,
   onReviewLeave,
   onAddHoliday,
@@ -183,29 +185,31 @@ export default function LeavesView({
 
   return (
     <div className="space-y-6">
-      {/* Leave balance grid (100% Dynamic) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {leaveBalances.map((bal, idx) => {
-          const isUnpaid = bal.allocated === 0;
-          const availableCount = Math.max(0, bal.allocated - bal.consumed);
-          return (
-            <div key={idx} className={`border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] rounded-xl p-4 shadow-xs dark:neon-glow border-l-3 ${bal.color}`}>
-              <h4 className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider">{bal.type}</h4>
-              <div className="flex items-baseline space-x-1.5 mt-2">
-                {isUnpaid ? (
-                  <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">Unpaid</span>
-                ) : (
-                  <>
-                    <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">{availableCount}</span>
-                    <span className="text-xs text-slate-400">/ {bal.allocated} Available</span>
-                  </>
-                )}
+      {/* Leave balance grid — only shown when count is visible */}
+      {showLeaveCount && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {leaveBalances.map((bal, idx) => {
+            const isUnpaid = bal.allocated === 0;
+            const availableCount = Math.max(0, bal.allocated - bal.consumed);
+            return (
+              <div key={idx} className={`border border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] rounded-xl p-4 shadow-xs dark:neon-glow border-l-3 ${bal.color}`}>
+                <h4 className="text-[10px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider">{bal.type}</h4>
+                <div className="flex items-baseline space-x-1.5 mt-2">
+                  {isUnpaid ? (
+                    <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">Unpaid</span>
+                  ) : (
+                    <>
+                      <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono">{availableCount}</span>
+                      <span className="text-xs text-slate-400">/ {bal.allocated} Available</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">{bal.consumed} Days consumed this year</p>
               </div>
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-1">{bal.consumed} Days consumed this year</p>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Side: Submit / Approval Boards */}

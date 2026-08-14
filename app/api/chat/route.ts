@@ -101,7 +101,7 @@ export async function POST(request: Request) {
               },
               bankDetails: {
                 accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
-                bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? "State Bank of India"),
+                bankName: String(row.bank_name ?? bankDetailsFromRow?.bankName ?? ""),
                 ifsc: String(row.bank_ifsc ?? bankDetailsFromRow?.ifsc ?? "")
               },
               address: row.address || "",
@@ -205,6 +205,10 @@ export async function POST(request: Request) {
             month: row.month || "",
             basic: Number(row.basic) || 0,
             hra: Number(row.hra) || 0,
+            telephone: Number(row.telephone) || 0,
+            fuel: Number(row.fuel) || 0,
+            professionalDev: Number(row.professional_dev ?? row.professionalDev) || 0,
+            lta: Number(row.lta) || 0,
             allowances: Number(row.allowances) || 0,
             finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
             pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
