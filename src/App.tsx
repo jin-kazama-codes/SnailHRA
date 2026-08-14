@@ -353,15 +353,28 @@ export default function App() {
         (prev || []).forEach((p: any) => {
           if (p.id && attMap.has(p.id)) {
             const fetched = attMap.get(p.id);
-            // For active (ongoing) punches, keep whichever breaks array is longer —
-            // this prevents a stale Supabase response from overwriting a freshly
-            // added break that the punch API already returned to the client.
-            const isActivePunch = !fetched.clockOut && !p.clockOut;
             const fetchedBreaks = fetched.breaks || [];
             const prevBreaks = p.breaks || [];
-            const mergedBreaks = isActivePunch
-              ? (fetchedBreaks.length >= prevBreaks.length ? fetchedBreaks : prevBreaks)
-              : (fetchedBreaks.length > 0 ? fetchedBreaks : prevBreaks);
+
+            // Choose the more up-to-date break list (more ended breaks or more total breaks)
+            const endedF = fetchedBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
+            const endedP = prevBreaks.filter((b: any) => b && (b.end || b.break_end)).length;
+
+            let mergedBreaks = prevBreaks;
+            if (endedF > endedP) {
+              mergedBreaks = fetchedBreaks;
+            } else if (endedP > endedF) {
+              mergedBreaks = prevBreaks;
+            } else if (fetchedBreaks.length > prevBreaks.length) {
+              mergedBreaks = fetchedBreaks;
+            } else if (prevBreaks.length > fetchedBreaks.length) {
+              mergedBreaks = prevBreaks;
+            } else if (fetchedBreaks.length > 0 && prevBreaks.length > 0) {
+              const lastF = fetchedBreaks[fetchedBreaks.length - 1];
+              const lastP = prevBreaks[prevBreaks.length - 1];
+              mergedBreaks = (lastP?.end && !lastF?.end) ? prevBreaks : fetchedBreaks;
+            }
+
             attMap.set(p.id, {
               ...fetched,
               clockOut: fetched.clockOut || p.clockOut,

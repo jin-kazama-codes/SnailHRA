@@ -261,9 +261,22 @@ export default function AttendanceView({
     a.employeeId === currentEmployeeId && (a.date === todayStr || a.date === todayLocalStr)
   );
   const todayPunch = todayPunches.length > 0
-    ? todayPunches.reduce((latest, current) => 
-        new Date(current.clockIn).getTime() > new Date(latest.clockIn).getTime() ? current : latest
-      )
+    ? todayPunches.reduce((latest, current) => {
+        if (!current.clockOut && latest.clockOut) return current;
+        if (current.clockOut && !latest.clockOut) return latest;
+
+        const currentEnded = (current.breaks || []).filter(b => b && b.end).length;
+        const latestEnded = (latest.breaks || []).filter(b => b && b.end).length;
+        if (currentEnded > latestEnded) return current;
+        if (latestEnded > currentEnded) return latest;
+
+        const currentBreaks = current.breaks?.length || 0;
+        const latestBreaks = latest.breaks?.length || 0;
+        if (currentBreaks > latestBreaks) return current;
+        if (latestBreaks > currentBreaks) return latest;
+
+        return new Date(current.clockIn).getTime() >= new Date(latest.clockIn).getTime() ? current : latest;
+      })
     : undefined;
 
   // Live duration calculations

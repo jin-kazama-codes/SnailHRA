@@ -323,6 +323,31 @@ export async function GET(request: Request) {
         db.leaves = Array.from(leaveMap.values());
       }
 
+function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] {
+  const listA = breaksA || [];
+  const listB = breaksB || [];
+
+  const endedA = listA.filter(b => b && (b.end || b.break_end)).length;
+  const endedB = listB.filter(b => b && (b.break_end || b.end)).length;
+
+  if (endedA > endedB) return listA;
+  if (endedB > endedA) return listB;
+
+  if (listA.length > listB.length) return listA;
+  if (listB.length > listA.length) return listB;
+
+  if (listA.length > 0 && listB.length > 0) {
+    const lastA = listA[listA.length - 1];
+    const lastB = listB[listB.length - 1];
+    const endA = lastA?.end || lastA?.break_end;
+    const endB = lastB?.end || lastB?.break_end;
+    if (endA && !endB) return listA;
+    if (endB && !endA) return listB;
+  }
+
+  return listA;
+}
+
       if (attendanceRes && !attendanceRes.error && Array.isArray(attendanceRes.data)) {
         const sbAttendance = attendanceRes.data.map((row: any) => {
           const sbBreaks = (breaksRes && breaksRes.data)
@@ -335,7 +360,7 @@ export async function GET(request: Request) {
             : [];
 
           const localMatch = (db.attendance || []).find((a: any) => a.id === row.id);
-          const relatedBreaks = sbBreaks.length > 0 ? sbBreaks : (localMatch?.breaks || []);
+          const relatedBreaks = getMoreUpToDateBreaks(sbBreaks, localMatch?.breaks || []);
 
           return {
             id: row.id,
