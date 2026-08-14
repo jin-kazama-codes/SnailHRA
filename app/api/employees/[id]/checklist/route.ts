@@ -164,6 +164,9 @@ export async function PUT(
 
     if (fileUrl) {
       item.fileUrl = fileUrl;
+      item.status = "Uploaded";
+      item.uploadedAt = new Date().toISOString();
+      item.comments = undefined;
     }
 
     if (action === "approve") {

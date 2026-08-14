@@ -3,7 +3,7 @@
 import React, { useState, useRef } from "react";
 import {
   FileText, Upload, CheckCircle2, XCircle, Clock, ShieldCheck, Eye, Trash2,
-  AlertCircle, LogOut, Check, X, FileUp, Sparkles, AlertTriangle, ArrowRight, Plus
+  AlertCircle, LogOut, Check, X, FileUp, Sparkles, AlertTriangle, ArrowRight, Plus, Download, Maximize2, Minimize2, Loader2
 } from "lucide-react";
 import { Employee, ChecklistItemTemplate, EmployeeChecklistItem, UserRole } from "../types";
 
@@ -35,7 +35,10 @@ export default function ChecklistCard({
   onInitiateResignation
 }: ChecklistCardProps) {
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [reviewingItemId, setReviewingItemId] = useState<string | null>(null);
+  const [reviewAction, setReviewAction] = useState<"approve" | "reject" | null>(null);
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [rejectingItemId, setRejectingItemId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -129,13 +132,31 @@ export default function ChecklistCard({
     }
   };
 
+  const handleApprove = async (itemId: string) => {
+    setReviewingItemId(itemId);
+    setReviewAction("approve");
+    try {
+      await onReviewItem(employee.id, itemId, "approve");
+    } catch (err) {
+      console.error("Failed to approve item:", err);
+    } finally {
+      setReviewingItemId(null);
+      setReviewAction(null);
+    }
+  };
+
   const handleConfirmReject = async () => {
     if (!rejectingItemId) return;
+    const itemId = rejectingItemId;
+    setReviewingItemId(itemId);
+    setReviewAction("reject");
     try {
-      await onReviewItem(employee.id, rejectingItemId, "reject", rejectComment);
+      await onReviewItem(employee.id, itemId, "reject", rejectComment);
     } catch (err) {
       console.error("Failed to reject item:", err);
     } finally {
+      setReviewingItemId(null);
+      setReviewAction(null);
       setRejectingItemId(null);
       setRejectComment("");
     }
@@ -350,7 +371,7 @@ export default function ChecklistCard({
                     )}
                   </div>
 
-                  <h4 className="font-bold text-slate-800 dark:text-white text-sm tracking-tight truncate">
+                  <h4 className="font-extrabold text-slate-800 dark:text-white text-sm sm:text-base tracking-tight break-words">
                     {item.title}
                   </h4>
 
@@ -397,8 +418,24 @@ export default function ChecklistCard({
                 </p>
               )}
 
-              {/* HR Reviewer Notes */}
-              {item.comments && (
+              {/* HR Reviewer Notes / Rejection Banner */}
+              {isRejected && (
+                <div className="sm:ml-9 mb-3 p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-2xl text-xs space-y-1 animate-in fade-in">
+                  <div className="flex items-center space-x-1.5 text-rose-700 dark:text-rose-400 font-extrabold">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>Action Required: Document Proof Rejected</span>
+                  </div>
+                  <p className="text-rose-600 dark:text-rose-300 text-[11px] leading-relaxed">
+                    {item.comments ? (
+                      <><strong>HR Reason:</strong> "{item.comments}"</>
+                    ) : (
+                      "Your uploaded document was rejected. Please re-upload a clear, valid copy of this requirement to complete compliance."
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {item.comments && !isRejected && (
                 <div className="sm:ml-9 mb-2.5 text-xs px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50 flex items-center space-x-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span><strong className="font-bold">HR Review Feedback:</strong> {item.comments}</span>
@@ -412,71 +449,73 @@ export default function ChecklistCard({
                 </p>
               )}
 
-              {/* Action Buttons Bar */}
-              <div className="sm:ml-9 pt-2.5 border-t border-slate-100 dark:border-[#222] flex flex-wrap items-center justify-end gap-2">
-                {/* Upload Button */}
-                {canUpload && (
-                  <button
-                    type="button"
-                    disabled={isUploading || (!canManage && (isUploaded || isApproved))}
-                    onClick={() => handleFileClick(item.id)}
-                    className={`px-3.5 py-1.5 text-xs font-extrabold rounded-xl transition-all shadow-xs flex items-center space-x-1.5 whitespace-nowrap ${
-                      isApproved
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 cursor-default opacity-90"
-                        : isUploaded && !canManage
-                        ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800/60 cursor-not-allowed opacity-90"
-                        : "bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
-                    }`}
-                    title={
-                      isApproved
-                        ? "Document already verified and approved"
-                        : isUploaded && !canManage
-                        ? "Document uploaded and awaiting HR/Admin review"
-                        : item.fileUrl
-                        ? "Re-upload document file"
-                        : "Upload document file"
-                    }
-                  >
-                    {isApproved ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        <span>Approved ✓</span>
-                      </>
-                    ) : isUploaded && !canManage ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
-                        <span>Uploaded (Awaiting Review)</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-3.5 h-3.5 shrink-0" />
-                        <span>{isUploading ? "Uploading..." : isRejected ? "Re-upload Document" : item.fileUrl ? "Re-upload" : "Upload Document"}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-
-                {/* Preview Button */}
-                {item.fileUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setPreviewDoc({ name: item.fileName || item.title, url: item.fileUrl! })}
-                    className="px-3.5 py-1.5 bg-slate-100 dark:bg-[#222] hover:bg-slate-200 dark:hover:bg-[#2a2a2a] text-slate-700 dark:text-gray-200 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1.5 whitespace-nowrap hover:scale-[1.02]"
-                    title="View uploaded document file"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>View File</span>
-                  </button>
-                )}
-
-                {/* Admin / HR Approval Actions */}
-                {canManage && (isUploaded || isPending || isRejected) && !isApproved && (
-                  <div className="flex items-center space-x-1.5 border-l border-slate-200 dark:border-[#222] pl-2">
+              {/* Action Buttons Bar - All in 1 Line Without Scroll */}
+              <div className="pt-2.5 border-t border-slate-100 dark:border-[#222] flex items-center justify-between gap-1.5 flex-nowrap overflow-hidden">
+                <div className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
+                  {/* Upload Button */}
+                  {canUpload && (
                     <button
                       type="button"
-                      disabled={!isUploaded}
-                      onClick={() => onReviewItem(employee.id, item.id, "approve")}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap ${
+                      disabled={isUploading || (!canManage && (isUploaded || isApproved))}
+                      onClick={() => handleFileClick(item.id)}
+                      className={`px-2.5 py-1 text-[11px] sm:text-xs font-extrabold rounded-xl transition-all shadow-xs flex items-center space-x-1 whitespace-nowrap shrink-0 ${
+                        isApproved
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 cursor-default opacity-90"
+                          : isUploaded && !canManage
+                          ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800/60 cursor-not-allowed opacity-90"
+                          : "bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
+                      }`}
+                      title={
+                        isApproved
+                          ? "Document already verified and approved"
+                          : isUploaded && !canManage
+                          ? "Document uploaded and awaiting HR/Admin review"
+                          : item.fileUrl
+                          ? "Re-upload document file"
+                          : "Upload document file"
+                      }
+                    >
+                      {isApproved ? (
+                        <>
+                          <Check className="w-3 h-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                          <span>Approved ✓</span>
+                        </>
+                      ) : isUploaded && !canManage ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 shrink-0 text-blue-600 dark:text-blue-400" />
+                          <span>Uploaded</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-3 h-3 shrink-0" />
+                          <span>{isUploading ? "Uploading..." : isRejected ? "Re-upload" : item.fileUrl ? "Re-upload" : "Upload"}</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Preview Button */}
+                  {item.fileUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDoc({ name: item.fileName || item.title, url: item.fileUrl! })}
+                      className="px-2.5 py-1 bg-slate-100 dark:bg-[#222] hover:bg-slate-200 dark:hover:bg-[#2a2a2a] text-slate-700 dark:text-gray-200 text-[11px] sm:text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center space-x-1 whitespace-nowrap shrink-0 hover:scale-[1.02]"
+                      title="View uploaded document file"
+                    >
+                      <Eye className="w-3 h-3 text-emerald-500 shrink-0" />
+                      <span>View File</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Admin / HR Approval Actions - Same Line */}
+                {canManage && (isUploaded || isPending || isRejected) && !isApproved && (
+                  <div className="flex items-center space-x-1 sm:space-x-1.5 shrink-0">
+                    <button
+                      type="button"
+                      disabled={!isUploaded || (reviewingItemId === item.id && reviewAction === "approve")}
+                      onClick={() => handleApprove(item.id)}
+                      className={`px-2.5 py-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                         isUploaded
                           ? "bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
                           : "bg-slate-200 text-slate-400 dark:bg-slate-800/80 dark:text-slate-600 border border-slate-300/40 dark:border-slate-700/40 cursor-not-allowed opacity-60"
@@ -487,14 +526,23 @@ export default function ChecklistCard({
                           : "Approval disabled until document file is uploaded by employee"
                       }
                     >
-                      <Check className="w-3.5 h-3.5 shrink-0" />
-                      <span>Approve</span>
+                      {reviewingItemId === item.id && reviewAction === "approve" ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                          <span>Approving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3 h-3 shrink-0" />
+                          <span>Approve</span>
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"
-                      disabled={!isUploaded}
+                      disabled={!isUploaded || (reviewingItemId === item.id && reviewAction === "reject")}
                       onClick={() => setRejectingItemId(item.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap ${
+                      className={`px-2.5 py-1 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center space-x-1 whitespace-nowrap shrink-0 ${
                         isUploaded
                           ? "bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow-2xs hover:scale-[1.02] active:scale-[0.98]"
                           : "bg-slate-200 text-slate-400 dark:bg-slate-800/80 dark:text-slate-600 border border-slate-300/40 dark:border-slate-700/40 cursor-not-allowed opacity-60"
@@ -505,8 +553,17 @@ export default function ChecklistCard({
                           : "Rejection disabled until document file is uploaded by employee"
                       }
                     >
-                      <X className="w-3.5 h-3.5 shrink-0" />
-                      <span>Reject</span>
+                      {reviewingItemId === item.id && reviewAction === "reject" ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                          <span>Rejecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-3 h-3 shrink-0" />
+                          <span>Reject</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
@@ -563,43 +620,84 @@ export default function ChecklistCard({
       {/* Document Preview Modal */}
       {previewDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-[#141414] border border-slate-200 dark:border-[#222] rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl">
-            <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#222] flex items-center justify-between bg-slate-50 dark:bg-[#0c0c0c]">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl">
+          <div className={`bg-white dark:bg-[#141414] border border-slate-200 dark:border-[#222] shadow-2xl flex flex-col transition-all overflow-hidden ${
+            isFullscreen 
+              ? "fixed inset-0 z-[100] w-screen h-screen rounded-none border-0 max-w-none max-h-none p-0" 
+              : "rounded-3xl w-full max-w-4xl max-h-[90vh]"
+          }`}>
+            <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-[#222] flex items-center justify-between bg-slate-50 dark:bg-[#0c0c0c] shrink-0">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
                   <FileText className="w-5 h-5" />
                 </div>
-                <div>
-                  <h4 className="font-bold text-slate-800 dark:text-white text-sm">{previewDoc.name}</h4>
-                  <p className="text-[10px] text-slate-400">Compliance & Verification Document</p>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-slate-800 dark:text-white text-sm sm:text-base truncate">{previewDoc.name}</h4>
+                  <p className="text-[11px] text-slate-400">Compliance &amp; Verification Document</p>
                 </div>
               </div>
-              <button
-                onClick={() => setPreviewDoc(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-[#222]"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="px-3 py-1.5 bg-slate-200/80 dark:bg-[#222] text-slate-700 dark:text-gray-200 text-xs font-bold rounded-xl flex items-center space-x-1.5 hover:bg-slate-300 dark:hover:bg-[#333] transition-colors cursor-pointer"
+                  title={isFullscreen ? "Exit Fullscreen" : "Full Screen View"}
+                >
+                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">{isFullscreen ? "Exit Full Screen" : "Full Screen"}</span>
+                </button>
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    download={previewDoc.name}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 text-xs font-bold rounded-xl flex items-center space-x-1.5 hover:bg-emerald-200 dark:hover:bg-emerald-900 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Download</span>
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewDoc(null);
+                    setIsFullscreen(false);
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-[#222] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <div className="p-6 text-center max-h-[75vh] overflow-y-auto">
-              {previewDoc.url && (previewDoc.url.endsWith(".png") || previewDoc.url.endsWith(".jpg") || previewDoc.url.endsWith(".jpeg") || previewDoc.url.startsWith("data:image")) ? (
-                <img src={previewDoc.url} alt={previewDoc.name} className="max-h-[500px] mx-auto rounded-2xl shadow-md border border-slate-200 dark:border-[#222]" />
+            <div className={`p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100/70 dark:bg-[#080808] custom-scrollbar ${
+              isFullscreen ? "h-[calc(100vh-65px)] min-h-0" : "min-h-[500px]"
+            }`}>
+              {previewDoc.url ? (
+                previewDoc.url.startsWith("data:image/") ||
+                /\.(jpg|jpeg|png|webp|svg|gif)(\?.*)?$/i.test(previewDoc.url) ? (
+                  <img
+                    src={previewDoc.url}
+                    alt={previewDoc.name}
+                    className={`object-contain rounded-2xl shadow-md border border-slate-200 dark:border-[#222] ${
+                      isFullscreen ? "max-h-[calc(100vh-100px)] max-w-full" : "max-h-[65vh] max-w-full"
+                    }`}
+                  />
+                ) : (
+                  <iframe
+                    src={previewDoc.url}
+                    title={previewDoc.name}
+                    className={`w-full rounded-2xl border border-slate-200 dark:border-[#222] bg-white shadow-md ${
+                      isFullscreen ? "h-[calc(100vh-100px)]" : "h-[65vh]"
+                    }`}
+                  />
+                )
               ) : (
-                <div className="p-10 bg-slate-50 dark:bg-[#0a0a0a] rounded-2xl border border-slate-200 dark:border-[#222] text-center space-y-4">
+                <div className="p-10 bg-white dark:bg-[#141414] rounded-2xl border border-slate-200 dark:border-[#222] text-center space-y-4 max-w-md">
                   <FileText className="w-16 h-16 text-emerald-500 mx-auto" />
                   <div>
                     <h5 className="text-sm font-bold text-slate-800 dark:text-white">{previewDoc.name}</h5>
-                    <p className="text-xs text-slate-400 mt-1">Uploaded clearance document file is ready for inspection.</p>
+                    <p className="text-xs text-slate-400 mt-1">No preview URL available for this document file.</p>
                   </div>
-                  <a
-                    href={previewDoc.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow-md hover:scale-[1.02]"
-                  >
-                    <span>Open / Download Document</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </a>
                 </div>
               )}
             </div>
@@ -636,10 +734,18 @@ export default function ChecklistCard({
               </button>
               <button
                 type="button"
+                disabled={reviewingItemId === rejectingItemId && reviewAction === "reject"}
                 onClick={handleConfirmReject}
-                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all hover:scale-[1.02] cursor-pointer"
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl shadow-md transition-all hover:scale-[1.02] cursor-pointer flex items-center space-x-1.5"
               >
-                Confirm Rejection
+                {reviewingItemId === rejectingItemId && reviewAction === "reject" ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                    <span>Rejecting...</span>
+                  </>
+                ) : (
+                  <span>Confirm Rejection</span>
+                )}
               </button>
             </div>
           </div>

@@ -377,8 +377,84 @@
       },
       "pan": "",
       "uan": "",
-      "documents": [],
-      "onboardingChecklist": [],
+      "documents": [
+        {
+          "id": "doc-chk-1786689686346-1786690131436",
+          "name": "Aadhaar Card Copy",
+          "category": "Onboarding Document Checklist",
+          "uploadedAt": "2026-08-14",
+          "size": "1.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786689683923_Green_leaf_traders.pdf"
+        },
+        {
+          "id": "doc-chk-1786690162081-1786690281551",
+          "name": "PAN Card Copy",
+          "category": "Onboarding Document Checklist",
+          "uploadedAt": "2026-08-14",
+          "size": "1.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786690160498_Green_leaf_traders.pdf"
+        },
+        {
+          "id": "doc-chk-1786690335112-1786690750491",
+          "name": "Signed Employment Contract / Offer Letter",
+          "category": "Onboarding Document Checklist",
+          "uploadedAt": "2026-08-14",
+          "size": "1.2 MB",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786690699527_Green_leaf_traders.pdf"
+        }
+      ],
+      "onboardingChecklist": [
+        {
+          "id": "chk-1786689686346",
+          "type": "onboarding",
+          "title": "Aadhaar Card Copy",
+          "status": "Approved",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786689683923_Green_leaf_traders.pdf",
+          "fileName": "Green leaf traders.pdf",
+          "reviewedAt": "2026-08-14T06:48:56.424Z",
+          "reviewedBy": "Aafaq Ahmad",
+          "templateId": "onb-tmpl-1",
+          "uploadedAt": "2026-08-14",
+          "description": "Government Identity Proof for mandatory KYC verification"
+        },
+        {
+          "id": "chk-1786690162081",
+          "type": "onboarding",
+          "title": "PAN Card Copy",
+          "status": "Approved",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786690160498_Green_leaf_traders.pdf",
+          "fileName": "Green leaf traders.pdf",
+          "reviewedAt": "2026-08-14T06:51:21.551Z",
+          "reviewedBy": "Mohammad Shah Nawaz",
+          "templateId": "onb-tmpl-2",
+          "uploadedAt": "2026-08-14",
+          "description": "Permanent Account Number card for income tax deduction & compliance"
+        },
+        {
+          "id": "chk-1786690335112",
+          "type": "onboarding",
+          "title": "Signed Employment Contract / Offer Letter",
+          "status": "Approved",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786690699527_Green_leaf_traders.pdf",
+          "fileName": "Green leaf traders.pdf",
+          "reviewedAt": "2026-08-14T06:59:10.491Z",
+          "reviewedBy": "Aafaq Ahmad",
+          "templateId": "onb-tmpl-6",
+          "uploadedAt": "2026-08-14",
+          "description": "Countersigned copy of the employment appointment agreement"
+        },
+        {
+          "id": "chk-1786690939495",
+          "type": "onboarding",
+          "title": "test",
+          "status": "Uploaded",
+          "fileUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-documents/onboarding-checklist-documents/1786690936853_print1111.pdf",
+          "fileName": "print1111.pdf",
+          "templateId": "onb-tmpl-1786690868526",
+          "uploadedAt": "2026-08-14",
+          "description": "test"
+        }
+      ],
       "exitChecklist": [],
       "avatarUrl": "https://zbpyoklhtuwjkdmrmpdj.supabase.co/storage/v1/object/public/employee-avatars/1786533215422_WhatsApp_Image_2024-10-14_at_3.47.53_PM-removebg-preview.jpg",
       "bio": "Hi its my bio",
@@ -1203,6 +1279,15 @@
       "category": "Contract",
       "required": true,
       "type": "onboarding"
+    },
+    {
+      "id": "onb-tmpl-1786690868526",
+      "title": "test",
+      "description": "test",
+      "category": "ID Proof",
+      "required": true,
+      "type": "onboarding",
+      "companyId": "bf46db43-ad37-41fe-8004-971e049f016e"
     }
   ],
   "exitChecklistTemplates": [

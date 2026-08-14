@@ -7,7 +7,7 @@ import {
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
   Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, ShieldAlert, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
-  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut
+  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut, Maximize2, Minimize2
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig, ChecklistItemTemplate } from "../types";
 import ChecklistCard from "./ChecklistCard";
@@ -151,6 +151,7 @@ export default function DirectoryView({
     }
   };
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; category?: string; size?: string } | null>(null);
+  const [isDocFullscreen, setIsDocFullscreen] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
@@ -3304,9 +3305,13 @@ export default function DirectoryView({
       {/* Document Preview Modal */}
       {previewDoc && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200 overflow-hidden">
+          <div className={`bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200 overflow-hidden transition-all ${
+            isDocFullscreen
+              ? "fixed inset-0 z-[100] w-screen h-screen rounded-none border-0 max-w-none max-h-none p-0"
+              : "rounded-2xl w-full max-w-4xl max-h-[90vh]"
+          }`}>
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-[#1a1a1a] flex items-center justify-between bg-slate-50/50 dark:bg-[#0a0a0a]/50">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-[#1a1a1a] flex items-center justify-between bg-slate-50/50 dark:bg-[#0a0a0a]/50 shrink-0">
               <div className="flex items-center space-x-3 min-w-0">
                 <div className="bg-emerald-100 dark:bg-emerald-950/60 p-2 rounded-xl text-emerald-600 dark:text-emerald-400">
                   <FileText className="w-5 h-5" />
@@ -3322,19 +3327,32 @@ export default function DirectoryView({
               </div>
 
               <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDocFullscreen(!isDocFullscreen)}
+                  className="px-3 py-1.5 bg-slate-200/80 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 text-xs font-bold rounded-xl flex items-center space-x-1.5 hover:bg-slate-300 dark:hover:bg-[#252525] transition-colors cursor-pointer"
+                  title={isDocFullscreen ? "Exit Fullscreen" : "Full Screen View"}
+                >
+                  {isDocFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span className="hidden sm:inline">{isDocFullscreen ? "Exit Full Screen" : "Full Screen"}</span>
+                </button>
                 {previewDoc.url && (
                   <a
                     href={previewDoc.url}
+                    download={previewDoc.name}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 text-slate-500 hover:text-emerald-600 dark:text-gray-400 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-colors"
                   >
-                    <ExternalLink className="w-4 h-4" />
-                    <span className="hidden sm:inline">Open in New Tab</span>
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Download</span>
                   </a>
                 )}
                 <button
-                  onClick={() => setPreviewDoc(null)}
+                  onClick={() => {
+                    setPreviewDoc(null);
+                    setIsDocFullscreen(false);
+                  }}
                   className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-xl transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
