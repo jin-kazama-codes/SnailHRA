@@ -14,6 +14,32 @@ const s3 = new S3Client({
 const BUCKET = process.env.SUPABASE_S3_BUCKET || "employee-documents";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 
+function getMimeType(fileName: string, fallbackType: string): string {
+  if (fallbackType && fallbackType !== "application/octet-stream" && fallbackType !== "") {
+    return fallbackType;
+  }
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  switch (ext) {
+    case "png": return "image/png";
+    case "jpg":
+    case "jpeg":
+    case "jfif": return "image/jpeg";
+    case "webp": return "image/webp";
+    case "gif": return "image/gif";
+    case "bmp": return "image/bmp";
+    case "svg": return "image/svg+xml";
+    case "heic": return "image/heic";
+    case "heif": return "image/heif";
+    case "avif": return "image/avif";
+    case "tiff":
+    case "tif": return "image/tiff";
+    case "pdf": return "application/pdf";
+    case "doc": return "application/msword";
+    case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    default: return fallbackType || "application/octet-stream";
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -32,7 +58,7 @@ export async function POST(request: Request) {
       ? `${folder}/${timestamp}_${sanitizedName}`
       : `${timestamp}_${sanitizedName}`;
 
-    const mimeType = file.type || "application/octet-stream";
+    const mimeType = getMimeType(file.name, file.type || "");
 
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = new Uint8Array(arrayBuffer);

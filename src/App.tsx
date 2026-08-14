@@ -1406,7 +1406,8 @@ export default function App() {
         const json = await res.json();
         if (json.item || json.checklist) {
           setEmployees(prev => prev.map(emp => {
-            if (emp.id === employeeId) {
+            const matchesEmp = emp.id === employeeId || emp.id.toLowerCase().replace(/[-_]/g, "") === employeeId.toLowerCase().replace(/[-_]/g, "");
+            if (matchesEmp) {
               const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
               const currentList = emp[listKey] || [];
               const itemToPut = json.item;
@@ -1455,7 +1456,8 @@ export default function App() {
         const json = await res.json();
         if (json.item || json.checklist) {
           setEmployees(prev => prev.map(emp => {
-            if (emp.id === employeeId) {
+            const matchesEmp = emp.id === employeeId || emp.id.toLowerCase().replace(/[-_]/g, "") === employeeId.toLowerCase().replace(/[-_]/g, "");
+            if (matchesEmp) {
               const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
               const currentList = emp[listKey] || [];
               const itemToPut = json.item;

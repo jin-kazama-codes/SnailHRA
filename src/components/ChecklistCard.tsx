@@ -219,7 +219,7 @@ export default function ChecklistCard({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+        accept="image/*,.pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.bmp,.heic,.heif,.svg,.jfif,.avif,.tiff,.tif"
         onChange={handleFileChange}
         className="hidden"
       />
@@ -674,7 +674,9 @@ export default function ChecklistCard({
             }`}>
               {previewDoc.url ? (
                 previewDoc.url.startsWith("data:image/") ||
-                /\.(jpg|jpeg|png|webp|svg|gif)(\?.*)?$/i.test(previewDoc.url) ? (
+                previewDoc.url.startsWith("blob:") ||
+                /\.(jpg|jpeg|png|webp|svg|gif|bmp|heic|heif|avif|jfif|tiff|tif)(\?.*)?$/i.test(previewDoc.url) ||
+                (previewDoc.name && /\.(jpg|jpeg|png|webp|svg|gif|bmp|heic|heif|avif|jfif|tiff|tif)$/i.test(previewDoc.name)) ? (
                   <img
                     src={previewDoc.url}
                     alt={previewDoc.name}
