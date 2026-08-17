@@ -730,6 +730,13 @@ function NewLayoutModal({ name, setName, onConfirm, onClose, saving }: {
   );
 }
 
+const getLocalDateString = (d: Date = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dateVal = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dateVal}`;
+};
+
 // ─── ROOM BOOKING COMPONENT ────────────────────────────────────────────────────
 
 function RoomBookingView({
@@ -773,7 +780,7 @@ function RoomBookingView({
 
   const isRoomBusy = (room: Room, date: string) => {
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = getLocalDateString(now);
     if (date !== todayStr) return false;
 
     const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -809,7 +816,7 @@ function RoomBookingView({
 
     // 1. Validation: date and time must not be in the past
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0];
+    const todayStr = getLocalDateString(now);
 
     if (bDate < todayStr) {
       alert("You cannot book a room for a past date.");

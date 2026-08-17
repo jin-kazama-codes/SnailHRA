@@ -56,6 +56,14 @@ function formatDateTime(iso: string) {
   return `${dateStr}, ${timeStr}`;
 }
 
+function capitalizeFirstWord(text?: string): string {
+  if (!text) return "";
+  const match = text.match(/\S/);
+  if (!match || match.index === undefined) return text;
+  const idx = match.index;
+  return text.slice(0, idx) + text.charAt(idx).toUpperCase() + text.slice(idx + 1);
+}
+
 export default function GrievanceView({ role, currentEmployee, companyId, employees, showToast }: GrievanceViewProps) {
   const [tickets, setTickets] = useState<GrievanceTicket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -261,10 +269,12 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
     }
     setSubmitting(true);
     try {
+      const formattedTitle = capitalizeFirstWord(form.title);
+      const formattedDescription = capitalizeFirstWord(form.description);
       const res = await fetch("/api/grievances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, employeeId: currentEmployee?.id, employeeName: currentEmployee?.fullName, ...form }),
+        body: JSON.stringify({ companyId, employeeId: currentEmployee?.id, employeeName: currentEmployee?.fullName, ...form, title: formattedTitle, description: formattedDescription }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -488,9 +498,9 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
                                 </span>
                               </div>
                               {/* Title */}
-                              <p className="font-bold text-sm text-slate-800 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors line-clamp-1">{ticket.title}</p>
+                              <p className="font-bold text-sm text-slate-800 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors line-clamp-1">{capitalizeFirstWord(ticket.title)}</p>
                               {/* Description */}
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 leading-relaxed">{ticket.description}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 leading-relaxed">{capitalizeFirstWord(ticket.description)}</p>
 
                               {/* Response bubble */}
                               {ticket.resolutionMessage && (
@@ -670,11 +680,11 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
                   </div>
 
                   <h3 className="font-bold text-sm text-slate-800 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors truncate">
-                    {ticket.title}
+                    {capitalizeFirstWord(ticket.title)}
                   </h3>
 
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 leading-relaxed">
-                    {ticket.description}
+                    {capitalizeFirstWord(ticket.description)}
                   </p>
 
                   {ticket.resolutionMessage && (
@@ -762,7 +772,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
                   <button key={t.id} onClick={() => setSelectedTicket(t)}
                     className="text-left bg-white dark:bg-[#111] rounded-xl p-3 shadow-sm border border-slate-100 dark:border-[#222] hover:border-violet-400/60 transition-all cursor-pointer group">
                     <div className="flex items-start justify-between gap-1">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2">{t.title}</p>
+                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 leading-snug line-clamp-2">{capitalizeFirstWord(t.title)}</p>
                       <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-violet-400 shrink-0 mt-0.5 transition-colors" />
                     </div>
                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -797,7 +807,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
                   <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${priorityColor[selectedTicket.priority]}`}>{selectedTicket.priority}</span>
                   <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#1a1a1a] px-2.5 py-0.5 rounded-full">{selectedTicket.category}</span>
                 </div>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white break-words leading-snug">{selectedTicket.title}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white break-words leading-snug">{capitalizeFirstWord(selectedTicket.title)}</h2>
                 <div className="flex items-center gap-3 text-xs text-slate-400">
                   <span className="flex items-center gap-1">
                     {selectedTicket.isAnonymous ? <EyeOff className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5 text-violet-500" />}
@@ -853,7 +863,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
               {/* Ticket Original Description */}
               <div className="bg-violet-50/60 dark:bg-violet-950/20 border-l-4 border-violet-500 rounded-r-2xl p-4">
                 <p className="text-[10px] font-bold text-violet-600 dark:text-violet-400 uppercase tracking-wider mb-1">Issue Description</p>
-                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p>
+                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{capitalizeFirstWord(selectedTicket.description)}</p>
               </div>
 
               {/* Chat Thread Header */}

@@ -2128,13 +2128,15 @@ async function startServer() {
     if (!title || !description || !employeeId) {
       return res.status(400).json({ error: "title, description, and employeeId are required" });
     }
+    const formattedTitle = title ? (title.trimStart().charAt(0).toUpperCase() + title.trimStart().slice(1)) : title;
+    const formattedDesc = description ? (description.trimStart().charAt(0).toUpperCase() + description.trimStart().slice(1)) : description;
     const ticket: GrievanceTicket = {
       id: `grv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       companyId: companyId || MGM_COMPANY_ID,
       employeeId,
       employeeName: isAnonymous ? "Anonymous" : (employeeName || employeeId),
-      title,
-      description,
+      title: formattedTitle,
+      description: formattedDesc,
       category: category || "Other",
       priority: priority || "Medium",
       status: "Open",

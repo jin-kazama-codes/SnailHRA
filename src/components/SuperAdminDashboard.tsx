@@ -271,11 +271,10 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-[200] flex items-center space-x-3 px-4 py-3 rounded-2xl border text-xs font-semibold shadow-lg transition-all ${
-          toast.type === "success"
+        <div className={`fixed top-4 right-4 z-[200] flex items-center space-x-3 px-4 py-3 rounded-2xl border text-xs font-semibold shadow-lg transition-all ${toast.type === "success"
             ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50"
             : "bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50"
-        }`}>
+          }`}>
           {toast.type === "success" ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
           <span>{toast.message}</span>
         </div>
@@ -394,11 +393,10 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                     <div
                       key={company.id}
                       onClick={() => handleSelectCompany(company)}
-                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                        selectedCompany?.id === company.id
+                      className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${selectedCompany?.id === company.id
                           ? "bg-violet-50 dark:bg-violet-950/10 border-violet-300 dark:border-violet-800/50 shadow-sm"
                           : "bg-slate-50 dark:bg-[#0a0a0a]/50 border-slate-100 dark:border-[#1a1a1a] hover:border-slate-200 dark:hover:border-[#252525]"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start space-x-3.5">
                         <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#0f0f0f] flex items-center justify-center shrink-0 border border-slate-100 dark:border-[#1a1a1a] overflow-hidden">
@@ -445,11 +443,10 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                         </select>
                         <button
                           onClick={() => handleUpdateCompany(company.id, { isActive: !company.isActive })}
-                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            company.isActive
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${company.isActive
                               ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400"
                               : "border-slate-200 dark:border-[#1a1a1a] bg-slate-50 dark:bg-[#0a0a0a] text-slate-400"
-                          }`}
+                            }`}
                           title={company.isActive ? "Mark Inactive" : "Mark Active"}
                         >
                           {company.isActive ? <Check className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
@@ -604,11 +601,10 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                       <Building2 className="w-5 h-5" />
                     </div>
                   )}
-                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${
-                    logoUploading
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${logoUploading
                       ? "bg-slate-50 dark:bg-[#0a0a0a] border-slate-100 dark:border-[#1a1a1a] text-slate-400 cursor-wait"
                       : "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-900/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30"
-                  }`}>
+                    }`}>
                     {logoUploading ? (
                       <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Uploading...</span></>
                     ) : (
@@ -723,11 +719,10 @@ export default function SuperAdminDashboard({ onLogout }: SuperAdminDashboardPro
                     </div>
                   )}
 
-                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${
-                    editLogoUploading
+                  <label className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors text-[10px] font-semibold ${editLogoUploading
                       ? "bg-slate-50 dark:bg-[#0a0a0a] border-slate-100 dark:border-[#1a1a1a] text-slate-400 cursor-wait"
                       : "bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-900/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30"
-                  }`}>
+                    }`}>
                     {editLogoUploading ? (
                       <><RefreshCw className="w-3.5 h-3.5 animate-spin" /><span>Uploading...</span></>
                     ) : (

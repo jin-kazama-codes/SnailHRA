@@ -64,7 +64,13 @@ export default function OnboardAgentSlideover({
   // Section 2 — placement
   const [department, setDepartment] = useState(customDepartments && customDepartments.length > 0 ? customDepartments[0] : "Information Technology");
   const [designation, setDesignation] = useState("Manager");
-  const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split("T")[0]);
+  const [joiningDate, setJoiningDate] = useState(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  });
   const [branch, setBranch] = useState("Head Office");
   const [employmentType, setEmploymentType] = useState<"contract" | "permanent" | "consultant" | "">("");
 

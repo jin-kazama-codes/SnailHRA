@@ -20,6 +20,22 @@ interface MeetingsViewProps {
   companyName?: string;
 }
 
+const getLocalDateString = (d: Date = new Date()): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dateVal = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dateVal}`;
+};
+
+const formatDisplayTime = (timeStr?: string): string => {
+  if (!timeStr) return "";
+  const parts = timeStr.trim().split(":");
+  if (parts.length >= 2) {
+    return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+  }
+  return timeStr;
+};
+
 export default function MeetingsView({
   meetings = [],
   employees = [],
@@ -31,14 +47,14 @@ export default function MeetingsView({
   onEditMeeting,
   companyName = "SnailHR"
 }: MeetingsViewProps) {
-  const todayStr = new Date().toISOString().split("T")[0];
-
   // Live clock tick — updates every second for countdown timers
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const todayStr = useMemo(() => getLocalDateString(now), [now]);
 
   const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -51,7 +67,7 @@ export default function MeetingsView({
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date(todayStr + "T00:00:00"));
   const [miniMonth, setMiniMonth] = useState<Date>(() => new Date(todayStr + "T00:00:00"));
-  const [calendarView, setCalendarView] = useState<"month" | "workweek" | "week" | "day">("workweek");
+  const [calendarView, setCalendarView] = useState<"month" | "workweek" | "week" | "day">("week");
   const [selectedDetailMeeting, setSelectedDetailMeeting] = useState<Meeting | null>(null);
 
   // Edit Meeting Modal state
@@ -74,7 +90,7 @@ export default function MeetingsView({
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [meetingDepartment, setMeetingDepartment] = useState("");
   const [priority, setPriority] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
-  const [date, setDate] = useState(todayStr);
+  const [date, setDate] = useState(() => getLocalDateString(new Date()));
   const [startTime, setStartTime] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -260,6 +276,7 @@ export default function MeetingsView({
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const finalOrganizerId = role === "admin" || role === "hr" ? organizerId : currentEmployeeId;
 
@@ -492,13 +509,6 @@ export default function MeetingsView({
     }
     return `${firstDayNum}–${lastDayNum} ${first.toLocaleDateString("en-US", { month: "long" })}, ${firstYear}`;
   }, [mainCalendarDays, calendarView, selectedDate]);
-
-  const getLocalDateString = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const dateVal = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${dateVal}`;
-  };
 
   const HOUR_HEIGHT = 64; // height in px of 1 hour row
   const START_HOUR = 8; // start calendar hour (8 AM)
@@ -1561,6 +1571,10 @@ export default function MeetingsView({
                                 priorityColor = "border-emerald-500";
                               }
 
+                              const formattedTimeRange = `${formatDisplayTime(meet.startTime)} - ${formatDisplayTime(meet.endTime)}`;
+                              const isShortCard = meet.height < 34;
+                              const isMediumCard = meet.height >= 34 && meet.height < 54;
+
                               return (
                                 <div
                                   key={meet.id}
@@ -1572,31 +1586,67 @@ export default function MeetingsView({
                                     width: `${meet.width}%`,
                                     zIndex: 10
                                   }}
-                                  className={`border-l-4 rounded-r-lg p-2 text-xs flex flex-col justify-between overflow-hidden shadow-2xs hover:shadow-xs cursor-pointer select-none transition-all active:scale-98 border-t border-r border-b border-t-slate-100/50 dark:border-t-[#1a1a1a]/50 ${priorityColor} ${priorityBg}`}
+                                  className={`border-l-4 rounded-r-lg ${meet.height < 42 ? "p-1 px-1.5" : "p-2"} text-xs flex flex-col justify-between overflow-hidden shadow-2xs hover:shadow-xs cursor-pointer select-none transition-all active:scale-98 border-t border-r border-b border-t-slate-100/50 dark:border-t-[#1a1a1a]/50 ${priorityColor} ${priorityBg}`}
                                   onClick={() => setSelectedDetailMeeting(meet)}
-                                  title={`${meet.title}\n${meet.startTime} - ${meet.endTime}\n${meet.description}${calIsClosed ? "\n[MEETING CLOSED]" : calIsLive ? "\n[LIVE NOW]" : ""}`}
+                                  title={`${meet.title}\n${formattedTimeRange}\n${meet.description}${calIsClosed ? "\n[MEETING CLOSED]" : calIsLive ? "\n[LIVE NOW]" : ""}`}
                                 >
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
+                                  {isShortCard ? (
+                                    <div className="flex items-center gap-1 min-w-0 h-full overflow-hidden leading-none">
                                       {calIsClosed
-                                        ? <Lock className="w-3 h-3 shrink-0 opacity-60" />
+                                        ? <Lock className="w-2.5 h-2.5 shrink-0 opacity-60" />
                                         : (calIsLive
-                                          ? <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
-                                          : (hasLink && <Video className="w-3 h-3 shrink-0 text-emerald-500 opacity-80" />)
+                                          ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                          : (hasLink && <Video className="w-2.5 h-2.5 shrink-0 text-emerald-500 opacity-80" />)
                                         )
                                       }
-                                      <h4 className="font-extrabold text-[10px] leading-tight truncate">{meet.title}</h4>
+                                      <h4 className="font-extrabold text-[9px] leading-none truncate shrink">{meet.title}</h4>
+                                      <span className="text-[8px] opacity-80 font-bold shrink-0 ml-auto leading-none">
+                                        {formattedTimeRange}
+                                      </span>
                                     </div>
-                                    <p className="text-[8px] opacity-75 font-bold mt-0.5 truncate">{meet.startTime} - {meet.endTime}</p>
-                                  </div>
-                                  <div className="flex items-center justify-between text-[8px] opacity-70 font-semibold pt-1 border-t border-current/10 shrink-0">
-                                    {calIsClosed
-                                      ? <span className="font-bold opacity-80">Meeting Closed</span>
-                                      : calIsLive
-                                      ? <span className="font-bold text-emerald-600 dark:text-emerald-400">● Live Now · {getTimeRemaining(meet)}</span>
-                                      : <span className="truncate opacity-90 font-bold">{getTimeRemaining(meet) ?? meet.reason}</span>
-                                    }
-                                  </div>
+                                  ) : isMediumCard ? (
+                                    <div className="flex flex-col justify-between min-w-0 h-full overflow-hidden">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        {calIsClosed
+                                          ? <Lock className="w-3 h-3 shrink-0 opacity-60" />
+                                          : (calIsLive
+                                            ? <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                            : (hasLink && <Video className="w-3 h-3 shrink-0 text-emerald-500 opacity-80" />)
+                                          )
+                                        }
+                                        <h4 className="font-extrabold text-[10px] leading-tight truncate">{meet.title}</h4>
+                                      </div>
+                                      <p className="text-[8px] opacity-80 font-bold leading-none truncate mt-0.5">
+                                        {formattedTimeRange}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          {calIsClosed
+                                            ? <Lock className="w-3 h-3 shrink-0 opacity-60" />
+                                            : (calIsLive
+                                              ? <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse" />
+                                              : (hasLink && <Video className="w-3 h-3 shrink-0 text-emerald-500 opacity-80" />)
+                                            )
+                                          }
+                                          <h4 className="font-extrabold text-[10px] leading-tight truncate">{meet.title}</h4>
+                                        </div>
+                                        <p className="text-[8px] opacity-75 font-bold mt-0.5 leading-tight truncate">
+                                          {formattedTimeRange}
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[8px] opacity-70 font-semibold pt-1 border-t border-current/10 shrink-0">
+                                        {calIsClosed
+                                          ? <span className="font-bold opacity-80">Meeting Closed</span>
+                                          : calIsLive
+                                          ? <span className="font-bold text-emerald-600 dark:text-emerald-400">● Live Now · {getTimeRemaining(meet)}</span>
+                                          : <span className="truncate opacity-90 font-bold">{getTimeRemaining(meet) ?? meet.reason}</span>
+                                        }
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               );
                             })}
