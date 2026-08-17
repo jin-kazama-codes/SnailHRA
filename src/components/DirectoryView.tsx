@@ -2670,19 +2670,71 @@ export default function DirectoryView({
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">Telephone Allow.</span>
-                          <input type="number" value={salaryTelephone} onChange={e => setSalaryTelephone(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                          <div className="flex items-center">
+                            {Number(salaryTelephone) > 0 && <span className="font-bold text-slate-700 dark:text-gray-200 font-mono text-xs mr-0.5">₹</span>}
+                            <input
+                              type="number"
+                              value={Number(salaryTelephone) === 0 ? "" : salaryTelephone}
+                              onChange={e => setSalaryTelephone(e.target.value)}
+                              placeholder="null"
+                              className={`w-full bg-transparent text-xs outline-none font-mono ${
+                                Number(salaryTelephone) > 0
+                                  ? "font-bold text-slate-700 dark:text-gray-200"
+                                  : "font-semibold text-slate-400 dark:text-gray-500 italic placeholder:text-slate-400 placeholder:dark:text-gray-500"
+                              }`}
+                            />
+                          </div>
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">Fuel Allow.</span>
-                          <input type="number" value={salaryFuel} onChange={e => setSalaryFuel(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                          <div className="flex items-center">
+                            {Number(salaryFuel) > 0 && <span className="font-bold text-slate-700 dark:text-gray-200 font-mono text-xs mr-0.5">₹</span>}
+                            <input
+                              type="number"
+                              value={Number(salaryFuel) === 0 ? "" : salaryFuel}
+                              onChange={e => setSalaryFuel(e.target.value)}
+                              placeholder="null"
+                              className={`w-full bg-transparent text-xs outline-none font-mono ${
+                                Number(salaryFuel) > 0
+                                  ? "font-bold text-slate-700 dark:text-gray-200"
+                                  : "font-semibold text-slate-400 dark:text-gray-500 italic placeholder:text-slate-400 placeholder:dark:text-gray-500"
+                              }`}
+                            />
+                          </div>
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">Prof. Dev.</span>
-                          <input type="number" value={salaryProfDev} onChange={e => setSalaryProfDev(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                          <div className="flex items-center">
+                            {Number(salaryProfDev) > 0 && <span className="font-bold text-slate-700 dark:text-gray-200 font-mono text-xs mr-0.5">₹</span>}
+                            <input
+                              type="number"
+                              value={Number(salaryProfDev) === 0 ? "" : salaryProfDev}
+                              onChange={e => setSalaryProfDev(e.target.value)}
+                              placeholder="null"
+                              className={`w-full bg-transparent text-xs outline-none font-mono ${
+                                Number(salaryProfDev) > 0
+                                  ? "font-bold text-slate-700 dark:text-gray-200"
+                                  : "font-semibold text-slate-400 dark:text-gray-500 italic placeholder:text-slate-400 placeholder:dark:text-gray-500"
+                              }`}
+                            />
+                          </div>
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">LTA</span>
-                          <input type="number" value={salaryLta} onChange={e => setSalaryLta(e.target.value)} placeholder="0" className="w-full font-bold text-slate-700 dark:text-gray-200 font-mono bg-transparent text-xs outline-none" />
+                          <div className="flex items-center">
+                            {Number(salaryLta) > 0 && <span className="font-bold text-slate-700 dark:text-gray-200 font-mono text-xs mr-0.5">₹</span>}
+                            <input
+                              type="number"
+                              value={Number(salaryLta) === 0 ? "" : salaryLta}
+                              onChange={e => setSalaryLta(e.target.value)}
+                              placeholder="null"
+                              className={`w-full bg-transparent text-xs outline-none font-mono ${
+                                Number(salaryLta) > 0
+                                  ? "font-bold text-slate-700 dark:text-gray-200"
+                                  : "font-semibold text-slate-400 dark:text-gray-500 italic placeholder:text-slate-400 placeholder:dark:text-gray-500"
+                              }`}
+                            />
+                          </div>
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">Special Allowances</span>
