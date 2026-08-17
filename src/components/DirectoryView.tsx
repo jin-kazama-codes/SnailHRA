@@ -522,6 +522,7 @@ export default function DirectoryView({
   const [salaryAllowances, setSalaryAllowances] = useState("");
   const [salaryPf, setSalaryPf] = useState("");
   const [salaryTds, setSalaryTds] = useState("");
+  const [salaryEsi, setSalaryEsi] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [bankName, setBankName] = useState("");
   const [bankIfsc, setBankIfsc] = useState("");
@@ -539,6 +540,7 @@ export default function DirectoryView({
   // Payroll Configuration integration for Onboarding Form
   const [onboardPayrollConfig, setOnboardPayrollConfig] = useState<PayrollConfig | null>(null);
   const [onboardIsPfExempt, setOnboardIsPfExempt] = useState<boolean>(false);
+  const [onboardIsEsiExempt, setOnboardIsEsiExempt] = useState<boolean>(false);
 
   // Fetch tenant payroll rules when onboarding or editing modal opens
   useEffect(() => {
@@ -549,13 +551,13 @@ export default function DirectoryView({
           if (data.config) {
             setOnboardPayrollConfig(data.config);
             if (salaryBasic) {
-              recomputeOnboardSalaryComponentsWithConfig(salaryBasic, onboardIsPfExempt, data.config);
+              recomputeOnboardSalaryComponentsWithConfig(salaryBasic, onboardIsPfExempt, onboardIsEsiExempt, data.config);
             }
           }
         })
         .catch(err => console.warn("Failed to load payroll config for employee modal:", err));
     }
-  }, [showOnboardForm, showEditModal, companyId, salaryBasic, onboardIsPfExempt]);
+  }, [showOnboardForm, showEditModal, companyId, salaryBasic, onboardIsPfExempt, onboardIsEsiExempt]);
 
   useEffect(() => {
     if (customDepartments && customDepartments.length > 0) {
@@ -565,8 +567,8 @@ export default function DirectoryView({
     }
   }, [customDepartments]);
 
-  // Helper to recompute HRA, Allowances, PF, Tax dynamically when Basic salary or PF exemption toggle changes
-  const recomputeOnboardSalaryComponentsWithConfig = (basicStr: string, exemptFlag: boolean, cfg: PayrollConfig | null) => {
+  // Helper to recompute HRA, Allowances, PF, Tax, ESI dynamically when Basic salary or exemption toggles change
+  const recomputeOnboardSalaryComponentsWithConfig = (basicStr: string, pfExemptFlag: boolean, esiExemptFlag: boolean, cfg: PayrollConfig | null) => {
     const basicVal = Number(basicStr) || 0;
     if (!cfg || basicVal <= 0) {
       setSalaryHra("0");
@@ -577,6 +579,7 @@ export default function DirectoryView({
       setSalaryAllowances("0");
       setSalaryPf("0");
       setSalaryTds("0");
+      setSalaryEsi("0");
       return;
     }
 
@@ -606,7 +609,7 @@ export default function DirectoryView({
 
     const gross = basicVal + hra + allowances + telephone + fuel + profDev + lta;
 
-    const pf = exemptFlag
+    const pf = pfExemptFlag
       ? 0
       : (cfg.pfModeDefault === "fixed_1800"
         ? 1800
@@ -618,6 +621,12 @@ export default function DirectoryView({
       ? Math.round(gross * (cfg.taxValue / 100))
       : cfg.taxValue;
 
+    const esiGrossCeiling = cfg.esiGrossCeiling ?? 21000;
+    const esiRate = cfg.esiRatePercentage ?? 0.75;
+    const esi = (cfg.esiEnabled !== false && !esiExemptFlag && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling))
+      ? Math.round(gross * (esiRate / 100))
+      : 0;
+
     setSalaryHra(String(hra));
     setSalaryTelephone(String(telephone));
     setSalaryFuel(String(fuel));
@@ -626,10 +635,11 @@ export default function DirectoryView({
     setSalaryAllowances(String(allowances));
     setSalaryPf(String(pf));
     setSalaryTds(String(tax));
+    setSalaryEsi(String(esi));
   };
 
-  const recomputeOnboardSalaryComponents = (basicStr: string, exemptFlag: boolean) => {
-    recomputeOnboardSalaryComponentsWithConfig(basicStr, exemptFlag, onboardPayrollConfig);
+  const recomputeOnboardSalaryComponents = (basicStr: string, pfExemptFlag: boolean, esiExemptFlag: boolean) => {
+    recomputeOnboardSalaryComponentsWithConfig(basicStr, pfExemptFlag, esiExemptFlag, onboardPayrollConfig);
   };
 
 
@@ -715,12 +725,18 @@ export default function DirectoryView({
         avatarUrl = await uploadProfileImage();
       }
 
+      const activePrefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") : null) || "EMP";
       const data = {
+        empCodePrefix: activePrefix,
         prefix, fullName, gender, email, phone, role: empRole, designationId: selectedDesgId, department, employmentType,
         branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
         joiningDate, dateOfBirth, salaryBasic, salaryHra,
         salaryTelephone, salaryFuel, salaryProfDev, salaryLta,
-        salaryAllowances, salaryPf, salaryTds,
+        salaryAllowances, salaryPf, salaryTds, salaryEsi,
+        salaryPfMode: onboardIsPfExempt ? "exempt" : "percentage",
+        salaryEsiOptIn: !onboardIsEsiExempt,
+        onboardIsPfExempt,
+        onboardIsEsiExempt,
         bankAccount, bankName, bankIfsc,
         address: address.trim() ? (address.trim().charAt(0).toUpperCase() + address.trim().slice(1)) : "",
         bio: bio.trim() ? (bio.trim().charAt(0).toUpperCase() + bio.trim().slice(1)) : "",
@@ -761,9 +777,11 @@ export default function DirectoryView({
       setSalaryAllowances("");
       setSalaryPf("");
       setSalaryTds("");
+      setSalaryEsi("");
       setPan("");
       setUan("");
       setOnboardIsPfExempt(false);
+      setOnboardIsEsiExempt(false);
 
       setBankAccount("");
       setBankName("");
@@ -935,6 +953,11 @@ export default function DirectoryView({
             : (onboardPayrollConfig
               ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
               : Math.round(basicVal * 0.12));
+          const isEsiExempt = (onboardPayrollConfig?.esiExemptEmployeeIds || []).includes(activeEmployee.id);
+          const esiGrossCeiling = onboardPayrollConfig?.esiGrossCeiling ?? 21000;
+          const esiVal = (onboardPayrollConfig?.esiEnabled !== false && !isEsiExempt && (esiGrossCeiling <= 0 || grossVal <= esiGrossCeiling))
+            ? Math.round(grossVal * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
+            : 0;
           const tdsVal = onboardPayrollConfig
             ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(grossVal * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
             : Math.round(grossVal * 0.05);
@@ -944,6 +967,7 @@ export default function DirectoryView({
             hra: hraVal,
             allowances: allowancesVal,
             pfDeduction: pfVal,
+            esiDeduction: esiVal,
             tdsDeduction: tdsVal,
           };
         })(),
@@ -2553,8 +2577,8 @@ export default function DirectoryView({
                     )}
                   </div>
 
-                  {/* Input 1: Basic Salary & Input 2: PF Exemption */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                  {/* Input 1: Basic Salary & Input 2 & 3: PF/ESI Exemption Toggles */}
+                  <div className="space-y-3.5">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 dark:text-gray-200 mb-1">
                         Basic Salary (INR) *
@@ -2565,7 +2589,7 @@ export default function DirectoryView({
                         onChange={(e) => {
                           const val = e.target.value;
                           setSalaryBasic(val);
-                          recomputeOnboardSalaryComponents(val, onboardIsPfExempt);
+                          recomputeOnboardSalaryComponents(val, onboardIsPfExempt, onboardIsEsiExempt);
                         }}
                         placeholder="e.g. 45000"
                         className="w-full bg-white dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#1a1a1a] font-mono font-bold focus:outline-none focus:border-emerald-500 shadow-xs"
@@ -2573,31 +2597,61 @@ export default function DirectoryView({
                       />
                     </div>
 
-                    {/* PF Exemption Checkbox Toggle */}
-                    <div className="p-3 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] flex items-center justify-between shadow-xs">
-                      <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
-                        <input
-                          type="checkbox"
-                          checked={onboardIsPfExempt}
-                          onChange={e => {
-                            const checked = e.target.checked;
-                            setOnboardIsPfExempt(checked);
-                            recomputeOnboardSalaryComponents(salaryBasic, checked);
-                          }}
-                          className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                        />
-                        <span>Exempt from Provident Fund (PF)</span>
-                      </label>
+                    {/* Exemption Checkbox Toggles Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* PF Exemption Checkbox Toggle */}
+                      <div className="p-3 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] flex items-center justify-between shadow-xs">
+                        <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={onboardIsPfExempt}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setOnboardIsPfExempt(checked);
+                              recomputeOnboardSalaryComponents(salaryBasic, checked, onboardIsEsiExempt);
+                            }}
+                            className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                          />
+                          <span>Exempt from Provident Fund (PF)</span>
+                        </label>
 
-                      {onboardIsPfExempt ? (
-                        <span className="text-[10px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-xs">
-                          EXEMPTED (₹0 PF)
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          Standard PF Active
-                        </span>
-                      )}
+                        {onboardIsPfExempt ? (
+                          <span className="text-[10px] font-extrabold bg-amber-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                            EXEMPTED (₹0 PF)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Standard PF Active
+                          </span>
+                        )}
+                      </div>
+
+                      {/* ESI Exemption Checkbox Toggle */}
+                      <div className="p-3 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] flex items-center justify-between shadow-xs">
+                        <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={onboardIsEsiExempt}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setOnboardIsEsiExempt(checked);
+                              recomputeOnboardSalaryComponents(salaryBasic, onboardIsPfExempt, checked);
+                            }}
+                            className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                          />
+                          <span>Exempt from ESI Insurance</span>
+                        </label>
+
+                        {onboardIsEsiExempt ? (
+                          <span className="text-[10px] font-extrabold bg-blue-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                            EXEMPTED (₹0 ESI)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            Standard ESI Active
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -2643,6 +2697,14 @@ export default function DirectoryView({
                           )}
                         </div>
                         <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
+                          <span className="text-slate-400 block text-[9px] uppercase">ESI Deduction</span>
+                          {onboardIsEsiExempt ? (
+                            <span className="font-bold text-blue-600 font-mono text-[10px]">₹0 (EXEMPT)</span>
+                          ) : (
+                            <span className="font-bold text-blue-500 font-mono">₹{Number(salaryEsi).toLocaleString()}</span>
+                          )}
+                        </div>
+                        <div className="bg-slate-50 dark:bg-[#0a0a0a] p-2 rounded-lg border border-slate-100 dark:border-[#252525]">
                           <span className="text-slate-400 block text-[9px] uppercase">TDS / Tax</span>
                           <span className="font-bold text-rose-500 font-mono">₹{Number(salaryTds).toLocaleString()}</span>
                         </div>
@@ -2653,7 +2715,7 @@ export default function DirectoryView({
                           Gross Pay: <span className="font-mono text-emerald-600 dark:text-emerald-400">₹{(Number(salaryBasic) + Number(salaryHra) + Number(salaryTelephone) + Number(salaryFuel) + Number(salaryProfDev) + Number(salaryLta) + Number(salaryAllowances)).toLocaleString()}</span>
                         </span>
                         <span className="text-emerald-600 dark:text-emerald-400 font-mono">
-                          Est. Net Pay: ₹{((Number(salaryBasic) + Number(salaryHra) + Number(salaryTelephone) + Number(salaryFuel) + Number(salaryProfDev) + Number(salaryLta) + Number(salaryAllowances)) - (Number(salaryPf) + Number(salaryTds))).toLocaleString()}
+                          Est. Net Pay: ₹{((Number(salaryBasic) + Number(salaryHra) + Number(salaryTelephone) + Number(salaryFuel) + Number(salaryProfDev) + Number(salaryLta) + Number(salaryAllowances)) - (Number(salaryPf) + Number(salaryTds) + Number(salaryEsi))).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -3130,15 +3192,20 @@ export default function DirectoryView({
                                   : Math.round(basicVal * 0.2);
                                 const gross = basicVal + hra + allowances;
                                 const isExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee?.id);
+                                const isEsiExempt = (onboardPayrollConfig?.esiExemptEmployeeIds || []).includes(activeEmployee?.id);
                                 const pf = isExempt
                                   ? 0
                                   : (onboardPayrollConfig
                                     ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
                                     : Math.round(basicVal * 0.12));
+                                const esiGrossCeiling = onboardPayrollConfig?.esiGrossCeiling ?? 21000;
+                                const esi = (onboardPayrollConfig?.esiEnabled !== false && !isEsiExempt && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling))
+                                  ? Math.round(gross * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
+                                  : 0;
                                 const tax = onboardPayrollConfig
                                   ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(gross * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
                                   : Math.round(gross * 0.05);
-                                const net = Math.max(0, gross - pf - tax);
+                                const net = Math.max(0, gross - pf - tax - esi);
 
                                 return (
                                   <div className="space-y-1.5 text-[11px]">
@@ -3148,6 +3215,7 @@ export default function DirectoryView({
                                     </div>
                                     <div className="flex justify-between border-t border-emerald-100 dark:border-emerald-900/50 pt-1.5">
                                       <span className="text-slate-600 dark:text-gray-400">PF: <strong className="font-mono text-slate-800 dark:text-gray-200">{isExempt ? "Exempt (₹0)" : `₹${pf.toLocaleString()}`}</strong></span>
+                                      <span className="text-slate-600 dark:text-gray-400">ESI: <strong className="font-mono text-slate-800 dark:text-gray-200">{isEsiExempt ? "Exempt (₹0)" : `₹${esi.toLocaleString()}`}</strong></span>
                                       <span className="text-slate-600 dark:text-gray-400">Tax/TDS: <strong className="font-mono text-slate-800 dark:text-gray-200">₹{tax.toLocaleString()}</strong></span>
                                     </div>
                                     <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-400 pt-1.5 border-t border-emerald-200/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/40 p-2 rounded-lg">

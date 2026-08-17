@@ -3,53 +3,18 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { Employee, capitalizeName } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
+import { generateGuaranteedUniqueEmployeeId } from "@/src/lib/idGenerator";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const db = loadDatabase();
-
-    let nextNum = 1001;
-    let maxNum = 1000;
-    if (db.employees && db.employees.length > 0) {
-      db.employees.forEach((e: any) => {
-        if (e.id && e.id.startsWith("EMP-")) {
-          const num = parseInt(e.id.replace("EMP-", ""), 10);
-          if (!isNaN(num) && num > maxNum) {
-            maxNum = num;
-          }
-        }
-      });
-    }
-    nextNum = maxNum + 1;
-
     const dbClient = supabaseAdmin || supabase;
-    if (dbClient) {
-      try {
-        const { data: lastEmp } = await dbClient
-          .from("employees")
-          .select("id")
-          .like("id", "EMP-%")
-          .order("id", { ascending: false })
-          .limit(1)
-          .maybeSingle();
 
-        if (lastEmp?.id) {
-          const match = lastEmp.id.match(/EMP-(\d+)/);
-          if (match) {
-            const lastNum = parseInt(match[1], 10);
-            if (lastNum >= nextNum) {
-              nextNum = lastNum + 1;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to fetch highest ID from Supabase:", err);
-      }
-    }
-
-    const empId = body.id || `EMP-${nextNum}`;
+    const codePrefix = (body.empCodePrefix || body.emp_code_prefix || "EMP").trim().toUpperCase();
+    const generatedId = await generateGuaranteedUniqueEmployeeId(db.employees || [], dbClient, codePrefix);
+    const empId = body.id || generatedId;
 
     const rawPassword = body.password || "Nawaz123#";
     const salt = bcrypt.genSaltSync(10);
@@ -74,6 +39,15 @@ export async function POST(request: Request) {
       }
     }
 
+    const isPfExemptOnboard = Boolean(body.onboardIsPfExempt || body.isPfExempt || body.salaryPfMode === "exempt" || body.pfMode === "exempt");
+    const isEsiExemptOnboard = Boolean(body.onboardIsEsiExempt || body.isEsiExempt || body.salaryEsiOptIn === false || body.esiOptIn === false);
+
+    const pfModeVal = isPfExemptOnboard ? "exempt" : (body.salaryPfMode || body.pfMode || "percentage");
+    const pfDeductionVal = isPfExemptOnboard ? 0 : (Number(body.salaryPf) || 0);
+
+    const esiOptInVal = isEsiExemptOnboard ? false : (body.salaryEsiOptIn !== undefined ? Boolean(body.salaryEsiOptIn) : (body.esiOptIn !== undefined ? Boolean(body.esiOptIn) : true));
+    const esiDeductionVal = isEsiExemptOnboard ? 0 : (Number(body.salaryEsi) || 0);
+
     const newEmp: Employee = {
       id: empId,
       companyId: resolvedCompanyId,
@@ -96,13 +70,13 @@ export async function POST(request: Request) {
         professionalDev: Number(body.salaryProfDev) || 0,
         lta: Number(body.salaryLta) || 0,
         allowances: Number(body.salaryAllowances) || 8000,
-        pfDeduction: Number(body.salaryPf) || 3600,
-        pfMode: body.salaryPfMode || body.pfMode || "percentage",
+        pfDeduction: pfDeductionVal,
+        pfMode: pfModeVal,
         tdsDeduction: Number(body.salaryTds) || 0,
         tdsMode: body.salaryTdsMode || body.tdsMode || "slab",
         tdsOptIn: body.salaryTdsOptIn !== undefined ? Boolean(body.salaryTdsOptIn) : (body.tdsOptIn !== undefined ? Boolean(body.tdsOptIn) : true),
-        esiOptIn: body.salaryEsiOptIn !== undefined ? Boolean(body.salaryEsiOptIn) : (body.esiOptIn !== undefined ? Boolean(body.esiOptIn) : true),
-        esiDeduction: Number(body.salaryEsi) || 0
+        esiOptIn: esiOptInVal,
+        esiDeduction: esiDeductionVal
       },
       bankDetails: body.bankDetails || {
         accountNumber: body.bankAccount || "",
@@ -133,11 +107,44 @@ export async function POST(request: Request) {
     };
 
     db.employees.push(newEmp);
+
+    // Sync PF & ESI exemptions with tenant payroll_configurations
+    if (isPfExemptOnboard || isEsiExemptOnboard) {
+      const existingCfg = db.payrollConfigs[resolvedCompanyId];
+      const cfg = existingCfg
+        ? { ...existingCfg }
+        : { companyId: resolvedCompanyId, hraType: "percentage" as const, hraValue: 40, pfType: "percentage" as const, pfValue: 12, pfModeDefault: "percentage" as const, pfExemptEmployeeIds: [], allowancesType: "percentage" as const, allowancesValue: 20, taxType: "percentage" as const, taxValue: 5, tdsOptInDefault: true, tdsModeDefault: "slab" as const, esiEnabled: true, esiRatePercentage: 0.75, esiGrossCeiling: 21000, esiExemptEmployeeIds: [], ltaValue: 0, ltaType: "percentage" as const, telephoneValue: 0, telephoneType: "percentage" as const, fuelValue: 0, fuelType: "percentage" as const, professionalDevValue: 0, professionalDevType: "percentage" as const };
+      let pfExempts = cfg.pfExemptEmployeeIds || [];
+      if (isPfExemptOnboard && !pfExempts.includes(empId)) {
+        pfExempts = [...pfExempts, empId];
+      }
+      let esiExempts = cfg.esiExemptEmployeeIds || [];
+      if (isEsiExemptOnboard && !esiExempts.includes(empId)) {
+        esiExempts = [...esiExempts, empId];
+      }
+      cfg.pfExemptEmployeeIds = pfExempts;
+      cfg.esiExemptEmployeeIds = esiExempts;
+      db.payrollConfigs[resolvedCompanyId] = cfg;
+
+      if (dbClient) {
+        try {
+          await dbClient.from("payroll_configurations").upsert({
+            company_id: resolvedCompanyId,
+            pf_exempt_employee_ids: pfExempts,
+            esi_exempt_employee_ids: esiExempts,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "company_id" });
+        } catch (cfgErr) {
+          console.warn("Failed to sync tenant exemption config on employee onboard:", cfgErr);
+        }
+      }
+    }
+
     saveDatabase(db);
 
-    if (supabase) {
+    if (dbClient) {
       try {
-        await supabase.from("employees").upsert({
+        const postUpsertData: any = {
           id: newEmp.id,
           company_id: newEmp.companyId,
           prefix: newEmp.prefix || null,
@@ -167,7 +174,12 @@ export async function POST(request: Request) {
           salary_lta: newEmp.salary?.lta || 0,
           salary_allowances: newEmp.salary?.allowances,
           salary_pf_deduction: newEmp.salary?.pfDeduction,
-          salary_tds_deduction: newEmp.salary?.tdsDeduction,
+          salary_pf_mode: newEmp.salary?.pfMode || null,
+          salary_tds_deduction: newEmp.salary?.tdsDeduction ?? 0,
+          salary_tds_opt_in: newEmp.salary?.tdsOptIn !== undefined ? newEmp.salary.tdsOptIn : null,
+          salary_tds_mode: newEmp.salary?.tdsMode || "slab",
+          salary_esi_opt_in: newEmp.salary?.esiOptIn !== undefined ? newEmp.salary.esiOptIn : null,
+          salary_esi_deduction: newEmp.salary?.esiDeduction ?? 0,
           bank_account_number: newEmp.bankDetails?.accountNumber,
           bank_name: newEmp.bankDetails?.bankName,
           bank_ifsc: newEmp.bankDetails?.ifsc,
@@ -178,7 +190,17 @@ export async function POST(request: Request) {
             pan: (newEmp.customFields?.pan as string) || (newEmp as any).pan || "",
             uan: (newEmp.customFields?.uan as string) || (newEmp as any).uan || ""
           }
-        });
+        };
+
+        const { error: upsertErr } = await dbClient.from("employees").upsert(postUpsertData);
+        if (upsertErr) {
+          console.warn("Supabase POST full upsert error, trying fallback without new columns:", upsertErr.message);
+          const { salary_pf_mode, salary_tds_opt_in, salary_tds_mode, salary_esi_opt_in, salary_esi_deduction, ...fallbackRecord } = postUpsertData;
+          const { error: fbErr } = await dbClient.from("employees").upsert(fallbackRecord);
+          if (fbErr) {
+            console.warn("Supabase fallback POST upsert error:", fbErr.message);
+          }
+        }
       } catch (sbErr) {
         console.warn("Supabase sync warning:", sbErr);
       }
@@ -212,9 +234,10 @@ export async function PUT(request: Request) {
     }
     saveDatabase(db);
 
-    if (supabase) {
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
       try {
-        await supabase.from("employees").upsert({
+        const upsertRecord: any = {
           id: updatedEmp.id,
           company_id: updatedEmp.companyId,
           prefix: updatedEmp.prefix || null,
@@ -244,6 +267,12 @@ export async function PUT(request: Request) {
           salary_lta: updatedEmp.salary?.lta || 0,
           salary_allowances: updatedEmp.salary?.allowances,
           salary_pf_deduction: updatedEmp.salary?.pfDeduction,
+          salary_pf_mode: updatedEmp.salary?.pfMode || null,
+          salary_tds_deduction: updatedEmp.salary?.tdsDeduction ?? 0,
+          salary_tds_opt_in: updatedEmp.salary?.tdsOptIn !== undefined ? updatedEmp.salary.tdsOptIn : null,
+          salary_tds_mode: updatedEmp.salary?.tdsMode || "slab",
+          salary_esi_opt_in: updatedEmp.salary?.esiOptIn !== undefined ? updatedEmp.salary.esiOptIn : null,
+          salary_esi_deduction: updatedEmp.salary?.esiDeduction ?? 0,
           bank_account_number: updatedEmp.bankDetails?.accountNumber,
           bank_name: updatedEmp.bankDetails?.bankName,
           bank_ifsc: updatedEmp.bankDetails?.ifsc,
@@ -254,7 +283,16 @@ export async function PUT(request: Request) {
             pan: (updatedEmp.customFields?.pan as string) || (updatedEmp as any).pan || "",
             uan: (updatedEmp.customFields?.uan as string) || (updatedEmp as any).uan || ""
           }
-        });
+        };
+        const { error: upsertErr } = await dbClient.from("employees").upsert(upsertRecord);
+        if (upsertErr) {
+          console.warn("Supabase full upsert error, trying fallback without new columns:", upsertErr.message);
+          const { salary_pf_mode, salary_tds_opt_in, salary_tds_mode, salary_esi_opt_in, salary_esi_deduction, ...fallbackRecord } = upsertRecord;
+          const { error: fbErr } = await dbClient.from("employees").upsert(fallbackRecord);
+          if (fbErr) {
+            console.warn("Supabase fallback upsert error:", fbErr.message);
+          }
+        }
       } catch (sbErr) {
         console.warn("Supabase PUT sync warning:", sbErr);
       }

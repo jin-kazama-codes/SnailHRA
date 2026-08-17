@@ -1,11 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+import path from "path";
 
-/**
- * Server-side only Supabase admin client.
- * Uses the SERVICE ROLE KEY which bypasses Row Level Security (RLS).
- * ⚠️ NEVER expose this client or key to the browser/client side.
- * Only import this in Next.js API routes (app/api/...).
- */
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config();
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";

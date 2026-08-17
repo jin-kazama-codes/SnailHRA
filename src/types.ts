@@ -69,6 +69,7 @@ export interface Employee {
   joiningDate: string;
   dateOfBirth?: string;
   status: "Active" | "Probation" | "Suspended" | "Resigned";
+  code?: string;
   salary: {
     basic: number;
     hra: number;
@@ -78,11 +79,12 @@ export interface Employee {
     lta?: number;             // Leave Travel Allowance
     allowances: number;       // Special allowance (catch-all)
     pfDeduction: number;
-    pfMode?: "percentage" | "fixed_1800" | "custom";
+    pfMode?: "percentage" | "fixed_1800" | "custom" | "exempt";
     tdsDeduction?: number;
     tdsMode?: "slab" | "custom";
     tdsOptIn?: boolean;
     esiOptIn?: boolean;
+    esiMode?: "auto" | "custom";
     esiDeduction?: number;
   };
   bankDetails: {
@@ -306,6 +308,7 @@ export interface PayrollConfig {
   esiEnabled?: boolean;
   esiRatePercentage?: number;
   esiGrossCeiling?: number;
+  esiExemptEmployeeIds?: string[];
   ltaValue?: number;
   ltaType?: "percentage" | "fixed";
   telephoneValue?: number;

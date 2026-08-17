@@ -43,7 +43,7 @@ export async function PUT(
 
     if (supabase) {
       try {
-        await supabase.from("employees").upsert({
+        const upsertData: any = {
           id: emp.id,
           full_name: emp.fullName,
           email: emp.email,
@@ -52,10 +52,10 @@ export async function PUT(
           designation_id: emp.designationId,
           department: emp.department,
           branch: emp.branch,
-          employment_type: emp.employmentType || emp.employment_type || null,
+          employment_type: emp.employmentType || (emp as any).employment_type || null,
           joining_date: emp.joiningDate,
           date_of_birth: emp.dateOfBirth || null,
-          company_id: emp.companyId || emp.company_id || null,
+          company_id: emp.companyId || (emp as any).company_id || null,
           status: emp.status,
           address: emp.address,
           emergency_contact_name: emp.emergencyContact?.name,
@@ -71,12 +71,27 @@ export async function PUT(
           salary_lta: emp.salary?.lta || 0,
           salary_allowances: emp.salary?.allowances,
           salary_pf_deduction: emp.salary?.pfDeduction,
-          salary_tds_deduction: emp.salary?.tdsDeduction,
+          salary_pf_mode: emp.salary?.pfMode || null,
+          salary_tds_deduction: emp.salary?.tdsDeduction ?? 0,
+          salary_tds_opt_in: emp.salary?.tdsOptIn !== undefined ? emp.salary.tdsOptIn : null,
+          salary_tds_mode: emp.salary?.tdsMode || "slab",
+          salary_esi_opt_in: emp.salary?.esiOptIn !== undefined ? emp.salary.esiOptIn : null,
+          salary_esi_deduction: emp.salary?.esiDeduction ?? 0,
           bank_account_number: emp.bankDetails?.accountNumber,
           bank_name: emp.bankDetails?.bankName,
           bank_ifsc: emp.bankDetails?.ifsc,
           password: emp.password || null
-        });
+        };
+        const { error: upsertErr } = await supabase.from("employees").upsert(upsertData);
+        if (upsertErr) {
+          // Fallback: retry without newer columns that may not exist yet
+          console.warn("Supabase full upsert failed, trying fallback:", upsertErr.message);
+          const { salary_pf_mode, salary_tds_opt_in, salary_tds_mode, salary_esi_opt_in, salary_esi_deduction, ...fallbackData } = upsertData;
+          const { error: fallbackErr } = await supabase.from("employees").upsert(fallbackData);
+          if (fallbackErr) {
+            console.warn("Supabase fallback upsert error:", fallbackErr.message);
+          }
+        }
       } catch (sbErr) {
         console.warn("Supabase sync warning in employee update:", sbErr);
       }

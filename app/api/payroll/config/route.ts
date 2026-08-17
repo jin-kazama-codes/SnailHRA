@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase, MGM_COMPANY_ID } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { PayrollConfig } from "@/src/types";
 
 export const DEFAULT_PAYROLL_CONFIG: Omit<PayrollConfig, "companyId"> = {
@@ -19,6 +20,7 @@ export const DEFAULT_PAYROLL_CONFIG: Omit<PayrollConfig, "companyId"> = {
   esiEnabled: true,
   esiRatePercentage: 0.75,
   esiGrossCeiling: 21000,
+  esiExemptEmployeeIds: [],
   ltaValue: 0,
   ltaType: "percentage",
   telephoneValue: 0,
@@ -44,10 +46,11 @@ export async function GET(request: Request) {
       ...DEFAULT_PAYROLL_CONFIG,
     };
 
-    // Try fetching from Supabase if configured
-    if (supabase) {
+    // Try fetching from Supabase if configured (bypassing RLS with admin client)
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await dbClient
           .from("payroll_configurations")
           .select("*")
           .eq("company_id", companyId)
@@ -59,6 +62,13 @@ export async function GET(request: Request) {
             ? rawExempt
             : typeof rawExempt === "string"
             ? JSON.parse(rawExempt)
+            : [];
+
+          const rawEsiExempt = data.esi_exempt_employee_ids;
+          const esiExemptEmployeeIds = Array.isArray(rawEsiExempt)
+            ? rawEsiExempt
+            : typeof rawEsiExempt === "string"
+            ? JSON.parse(rawEsiExempt)
             : [];
 
           config = {
@@ -78,6 +88,7 @@ export async function GET(request: Request) {
             esiEnabled: data.esi_enabled !== false,
             esiRatePercentage: Number(data.esi_rate_percentage) ?? 0.75,
             esiGrossCeiling: Number(data.esi_gross_ceiling) ?? 21000,
+            esiExemptEmployeeIds: esiExemptEmployeeIds.length > 0 ? esiExemptEmployeeIds : (config.esiExemptEmployeeIds || []),
             ltaValue: Number(data.lta_value) ?? 0,
             ltaType: data.lta_type || "percentage",
             telephoneValue: Number(data.telephone_value) ?? 0,
@@ -126,6 +137,7 @@ export async function POST(request: Request) {
       esiEnabled: body.esiEnabled !== false,
       esiRatePercentage: Number(body.esiRatePercentage) ?? 0.75,
       esiGrossCeiling: Number(body.esiGrossCeiling) ?? 21000,
+      esiExemptEmployeeIds: Array.isArray(body.esiExemptEmployeeIds) ? body.esiExemptEmployeeIds : [],
       ltaValue: Number(body.ltaValue) ?? 0,
       ltaType: body.ltaType || "percentage",
       telephoneValue: Number(body.telephoneValue) ?? 0,
@@ -143,8 +155,9 @@ export async function POST(request: Request) {
     db.payrollConfigs[companyId] = config;
     saveDatabase(db);
 
-    // Save to Supabase if available
-    if (supabase) {
+    // Save to Supabase using Admin Client (bypassing RLS)
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
       try {
         const payload = {
           company_id: config.companyId,
@@ -152,20 +165,37 @@ export async function POST(request: Request) {
           hra_value: config.hraValue,
           pf_type: config.pfType,
           pf_value: config.pfValue,
+          pf_mode_default: config.pfModeDefault,
           pf_exempt_employee_ids: config.pfExemptEmployeeIds,
+          esi_enabled: config.esiEnabled !== false,
+          esi_rate_percentage: config.esiRatePercentage,
+          esi_gross_ceiling: config.esiGrossCeiling,
+          esi_exempt_employee_ids: config.esiExemptEmployeeIds,
           allowances_type: config.allowancesType,
           allowances_value: config.allowancesValue,
+          telephone_type: config.telephoneType || "percentage",
+          telephone_value: config.telephoneValue ?? 0,
+          fuel_type: config.fuelType || "percentage",
+          fuel_value: config.fuelValue ?? 0,
+          professional_dev_type: config.professionalDevType || "percentage",
+          professional_dev_value: config.professionalDevValue ?? 0,
+          lta_type: config.ltaType || "percentage",
+          lta_value: config.ltaValue ?? 0,
           tax_type: config.taxType,
           tax_value: config.taxValue,
+          tds_opt_in_default: config.tdsOptInDefault !== false,
+          tds_mode_default: config.tdsModeDefault || "slab",
           updated_at: config.updatedAt,
         };
 
-        const { error } = await supabase
+        const { error } = await dbClient
           .from("payroll_configurations")
           .upsert(payload, { onConflict: "company_id" });
 
         if (error) {
-          console.warn("Supabase upsert payroll_configurations warning:", error.message);
+          console.error("Supabase upsert payroll_configurations error:", error.message, error.details);
+        } else {
+          console.log("Successfully upserted payroll config to Supabase 'payroll_configurations' table for company:", config.companyId);
         }
       } catch (sbErr) {
         console.warn("Failed to sync payroll config to Supabase:", sbErr);

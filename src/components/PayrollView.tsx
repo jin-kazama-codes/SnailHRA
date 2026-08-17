@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText, 
+import {
+  IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText,
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
   ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X, Pencil
 } from "lucide-react";
@@ -77,12 +77,13 @@ export default function PayrollView({
   const [editProfDev, setEditProfDev] = useState("");
   const [editLta, setEditLta] = useState("");
   const [editSpAllow, setEditSpAllow] = useState("");
-  const [editPfMode, setEditPfMode] = useState<"percentage" | "fixed_1800" | "custom">("percentage");
+  const [editPfMode, setEditPfMode] = useState<"percentage" | "fixed_1800" | "custom" | "exempt">("percentage");
   const [editPfCustom, setEditPfCustom] = useState("");
   const [editTdsOptIn, setEditTdsOptIn] = useState(true);
   const [editTdsMode, setEditTdsMode] = useState<"slab" | "custom">("slab");
   const [editTdsCustom, setEditTdsCustom] = useState("");
   const [editEsiOptIn, setEditEsiOptIn] = useState(true);
+  const [editEsiMode, setEditEsiMode] = useState<"auto" | "custom">("auto");
   const [editEsiCustom, setEditEsiCustom] = useState("");
   const [isSavingSalary, setIsSavingSalary] = useState(false);
 
@@ -113,12 +114,19 @@ export default function PayrollView({
     setEditProfDev(emp.salary?.professionalDev ? String(emp.salary.professionalDev) : configProfDev ? String(configProfDev) : "");
     setEditLta(emp.salary?.lta ? String(emp.salary.lta) : configLta ? String(configLta) : "");
     setEditSpAllow(emp.salary?.allowances ? String(emp.salary.allowances) : configSpAllow ? String(configSpAllow) : "");
-    setEditPfMode(emp.salary?.pfMode || (config?.pfModeDefault === "fixed_1800" ? "fixed_1800" : "percentage"));
+    const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(emp.id) ||
+                       (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
+                       emp.salary?.pfMode === "exempt";
+    setEditPfMode(isPfExempt ? "exempt" : (emp.salary?.pfMode || (config?.pfModeDefault === "fixed_1800" ? "fixed_1800" : "percentage")));
     setEditPfCustom(emp.salary?.pfDeduction ? String(emp.salary.pfDeduction) : "");
     setEditTdsOptIn(emp.salary?.tdsOptIn !== undefined ? emp.salary.tdsOptIn : true);
     setEditTdsMode(emp.salary?.tdsMode || "slab");
     setEditTdsCustom(emp.salary?.tdsDeduction ? String(emp.salary.tdsDeduction) : "");
-    setEditEsiOptIn(emp.salary?.esiOptIn !== undefined ? emp.salary.esiOptIn : true);
+    const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
+      (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
+      emp.salary?.esiOptIn === false;
+    setEditEsiOptIn(!isEsiExempt);
+    setEditEsiMode(emp.salary?.esiMode || (emp.salary?.esiDeduction && emp.salary?.esiDeduction > 0 ? "custom" : "auto"));
     setEditEsiCustom(emp.salary?.esiDeduction ? String(emp.salary.esiDeduction) : "");
   };
 
@@ -129,13 +137,28 @@ export default function PayrollView({
     setIsSavingSalary(true);
     try {
       const basic = editingEmpForSalary.salary.basic || 0;
-      let calculatedPf = editingEmpForSalary.salary.pfDeduction;
-      if (editPfMode === "fixed_1800") {
+      let calculatedPf = 0;
+      if (editPfMode === "exempt") {
+        calculatedPf = 0;
+      } else if (editPfMode === "fixed_1800") {
         calculatedPf = 1800;
       } else if (editPfMode === "custom") {
         calculatedPf = Number(editPfCustom) || 0;
       } else {
         calculatedPf = Math.round(basic * ((config?.pfValue || 12) / 100));
+      }
+
+      let calculatedEsi = 0;
+      if (editEsiOptIn) {
+        if (editEsiMode === "custom" && editEsiCustom !== "") {
+          calculatedEsi = Number(editEsiCustom) || 0;
+        } else {
+          const gross = basic + (editingEmpForSalary.salary?.hra || 0) + Number(editTel) + Number(editFuel) + Number(editProfDev) + Number(editLta) + Number(editSpAllow);
+          const esiGrossCeiling = config?.esiGrossCeiling ?? 21000;
+          if (esiGrossCeiling <= 0 || gross <= esiGrossCeiling) {
+            calculatedEsi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
+          }
+        }
       }
 
       const updatedSalary = {
@@ -151,12 +174,54 @@ export default function PayrollView({
         tdsMode: editTdsMode,
         tdsDeduction: editTdsOptIn ? (editTdsMode === "custom" ? (Number(editTdsCustom) || 0) : editingEmpForSalary.salary.tdsDeduction) : 0,
         esiOptIn: editEsiOptIn,
-        esiDeduction: editEsiOptIn ? (Number(editEsiCustom) || 0) : 0,
+        esiMode: editEsiMode,
+        esiDeduction: calculatedEsi,
       };
 
       await onUpdateEmployee(editingEmpForSalary.id, {
         salary: updatedSalary,
       });
+
+      // Keep tenant config PF & ESI exemption lists in sync if modal toggles changed
+      const currentPfExemptList = config?.pfExemptEmployeeIds || [];
+      let updatedPfExemptList = [...currentPfExemptList];
+
+      if (editPfMode === "exempt") {
+        if (!updatedPfExemptList.includes(editingEmpForSalary.id)) {
+          updatedPfExemptList.push(editingEmpForSalary.id);
+        }
+      } else {
+        updatedPfExemptList = updatedPfExemptList.filter(id => id !== editingEmpForSalary.id && id !== editingEmpForSalary.code);
+      }
+
+      const currentEsiExemptList = config?.esiExemptEmployeeIds || [];
+      let updatedEsiExemptList = [...currentEsiExemptList];
+
+      if (!editEsiOptIn) {
+        if (!updatedEsiExemptList.includes(editingEmpForSalary.id)) {
+          updatedEsiExemptList.push(editingEmpForSalary.id);
+        }
+      } else {
+        updatedEsiExemptList = updatedEsiExemptList.filter(id => id !== editingEmpForSalary.id && id !== editingEmpForSalary.code);
+      }
+
+      const isPfChanged = JSON.stringify(updatedPfExemptList) !== JSON.stringify(currentPfExemptList);
+      const isEsiChanged = JSON.stringify(updatedEsiExemptList) !== JSON.stringify(currentEsiExemptList);
+
+      if (isPfChanged || isEsiChanged) {
+        const newConfig = {
+          ...config,
+          companyId,
+          pfExemptEmployeeIds: updatedPfExemptList,
+          esiExemptEmployeeIds: updatedEsiExemptList
+        };
+        setConfig(newConfig);
+        fetch("/api/payroll/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newConfig),
+        }).catch(err => console.warn("Failed to update exempt lists on salary save:", err));
+      }
 
       setEditingEmpForSalary(null);
     } catch (err) {
@@ -174,6 +239,7 @@ export default function PayrollView({
     pfType: "percentage",
     pfValue: 12,
     pfExemptEmployeeIds: [],
+    esiExemptEmployeeIds: [],
     allowancesType: "percentage",
     allowancesValue: 20,
     taxType: "percentage",
@@ -183,6 +249,7 @@ export default function PayrollView({
   const [savingConfig, setSavingConfig] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
   const [pfSearchQuery, setPfSearchQuery] = useState("");
+  const [esiSearchQuery, setEsiSearchQuery] = useState("");
   const [simEmpId, setSimEmpId] = useState<string>(employees[0]?.id || "");
 
   // Load tenant payroll config from backend API
@@ -223,7 +290,7 @@ export default function PayrollView({
       const data = await res.json();
       if (res.ok && data.config) {
         setConfig(data.config);
-        setSaveSuccessMsg("Payroll rules and PF exemptions saved successfully for tenant!");
+        setSaveSuccessMsg("Payroll rules, PF exemptions & ESI exemptions saved successfully for tenant!");
         setTimeout(() => setSaveSuccessMsg(""), 4000);
       } else {
         alert(data.error || "Failed to save payroll rules");
@@ -241,6 +308,15 @@ export default function PayrollView({
       const exists = current.includes(empId);
       const next = exists ? current.filter(id => id !== empId) : [...current, empId];
       return { ...prev, pfExemptEmployeeIds: next };
+    });
+  };
+
+  const toggleEsiExempt = (empId: string) => {
+    setConfig(prev => {
+      const current = prev.esiExemptEmployeeIds || [];
+      const exists = current.includes(empId);
+      const next = exists ? current.filter(id => id !== empId) : [...current, empId];
+      return { ...prev, esiExemptEmployeeIds: next };
     });
   };
 
@@ -323,11 +399,19 @@ export default function PayrollView({
     return emp ? `${emp.bankDetails.bankName} - A/C ****${emp.bankDetails.accountNumber.slice(-4)}` : "HDFC Bank";
   };
 
-  // Generate employee code: PREFIX + 4-digit zero-padded number
+  // Generate employee code: returns employee's exact database code/id if formatted, otherwise formats prefix
   const getEmployeeCode = (emp: Employee): string => {
-    const prefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") || empCodePrefix : empCodePrefix).toUpperCase();
-    const num = emp.employeeNumber || (employees.findIndex(e => e.id === emp.id) + 1);
-    return `${prefix}${String(num).padStart(4, "0")}`;
+    if (emp.code && emp.code.trim() !== "") {
+      return emp.code;
+    }
+    if (emp.id && (emp.id.startsWith("EMP-") || emp.id.startsWith("EMP0") || emp.id.includes("-"))) {
+      return emp.id;
+    }
+    if (emp.employeeNumber) {
+      const prefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") || empCodePrefix : empCodePrefix).toUpperCase();
+      return `${prefix}${String(emp.employeeNumber).padStart(4, "0")}`;
+    }
+    return emp.id || "EMP";
   };
 
   // Get all salary components with defaults — falls back to config-derived values when employee has no per-field override
@@ -374,7 +458,7 @@ export default function PayrollView({
           >
             {role === "employee" ? "My Salary Payslips" : "Payroll Dashboard"}
           </button>
-          
+
           {(role === "admin" || role === "hr") && (
             <>
               <button
@@ -547,12 +631,42 @@ export default function PayrollView({
                         const hasSlip = currentMonthPayslips.find(p => p.employeeId === emp.id);
                         const sal = getEmpSalaryComponents(emp);
                         const grossEarnings = sal.basic + sal.hra + sal.telephone + sal.fuel + sal.professionalDev + sal.lta + sal.allowances;
-                        const pfDeduction = sal.pfDeduction || Math.round(sal.basic * 0.08);
+                        const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(emp.id) ||
+                          (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
+                          emp.salary?.pfMode === "exempt";
+                        let pfDeduction = 0;
+                        if (!isPfExempt) {
+                          if (emp.salary?.pfMode === "fixed_1800") {
+                            pfDeduction = 1800;
+                          } else if (emp.salary?.pfMode === "custom" && emp.salary?.pfDeduction !== undefined) {
+                            pfDeduction = emp.salary.pfDeduction;
+                          } else {
+                            pfDeduction = (emp.salary?.pfDeduction !== undefined && emp.salary?.pfDeduction > 0)
+                              ? emp.salary.pfDeduction
+                              : Math.round(sal.basic * ((config?.pfValue || 12) / 100));
+                          }
+                        }
                         const empPendingFines = (fines || [])
                           .filter(f => f.employeeId === emp.id && f.status === "Deducted From Payroll")
                           .reduce((sum, f) => sum + f.amount, 0);
                         const defaultTaxes = sal.tdsDeduction || Math.round(grossEarnings * 0.05);
-                        const netSalaryEstimate = Math.max(0, grossEarnings - pfDeduction - empPendingFines - defaultTaxes);
+
+                        const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
+                          (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
+                          emp.salary?.esiOptIn === false;
+                        let esiEst = 0;
+                        if (config?.esiEnabled !== false && !isEsiExempt) {
+                          if (emp.salary?.esiDeduction && emp.salary.esiDeduction > 0) {
+                            esiEst = emp.salary.esiDeduction;
+                          } else {
+                            const esiCeiling = config?.esiGrossCeiling ?? 21000;
+                            if (esiCeiling <= 0 || grossEarnings <= esiCeiling) {
+                              esiEst = Math.round(grossEarnings * ((config?.esiRatePercentage || 0.75) / 100));
+                            }
+                          }
+                        }
+
+                        const netSalaryEstimate = Math.max(0, grossEarnings - pfDeduction - defaultTaxes - esiEst - empPendingFines);
 
                         return (
                           <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
@@ -581,7 +695,7 @@ export default function PayrollView({
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.professionalDev.toLocaleString()}</td>
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.lta.toLocaleString()}</td>
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.allowances.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes + esiEst).toLocaleString()}</td>
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
                             </td>
@@ -589,13 +703,12 @@ export default function PayrollView({
                               ₹{hasSlip ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
                             </td>
                             <td className="py-2 px-2 text-center whitespace-nowrap">
-                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${
-                                hasSlip?.status === "Paid" 
+                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${hasSlip?.status === "Paid"
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
                                   : hasSlip?.status === "Generated"
-                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
-                                  : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
-                              }`}>
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
+                                    : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
+                                }`}>
                                 {hasSlip ? hasSlip.status : "Pending Run"}
                               </span>
                             </td>
@@ -681,11 +794,10 @@ export default function PayrollView({
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                            safeCurrentPage === page
+                          className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${safeCurrentPage === page
                               ? "bg-emerald-600 text-white shadow-xs"
                               : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a]"
-                          }`}
+                            }`}
                         >
                           {page}
                         </button>
@@ -784,7 +896,7 @@ export default function PayrollView({
                       <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">House Rent Allowance (HRA)</p>
                       <p className="text-[11px] text-slate-400">Allowance for accommodation expenses</p>
                     </div>
-                    
+
                     {/* Type Switcher */}
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
                       <button
@@ -829,7 +941,7 @@ export default function PayrollView({
                       <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Special & Other Allowances</p>
                       <p className="text-[11px] text-slate-400">Medical, conveyance & flexible benefits</p>
                     </div>
-                    
+
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
                       <button
                         type="button"
@@ -1034,7 +1146,7 @@ export default function PayrollView({
                       </p>
                       <p className="text-[11px] text-slate-400">Default rule: 12% of Basic vs Fixed ₹1,800</p>
                     </div>
-                    
+
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
                       <button
                         type="button"
@@ -1123,7 +1235,7 @@ export default function PayrollView({
                       <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Income Tax (TDS) Default Rules</p>
                       <p className="text-[11px] text-slate-400">Flexibility: Employees can opt in/out or set manual TDS</p>
                     </div>
-                    
+
                     <div className="flex bg-white dark:bg-[#1a1a1a] p-1 rounded-lg border border-slate-200 dark:border-[#252525] text-xs font-semibold">
                       <button
                         type="button"
@@ -1220,11 +1332,10 @@ export default function PayrollView({
                       return (
                         <label
                           key={emp.id}
-                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${
-                            isExempt
+                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${isExempt
                               ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/50 shadow-xs"
                               : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center space-x-3">
                             <input
@@ -1252,6 +1363,104 @@ export default function PayrollView({
                           )}
                         </label>
 
+                      );
+                    })}
+
+                  {employees.length === 0 && (
+                    <p className="text-xs text-slate-400 text-center py-6">No active employees found.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Employee ESI Exemption Manager */}
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white text-sm flex items-center gap-2">
+                      <UserX className="w-4 h-4 text-blue-500" />
+                      <span>ESI Exempted Employees Manager</span>
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Select employees who are exempted from ESI deduction (ESI will be set to ₹0)
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = employees.map(e => e.id);
+                        setConfig(prev => ({ ...prev, esiExemptEmployeeIds: allIds }));
+                      }}
+                      className="text-[10px] font-bold px-2.5 py-1 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200 dark:border-blue-900/40 hover:bg-blue-100 transition-all cursor-pointer"
+                    >
+                      Exempt All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, esiExemptEmployeeIds: [] }))}
+                      className="text-[10px] font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-200 transition-all cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                {/* Search Filter */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search employee by name, designation, or department..."
+                    value={esiSearchQuery}
+                    onChange={e => setEsiSearchQuery(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl pl-9 pr-3.5 py-2 text-xs text-slate-700 dark:text-gray-200 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Checkbox List */}
+                <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-1">
+                  {employees
+                    .filter(e => {
+                      const q = esiSearchQuery.toLowerCase();
+                      const dName = getDesignationTitle(e.designationId).toLowerCase();
+                      return e.fullName.toLowerCase().includes(q) || e.department.toLowerCase().includes(q) || dName.includes(q);
+                    })
+                    .map(emp => {
+                      const isExempt = (config.esiExemptEmployeeIds || []).includes(emp.id);
+                      return (
+                        <label
+                          key={emp.id}
+                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${isExempt
+                              ? "bg-blue-50/60 dark:bg-blue-950/20 border-blue-300 dark:border-blue-900/50 shadow-xs"
+                              : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
+                            }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={isExempt}
+                              onChange={() => toggleEsiExempt(emp.id)}
+                              className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                            />
+                            <div>
+                              <p className="font-bold text-slate-800 dark:text-white leading-tight">{emp.fullName}</p>
+                              <p className="text-[10px] text-slate-400 leading-tight">
+                                {getDesignationTitle(emp.designationId)} • {emp.department}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isExempt ? (
+                            <span className="text-[10px] font-extrabold bg-blue-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                              EXEMPTED (₹0 ESI)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              Standard ESI Active
+                            </span>
+                          )}
+                        </label>
                       );
                     })}
 
@@ -1308,9 +1517,11 @@ export default function PayrollView({
                   const gross = basic + hra + allowances + telephone + fuel + profDev + lta;
 
                   const isExempt = (config.pfExemptEmployeeIds || []).includes(simEmp.id);
+                  const isEsiSimExempt = (config.esiExemptEmployeeIds || []).includes(simEmp.id);
                   const pf = isExempt ? 0 : (config.pfModeDefault === "fixed_1800" ? 1800 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue));
                   const tax = config.taxType === "percentage" ? Math.round(gross * (config.taxValue / 100)) : config.taxValue;
-                  const esi = (config.esiEnabled !== false && gross <= (config.esiGrossCeiling || 21000)) ? Math.round(gross * ((config.esiRatePercentage || 0.75) / 100)) : 0;
+                  const esiGrossCeiling = config.esiGrossCeiling ?? 21000;
+                  const esi = (config.esiEnabled !== false && !isEsiSimExempt && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling)) ? Math.round(gross * ((config.esiRatePercentage || 0.75) / 100)) : 0;
                   const net = Math.max(0, gross - pf - tax - esi);
 
                   return (
@@ -1438,18 +1649,61 @@ export default function PayrollView({
       {/* Detailed Salary Slip Modal */}
       {activeSlip && (() => {
         const emp = employees.find(e => e.id === activeSlip.employeeId);
-        const slipTelephone = activeSlip.telephone || 0;
-        const slipFuel = activeSlip.fuel || 0;
-        const slipProfDev = activeSlip.professionalDev || 0;
-        const slipLta = activeSlip.lta || 0;
-        const grossEarnings = activeSlip.basic + activeSlip.hra + slipTelephone + slipFuel + slipProfDev + slipLta + activeSlip.allowances;
-        const grossDeductions = activeSlip.pfDeduction + activeSlip.taxDeduction + activeSlip.finesDeducted;
+        const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(activeSlip.employeeId) ||
+                           (emp && ((config?.pfExemptEmployeeIds || []).includes(emp.id) ||
+                                   (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
+                                   emp.salary?.pfMode === "exempt"));
+
+        const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(activeSlip.employeeId) ||
+                            (emp && ((config?.esiExemptEmployeeIds || []).includes(emp.id) ||
+                                    (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
+                                    emp.salary?.esiOptIn === false));
+
+        const slipTelephone = (activeSlip.telephone && activeSlip.telephone > 0) ? activeSlip.telephone : (emp?.salary?.telephone || 0);
+        const slipFuel = (activeSlip.fuel && activeSlip.fuel > 0) ? activeSlip.fuel : (emp?.salary?.fuel || 0);
+        const slipProfDev = (activeSlip.professionalDev && activeSlip.professionalDev > 0) ? activeSlip.professionalDev : (emp?.salary?.professionalDev || 0);
+        const slipLta = (activeSlip.lta && activeSlip.lta > 0) ? activeSlip.lta : (emp?.salary?.lta || 0);
+        const slipAllowances = (activeSlip.allowances !== undefined && activeSlip.allowances > 0) ? activeSlip.allowances : (emp?.salary?.allowances || 0);
+        const grossEarnings = activeSlip.basic + activeSlip.hra + slipTelephone + slipFuel + slipProfDev + slipLta + slipAllowances;
+
+        const slipPf = isPfExempt ? 0 : (activeSlip.pfDeduction || 0);
+        const slipEsi = isEsiExempt ? 0 : (activeSlip.esiDeduction || 0);
+        const slipTds = activeSlip.taxDeduction || 0;
+        const slipFines = activeSlip.finesDeducted || 0;
+
+        const grossDeductions = slipPf + slipTds + slipFines + slipEsi;
+        const displayNetPay = Math.max(0, grossEarnings - grossDeductions);
         const designation = getDesignationTitle(emp?.designationId || "");
         const empCode = emp ? getEmployeeCode(emp) : activeSlip.employeeId;
-        
+
+        const activeDeductions: { label: string; amount: number; isRose?: boolean }[] = [];
+        if (slipTds > 0) {
+          activeDeductions.push({ label: "TDS", amount: slipTds });
+        }
+        if (!isPfExempt && slipPf > 0) {
+          activeDeductions.push({ label: "P.F.", amount: slipPf });
+        }
+        if (slipFines > 0) {
+          activeDeductions.push({ label: "LATE FINES", amount: slipFines, isRose: true });
+        }
+        if (!isEsiExempt && slipEsi > 0) {
+          activeDeductions.push({ label: "E.S.I.", amount: slipEsi });
+        }
+
+        const activeEarnings: { label: string; amount: number }[] = [];
+        if (activeSlip.basic > 0) activeEarnings.push({ label: "BASIC", amount: activeSlip.basic });
+        if (activeSlip.hra > 0) activeEarnings.push({ label: "HRA", amount: activeSlip.hra });
+        if (slipTelephone > 0) activeEarnings.push({ label: "TELEPHONE", amount: slipTelephone });
+        if (slipFuel > 0) activeEarnings.push({ label: "FUEL", amount: slipFuel });
+        if (slipProfDev > 0) activeEarnings.push({ label: "PROFESSIONAL DEV", amount: slipProfDev });
+        if (slipLta > 0) activeEarnings.push({ label: "LTA", amount: slipLta });
+        if (slipAllowances > 0) activeEarnings.push({ label: "SPECIAL ALLOWANCE", amount: slipAllowances });
+
+        const totalTableRows = Math.max(activeEarnings.length, activeDeductions.length, 1);
+
         return (
           <div className="fixed inset-0 bg-slate-100 dark:bg-[#0a0e17] z-50 flex flex-col w-full h-full min-h-screen overflow-hidden animate-in fade-in duration-200">
-            
+
             {/* Full-Width Header Controls Bar */}
             <div className="bg-slate-900 px-6 py-3.5 text-white flex items-center justify-between shadow-md shrink-0 print:hidden">
               <div className="flex items-center space-x-3">
@@ -1486,16 +1740,16 @@ export default function PayrollView({
             {/* FULL PAGE PAYSLIP DOCUMENT CONTAINER */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 flex justify-center custom-scrollbar">
               <div className="bg-white text-slate-900 shadow-2xl border border-slate-300 rounded-2xl w-full max-w-4xl p-6 sm:p-10 my-auto printable-payslip font-sans space-y-6">
-                
+
                 {/* Document Top Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
                   {/* Logo & Company Name */}
                   <div className="flex items-center space-x-4">
                     {companyLogoUrl ? (
-                      <img 
-                        src={companyLogoUrl} 
-                        alt={companyName || "Company Logo"} 
-                        className="h-12 max-w-[180px] object-contain shrink-0" 
+                      <img
+                        src={companyLogoUrl}
+                        alt={companyName || "Company Logo"}
+                        className="h-12 max-w-[180px] object-contain shrink-0"
                       />
                     ) : (
                       <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
@@ -1575,48 +1829,36 @@ export default function PayrollView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">BASIC</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.basic.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">TDS</td>
-                        <td className="p-2.5 text-right font-mono">{activeSlip.taxDeduction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">HRA</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.hra.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">P.F.</td>
-                        <td className="p-2.5 text-right font-mono">{activeSlip.pfDeduction.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">TELEPHONE</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipTelephone.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase text-rose-700">LATE FINES</td>
-                        <td className="p-2.5 text-right font-mono text-rose-700">{activeSlip.finesDeducted.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">FUEL</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipFuel.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700"></td>
-                        <td className="p-2.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">PROFESSIONAL DEV</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipProfDev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700"></td>
-                        <td className="p-2.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">LTA</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{slipLta.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700"></td>
-                        <td className="p-2.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 border-r border-slate-700 font-bold uppercase">SPECIAL ALLOWANCE</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{activeSlip.allowances.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700"></td>
-                        <td className="p-2.5 text-right"></td>
-                      </tr>
+                      {Array.from({ length: totalTableRows }).map((_, idx) => {
+                        const earn = activeEarnings[idx];
+                        const ded = activeDeductions[idx];
+                        return (
+                          <tr key={idx}>
+                            {earn ? (
+                              <>
+                                <td className="p-2.5 border-r border-slate-700 font-bold uppercase">{earn.label}</td>
+                                <td className="p-2.5 border-r border-slate-700 text-right font-mono">{earn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-2.5 border-r border-slate-700"></td>
+                                <td className="p-2.5 border-r border-slate-700 text-right"></td>
+                              </>
+                            )}
+                            {ded ? (
+                              <>
+                                <td className={`p-2.5 border-r border-slate-700 font-bold uppercase ${ded.isRose ? "text-rose-700" : ""}`}>{ded.label}</td>
+                                <td className={`p-2.5 text-right font-mono ${ded.isRose ? "text-rose-700" : ""}`}>{ded.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-2.5 border-r border-slate-700"></td>
+                                <td className="p-2.5 text-right"></td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
                       {/* Totals Row */}
                       <tr className="border-t-2 border-slate-700 font-bold bg-slate-50">
                         <td className="p-2.5 border-r border-slate-700 uppercase">GROSS EARNINGS</td>
@@ -1629,7 +1871,7 @@ export default function PayrollView({
                         <td className="p-2.5 border-r border-slate-700 bg-white" colSpan={2}></td>
                         <td className="p-2.5 border-r border-slate-700 uppercase font-extrabold text-slate-900 bg-slate-100">NET PAY</td>
                         <td className="p-2.5 text-right font-mono font-black text-slate-900 bg-slate-100 text-sm">
-                          {activeSlip.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     </tbody>
@@ -1639,7 +1881,7 @@ export default function PayrollView({
                 {/* Net Pay In Words */}
                 <div className="pt-2 space-y-1">
                   <p className="font-bold text-slate-900 text-xs">
-                    NET Pay for the Month: <span className="font-mono font-extrabold">{activeSlip.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /-</span> ({numberToWordsIndian(activeSlip.netPay)} Only)
+                    NET Pay for the Month: <span className="font-mono font-extrabold">{displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /-</span> ({numberToWordsIndian(displayNetPay)} Only)
                   </p>
                 </div>
 
@@ -1656,11 +1898,11 @@ export default function PayrollView({
       })()}
       {/* Adjust Monthly Allowances Modal */}
       {editingEmpForSalary && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200"
           onClick={() => setEditingEmpForSalary(null)}
         >
-          <div 
+          <div
             className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] w-full max-w-2xl sm:max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] my-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1674,7 +1916,7 @@ export default function PayrollView({
                   {editingEmpForSalary.fullName} ({getEmployeeCode(editingEmpForSalary)}) — {editingEmpForSalary.department}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setEditingEmpForSalary(null)}
                 className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a1a1a] text-slate-400 cursor-pointer"
               >
@@ -1744,28 +1986,44 @@ export default function PayrollView({
 
                 {/* PF Mode Selector */}
                 <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
-                  <label className="block text-[11px] font-bold text-slate-700 dark:text-gray-300">Provident Fund (PF) Rule</label>
-                  <div className="grid grid-cols-3 gap-1.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">Provident Fund (PF) Rule</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditPfMode(editPfMode === "exempt" ? "percentage" : "exempt")}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${editPfMode === "exempt" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400"}`}
+                    >
+                      {editPfMode === "exempt" ? "✕ Opted OUT (PF Exempt)" : "✓ Opted IN (PF Active)"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 text-xs">
                     <button
                       type="button"
                       onClick={() => setEditPfMode("percentage")}
-                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "percentage" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                      className={`py-1.5 px-1.5 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editPfMode === "percentage" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
                     >
-                      12% of Basic
+                      12% Basic
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditPfMode("fixed_1800")}
-                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "fixed_1800" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                      className={`py-1.5 px-1.5 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editPfMode === "fixed_1800" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
                     >
-                      Fixed ₹1,800
+                      Fixed ₹1.8k
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditPfMode("custom")}
-                      className={`py-1.5 px-2 rounded-lg border font-bold text-[11px] transition-all cursor-pointer ${editPfMode === "custom" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                      className={`py-1.5 px-1.5 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editPfMode === "custom" ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
                     >
                       Custom ₹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPfMode("exempt")}
+                      className={`py-1.5 px-1.5 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editPfMode === "exempt" ? "bg-amber-600 text-white border-amber-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                    >
+                      Exempt (₹0)
                     </button>
                   </div>
                   {editPfMode === "custom" && (
@@ -1827,24 +2085,44 @@ export default function PayrollView({
                 {/* ESI Opt-In & Amount */}
                 <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">ESI Deduction</label>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">ESI Deduction Rule</label>
                     <button
                       type="button"
                       onClick={() => setEditEsiOptIn(!editEsiOptIn)}
                       className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold cursor-pointer transition-all ${editEsiOptIn ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}
                     >
-                      {editEsiOptIn ? "✓ ESI Active" : "✕ ESI Exempt"}
+                      {editEsiOptIn ? "✓ Opted IN (ESI Active)" : "✕ Opted OUT (ESI Exempt)"}
                     </button>
                   </div>
                   {editEsiOptIn && (
-                    <input
-                      type="number"
-                      min="0"
-                      value={editEsiCustom}
-                      onChange={e => setEditEsiCustom(e.target.value)}
-                      placeholder="Auto calculated (~0.75% of gross) or enter custom ESI ₹"
-                      className="w-full bg-white dark:bg-[#151515] text-slate-800 dark:text-gray-100 p-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold"
-                    />
+                    <div className="space-y-1.5 pt-1">
+                      <div className="grid grid-cols-2 gap-1.5 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setEditEsiMode("auto")}
+                          className={`py-1 px-2 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editEsiMode === "auto" ? "bg-blue-600 text-white border-blue-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                        >
+                          Auto Rule ({config?.esiRatePercentage || 0.75}%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditEsiMode("custom")}
+                          className={`py-1 px-2 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editEsiMode === "custom" ? "bg-blue-600 text-white border-blue-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
+                        >
+                          Manual Amount (₹)
+                        </button>
+                      </div>
+                      {editEsiMode === "custom" && (
+                        <input
+                          type="number"
+                          min="0"
+                          value={editEsiCustom}
+                          onChange={e => setEditEsiCustom(e.target.value)}
+                          placeholder="Enter manual ESI deduction amount (INR)"
+                          className="w-full bg-white dark:bg-[#151515] text-slate-800 dark:text-gray-100 p-2 text-xs rounded-lg border border-slate-200 dark:border-[#2a2a2a] font-mono font-bold"
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -1860,7 +2138,8 @@ export default function PayrollView({
                   const gross = basic + hra + tel + fuel + profDev + lta + spAllow;
 
                   let pf = 0;
-                  if (editPfMode === "fixed_1800") pf = 1800;
+                  if (editPfMode === "exempt") pf = 0;
+                  else if (editPfMode === "fixed_1800") pf = 1800;
                   else if (editPfMode === "custom") pf = Number(editPfCustom) || 0;
                   else pf = Math.round(basic * ((config?.pfValue || 12) / 100));
 
@@ -1872,8 +2151,11 @@ export default function PayrollView({
 
                   let esi = 0;
                   if (editEsiOptIn) {
-                    if (editEsiCustom) esi = Number(editEsiCustom) || 0;
-                    else if (gross <= (config?.esiGrossCeiling || 21000)) esi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
+                    if (editEsiMode === "custom" && editEsiCustom !== "") esi = Number(editEsiCustom) || 0;
+                    else {
+                      const esiGrossCeiling = config?.esiGrossCeiling ?? 21000;
+                      if (esiGrossCeiling <= 0 || gross <= esiGrossCeiling) esi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
+                    }
                   }
 
                   const pendingFines = (fines || [])

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { updateFineStatusInSupabase, syncPayslipToSupabase, supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { Payslip, SimulatedEmail } from "@/src/types";
 async function syncLocalDbWithSupabase(db: any) {
-  if (!supabase) return;
+  const dbClient = supabaseAdmin || supabase;
+  if (!dbClient) return;
   try {
-    const { data: empRows } = await supabase.from("employees").select("*");
+    const { data: empRows } = await dbClient.from("employees").select("*");
     if (empRows && empRows.length > 0) {
       db.employees = empRows.map((row: any) => {
         const bankDetailsFromRow = typeof row.bank_details === "string" ? JSON.parse(row.bank_details) : row.bank_details;
@@ -55,7 +57,7 @@ async function syncLocalDbWithSupabase(db: any) {
       });
     }
 
-    const { data: fineRows } = await supabase.from("fines").select("*");
+    const { data: fineRows } = await dbClient.from("fines").select("*");
     if (fineRows) {
       db.fines = fineRows.map((row: any) => ({
         id: row.id,
@@ -68,7 +70,7 @@ async function syncLocalDbWithSupabase(db: any) {
       }));
     }
 
-    const { data: slipsRows } = await supabase.from("payslips").select("*");
+    const { data: slipsRows } = await dbClient.from("payslips").select("*");
     if (slipsRows) {
       db.payslips = slipsRows.map((row: any) => ({
         id: row.id,
@@ -76,10 +78,15 @@ async function syncLocalDbWithSupabase(db: any) {
         month: row.month || "",
         basic: Number(row.basic) || 0,
         hra: Number(row.hra) || 0,
+        telephone: Number(row.telephone ?? 0),
+        fuel: Number(row.fuel ?? 0),
+        professionalDev: Number(row.professional_dev ?? row.professionalDev ?? 0),
+        lta: Number(row.lta ?? 0),
         allowances: Number(row.allowances) || 0,
         finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
         pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
         taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
+        esiDeduction: Number(row.esi_deduction ?? row.esiDeduction ?? 0),
         netPay: Number(row.net_pay ?? row.netPay ?? 0),
         status: row.status || "Generated",
         generatedAt: row.generated_at || row.generatedAt || "",
@@ -192,6 +199,7 @@ export async function POST(request: Request) {
 
     // Calculate PF Deduction
     const isPfExempt = (
+      employee.salary?.pfMode === "exempt" ||
       (Array.isArray(config?.pfExemptEmployeeIds) && config.pfExemptEmployeeIds.includes(employeeId)) ||
       Object.values(db.payrollConfigs || {}).some((c: any) =>
         Array.isArray(c?.pfExemptEmployeeIds) && c.pfExemptEmployeeIds.includes(employeeId)
@@ -234,12 +242,19 @@ export async function POST(request: Request) {
     }
 
     // Calculate ESI Deduction
+    const isEsiExempt = (
+      (Array.isArray(config?.esiExemptEmployeeIds) && config.esiExemptEmployeeIds.includes(employeeId)) ||
+      Object.values(db.payrollConfigs || {}).some((c: any) =>
+        Array.isArray(c?.esiExemptEmployeeIds) && c.esiExemptEmployeeIds.includes(employeeId)
+      )
+    );
+
     let esi = 0;
-    if (employee.salary?.esiOptIn === false) {
+    if (isEsiExempt || employee.salary?.esiOptIn === false) {
       esi = 0;
     } else if (employee.salary?.esiDeduction !== undefined && employee.salary.esiDeduction > 0) {
       esi = employee.salary.esiDeduction;
-    } else if (config.esiEnabled !== false && gross <= (config.esiGrossCeiling || 21000)) {
+    } else if (config.esiEnabled !== false && ((config.esiGrossCeiling || 0) <= 0 || gross <= (config.esiGrossCeiling || 21000))) {
       esi = Math.round(gross * ((config.esiRatePercentage || 0.75) / 100));
     } else {
       esi = 0;
@@ -329,8 +344,9 @@ export async function DELETE(request: Request) {
 
     saveDatabase(db);
 
-    if (supabase) {
-      await supabase.from("payslips").delete().eq("id", payslip.id);
+    const writeClient = supabaseAdmin || supabase;
+    if (writeClient) {
+      await writeClient.from("payslips").delete().eq("id", payslip.id);
       for (const fine of employeeFines) {
         await updateFineStatusInSupabase(fine.id, "Deducted From Payroll");
       }

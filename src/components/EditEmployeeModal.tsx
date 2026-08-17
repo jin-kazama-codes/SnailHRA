@@ -51,10 +51,11 @@ export default function EditEmployeeModal({
   const [salaryAllowances, setSalaryAllowances] = useState(String(employee.salary?.allowances ?? 6000));
   const [salaryPf, setSalaryPf] = useState(String(employee.salary?.pfDeduction ?? 3600));
   const [salaryTds, setSalaryTds] = useState(String(employee.salary?.tdsDeduction ?? 0));
-  const [pfMode, setPfMode] = useState<"percentage" | "fixed_1800" | "custom">(employee.salary?.pfMode || "percentage");
+  const [pfMode, setPfMode] = useState<"percentage" | "fixed_1800" | "custom" | "exempt">(employee.salary?.pfMode || "percentage");
   const [tdsOptIn, setTdsOptIn] = useState<boolean>(employee.salary?.tdsOptIn !== undefined ? employee.salary.tdsOptIn : true);
   const [tdsMode, setTdsMode] = useState<"slab" | "custom">(employee.salary?.tdsMode || "slab");
   const [esiOptIn, setEsiOptIn] = useState<boolean>(employee.salary?.esiOptIn !== undefined ? employee.salary.esiOptIn : true);
+  const [esiMode, setEsiMode] = useState<"auto" | "custom">(employee.salary?.esiMode || (employee.salary?.esiDeduction && employee.salary?.esiDeduction > 0 ? "custom" : "auto"));
   const [salaryEsi, setSalaryEsi] = useState(String(employee.salary?.esiDeduction ?? 0));
 
   const [bankAccount, setBankAccount] = useState(employee.bankDetails?.accountNumber || "");
@@ -127,7 +128,7 @@ export default function EditEmployeeModal({
         : 0;
 
       const calculatedEsi = esiOptIn
-        ? (salaryEsi ? (Number(salaryEsi) || 0) : (gVal <= 21000 ? Math.round(gVal * 0.0075) : 0))
+        ? (esiMode === "custom" && salaryEsi !== "" ? (Number(salaryEsi) || 0) : (gVal <= 21000 ? Math.round(gVal * 0.0075) : 0))
         : 0;
 
       const updated: any = {
@@ -157,6 +158,7 @@ export default function EditEmployeeModal({
           tdsMode,
           tdsOptIn,
           esiOptIn,
+          esiMode,
           esiDeduction: calculatedEsi,
         },
         bankDetails: {
@@ -932,24 +934,44 @@ export default function EditEmployeeModal({
 
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <label className="block text-[11px] font-semibold text-slate-500 dark:text-gray-400">ESI Deduction</label>
+                            <label className="block text-[11px] font-semibold text-slate-500 dark:text-gray-400">ESI Deduction Rule</label>
                             <button
                               type="button"
                               onClick={() => setEsiOptIn(!esiOptIn)}
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded cursor-pointer ${esiOptIn ? "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400" : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400"}`}
                             >
-                              {esiOptIn ? "ESI Active" : "ESI Exempt"}
+                              {esiOptIn ? "✓ ESI Active" : "✕ ESI Exempt"}
                             </button>
                           </div>
                           {esiOptIn ? (
-                            <input
-                              type="number"
-                              min="0"
-                              value={salaryEsi}
-                              onChange={e => setSalaryEsi(e.target.value)}
-                              placeholder="Auto ~0.75% or custom ₹"
-                              className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-2.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono font-bold"
-                            />
+                            <div className="space-y-1.5 pt-0.5">
+                              <div className="grid grid-cols-2 gap-1 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setEsiMode("auto")}
+                                  className={`py-1 px-1.5 rounded-lg border font-bold text-[9px] transition-all cursor-pointer ${esiMode === "auto" ? "bg-blue-600 text-white border-blue-600 shadow-xs" : "bg-white dark:bg-[#141414] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#222]"}`}
+                                >
+                                  Auto Rule
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEsiMode("custom")}
+                                  className={`py-1 px-1.5 rounded-lg border font-bold text-[9px] transition-all cursor-pointer ${esiMode === "custom" ? "bg-blue-600 text-white border-blue-600 shadow-xs" : "bg-white dark:bg-[#141414] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#222]"}`}
+                                >
+                                  Manual Amount (₹)
+                                </button>
+                              </div>
+                              {esiMode === "custom" && (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={salaryEsi}
+                                  onChange={e => setSalaryEsi(e.target.value)}
+                                  placeholder="Manual ESI ₹"
+                                  className="w-full bg-white dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-2 py-1 text-xs rounded-lg border border-slate-200 dark:border-[#222] font-mono font-bold"
+                                />
+                              )}
+                            </div>
                           ) : (
                             <div className="p-2 bg-slate-100 dark:bg-[#141414] text-slate-400 text-[10px] rounded-xl italic">ESI Exempted</div>
                           )}

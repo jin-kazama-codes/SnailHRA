@@ -591,15 +591,31 @@ export async function syncPayslipToSupabase(payslip: any) {
       fines_deducted: Number(payslip.finesDeducted ?? payslip.fines_ded_amount ?? payslip.fines_deducted ?? 0),
       pf_deduction: Number(payslip.pfDeduction ?? payslip.pf_deduction ?? 0),
       tax_deduction: Number(payslip.taxDeduction ?? payslip.tax_deduction ?? 0),
+      esi_deduction: Number(payslip.esiDeduction ?? payslip.esi_deduction ?? 0),
       net_pay: Number(payslip.netPay ?? payslip.net_pay ?? 0),
       status: payslip.status || "Generated",
       generated_at: payslip.generatedAt || payslip.generated_at || new Date().toISOString(),
       sent_to_email: payslip.sentToEmail || payslip.sent_to_email || ""
     };
-    const { error } = await supabase.from("payslips").upsert(record, { onConflict: "id" });
+    // Prefer admin client (bypasses RLS) for writes; fall back to anon client
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const writeClient = supabaseAdmin || supabase;
+    const { error } = await writeClient.from("payslips").upsert(record, { onConflict: "id" });
 
     if (error) {
-      console.warn("Supabase payslips table upsert error:", error.message, error.details);
+      // If error is about esi_deduction column not existing, retry without it
+      if (error.message?.includes('esi_deduction')) {
+        console.warn("esi_deduction column missing, retrying without it...");
+        const { esi_deduction, ...recordWithoutEsi } = record;
+        const { error: fallbackErr } = await writeClient.from("payslips").upsert(recordWithoutEsi, { onConflict: "id" });
+        if (fallbackErr) {
+          console.warn("Supabase payslips fallback upsert error:", fallbackErr.message, fallbackErr.details);
+        } else {
+          console.log("Payslip synced without esi_deduction field (column missing):", payslip.id);
+        }
+      } else {
+        console.warn("Supabase payslips table upsert error:", error.message, error.details);
+      }
     } else {
       console.log("Successfully synced payslip to Supabase 'payslips' table:", payslip.id);
     }
@@ -654,6 +670,125 @@ export async function deleteMeetingFromSupabase(meetingId: string) {
   } catch (e) {
     console.warn("Supabase meeting delete warning:", e);
   }
+}
+
+export async function syncPayrollConfigToSupabase(config: any) {
+  if (!supabase) return;
+  try {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const dbClient = supabaseAdmin || supabase;
+
+    const record: any = {
+      company_id: config.companyId,
+      hra_type: config.hraType || "percentage",
+      hra_value: Number(config.hraValue) ?? 40,
+      pf_type: config.pfType || "percentage",
+      pf_value: Number(config.pfValue) ?? 12,
+      pf_mode_default: config.pfModeDefault || "percentage",
+      pf_exempt_employee_ids: config.pfExemptEmployeeIds || [],
+      allowances_type: config.allowancesType || "percentage",
+      allowances_value: Number(config.allowancesValue) ?? 20,
+      telephone_type: config.telephoneType || "percentage",
+      telephone_value: Number(config.telephoneValue) ?? 0,
+      fuel_type: config.fuelType || "percentage",
+      fuel_value: Number(config.fuelValue) ?? 0,
+      professional_dev_type: config.professionalDevType || "percentage",
+      professional_dev_value: Number(config.professionalDevValue) ?? 0,
+      lta_type: config.ltaType || "percentage",
+      lta_value: Number(config.ltaValue) ?? 0,
+      tax_type: config.taxType || "percentage",
+      tax_value: Number(config.taxValue) ?? 5,
+      tds_opt_in_default: config.tdsOptInDefault !== false,
+      tds_mode_default: config.tdsModeDefault || "slab",
+      esi_enabled: config.esiEnabled !== false,
+      esi_rate_percentage: Number(config.esiRatePercentage) ?? 0.75,
+      esi_gross_ceiling: Number(config.esiGrossCeiling) ?? 21000,
+      esi_exempt_employee_ids: config.esiExemptEmployeeIds || [],
+      updated_at: config.updatedAt || new Date().toISOString()
+    };
+
+    let { error } = await dbClient.from("payroll_configurations").upsert(record, { onConflict: "company_id" });
+    if (error) {
+      console.warn("Supabase payroll_configurations upsert error, trying fallback without new ESI columns:", error.message);
+      const fallbackRecord = {
+        company_id: config.companyId,
+        hra_type: config.hraType || "percentage",
+        hra_value: Number(config.hraValue) ?? 40,
+        pf_type: config.pfType || "percentage",
+        pf_value: Number(config.pfValue) ?? 12,
+        pf_exempt_employee_ids: config.pfExemptEmployeeIds || [],
+        allowances_type: config.allowancesType || "percentage",
+        allowances_value: Number(config.allowancesValue) ?? 20,
+        tax_type: config.taxType || "percentage",
+        tax_value: Number(config.taxValue) ?? 5,
+        updated_at: config.updatedAt || new Date().toISOString()
+      };
+      const { error: fbErr } = await dbClient.from("payroll_configurations").upsert(fallbackRecord, { onConflict: "company_id" });
+      if (fbErr) {
+        console.error("Supabase payroll_configurations fallback upsert failed:", fbErr.message);
+      } else {
+        console.log("Successfully synced basic payroll config to Supabase 'payroll_configurations' table");
+      }
+    } else {
+      console.log("Successfully synced full payroll config to Supabase 'payroll_configurations' table:", config.companyId);
+    }
+  } catch (e) {
+    console.warn("Supabase payroll config sync warning:", e);
+  }
+}
+
+export async function fetchPayrollConfigFromSupabase(companyId: string) {
+  if (!supabase) return null;
+  try {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const dbClient = supabaseAdmin || supabase;
+
+    const { data, error } = await dbClient
+      .from("payroll_configurations")
+      .select("*")
+      .eq("company_id", companyId)
+      .maybeSingle();
+
+    if (data && !error) {
+      const rawPfExempt = data.pf_exempt_employee_ids;
+      const pfExemptEmployeeIds = Array.isArray(rawPfExempt)
+        ? rawPfExempt
+        : typeof rawPfExempt === "string"
+        ? JSON.parse(rawPfExempt)
+        : [];
+
+      const rawEsiExempt = data.esi_exempt_employee_ids;
+      const esiExemptEmployeeIds = Array.isArray(rawEsiExempt)
+        ? rawEsiExempt
+        : typeof rawEsiExempt === "string"
+        ? JSON.parse(rawEsiExempt)
+        : [];
+
+      return {
+        companyId: data.company_id,
+        hraType: data.hra_type || "percentage",
+        hraValue: Number(data.hra_value) ?? 40,
+        pfType: data.pf_type || "percentage",
+        pfValue: Number(data.pf_value) ?? 12,
+        pfModeDefault: data.pf_mode_default || "percentage",
+        pfExemptEmployeeIds,
+        allowancesType: data.allowances_type || "percentage",
+        allowancesValue: Number(data.allowances_value) ?? 20,
+        taxType: data.tax_type || "percentage",
+        taxValue: Number(data.tax_value) ?? 5,
+        tdsOptInDefault: data.tds_opt_in_default !== false,
+        tdsModeDefault: data.tds_mode_default || "slab",
+        esiEnabled: data.esi_enabled !== false,
+        esiRatePercentage: Number(data.esi_rate_percentage) ?? 0.75,
+        esiGrossCeiling: Number(data.esi_gross_ceiling) ?? 21000,
+        esiExemptEmployeeIds,
+        updatedAt: data.updated_at,
+      };
+    }
+  } catch (e) {
+    console.warn("Error fetching payroll config from Supabase:", e);
+  }
+  return null;
 }
 
 

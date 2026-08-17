@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { syncPayslipToSupabase, supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
 export async function POST(request: Request) {
   try {
@@ -11,8 +12,9 @@ export async function POST(request: Request) {
 
     const db = loadDatabase();
 
-    if (supabase) {
-      const { data: slipsRows } = await supabase.from("payslips").select("*");
+    const dbClient = supabaseAdmin || supabase;
+    if (dbClient) {
+      const { data: slipsRows } = await dbClient.from("payslips").select("*");
       if (slipsRows) {
         db.payslips = slipsRows.map((row: any) => ({
           id: row.id,

@@ -15,6 +15,8 @@ import {
   deleteInventoryRequestFromSupabase,
   syncFineToSupabase,
   syncPayslipToSupabase,
+  syncPayrollConfigToSupabase,
+  fetchPayrollConfigFromSupabase,
   getCompanyIdForEmployee
 } from "./src/lib/supabase.js";
 import { supabaseAdmin } from "./src/lib/supabase-admin.js";
@@ -23,7 +25,7 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting,
-  GrievanceTicket, PerformanceRecord
+  GrievanceTicket, PerformanceRecord, PayrollConfig
 } from "./src/types";
 
 // Default MGM Financiers company ID (matches migration script)
@@ -67,7 +69,36 @@ interface AppState {
   companies: Company[];
   grievanceTickets?: GrievanceTicket[];
   performanceRecords?: PerformanceRecord[];
+  payrollConfig?: PayrollConfig;
+  payrollConfigs?: Record<string, PayrollConfig>;
 }
+
+const DEFAULT_PAYROLL_CONFIG: Omit<PayrollConfig, "companyId"> = {
+  hraType: "percentage",
+  hraValue: 40,
+  pfType: "percentage",
+  pfValue: 12,
+  pfModeDefault: "percentage",
+  pfExemptEmployeeIds: [],
+  allowancesType: "percentage",
+  allowancesValue: 20,
+  taxType: "percentage",
+  taxValue: 5,
+  tdsOptInDefault: true,
+  tdsModeDefault: "slab",
+  esiEnabled: true,
+  esiRatePercentage: 0.75,
+  esiGrossCeiling: 21000,
+  esiExemptEmployeeIds: [],
+  ltaValue: 0,
+  ltaType: "percentage",
+  telephoneValue: 0,
+  telephoneType: "percentage",
+  fuelValue: 0,
+  fuelType: "percentage",
+  professionalDevValue: 0,
+  professionalDevType: "percentage",
+};
 
 const initialDesignations: Designation[] = [];
 const initialHolidays: Holiday[] = [];
@@ -136,6 +167,7 @@ function readDatabaseLocal(): AppState {
       if (!state.employees) state.employees = [];
       if (!state.timingSettings) state.timingSettings = initialData.timingSettings;
       if (!state.companies) state.companies = initialData.companies;
+      if (!state.payrollConfigs) state.payrollConfigs = {};
       return state;
     }
   } catch (err) {
@@ -1096,7 +1128,8 @@ async function startServer() {
       return res.status(400).json({ error: "Full Name and Email are required" });
     }
     
-    const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
+    const codePrefix = (empData.empCodePrefix || empData.emp_code_prefix || (req.headers["x-emp-code-prefix"] as string) || "EMP").trim().toUpperCase();
+    const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase, codePrefix);
     
     // Hash password
     const rawPassword = empData.password || "Nawaz123#";
@@ -1127,7 +1160,9 @@ async function startServer() {
         lta: Number(empData.salaryLta) || 0,
         allowances: Number(empData.salaryAllowances) || 8000,
         pfDeduction: Number(empData.salaryPf) || 3600,
-        tdsDeduction: Number(empData.salaryTds) || 0
+        tdsDeduction: Number(empData.salaryTds) || 0,
+        esiOptIn: empData.salaryEsiOptIn !== undefined ? Boolean(empData.salaryEsiOptIn) : true,
+        esiDeduction: Number(empData.salaryEsi) || 0
       },
       bankDetails: {
         accountNumber: empData.bankAccount || "112233445566",
@@ -1997,7 +2032,25 @@ async function startServer() {
       ? employee.salary.tdsDeduction
       : Math.round(grossEarnings * 0.05);
 
-    const netPay = grossEarnings - pf - finesDeduction - tax;
+    // Calculate ESI deduction — respects employee opt-in flag, exemptions, and gross salary ceiling from config
+    const reqCompanyId = req.body.companyId || employee.companyId || MGM_COMPANY_ID;
+    const payrollConfig = db.payrollConfigs?.[reqCompanyId] || db.payrollConfig;
+    const esiEnabled = payrollConfig ? payrollConfig.esiEnabled !== false : true;
+    const esiGrossCeiling = payrollConfig ? (payrollConfig.esiGrossCeiling ?? 21000) : 21000;
+    const esiRatePercentage = payrollConfig ? (payrollConfig.esiRatePercentage ?? 0.75) : 0.75;
+    const isEsiExempt = (payrollConfig?.esiExemptEmployeeIds || []).includes(employeeId);
+    let esiDeduction = 0;
+    if (esiEnabled && !isEsiExempt && employee.salary.esiOptIn !== false) {
+      if (typeof employee.salary.esiDeduction === "number" && employee.salary.esiDeduction > 0) {
+        // Use the custom ESI amount stored on the employee
+        esiDeduction = employee.salary.esiDeduction;
+      } else if (esiGrossCeiling <= 0 || grossEarnings <= esiGrossCeiling) {
+        // Auto-calculate based on gross salary ceiling rule (0 = no limit)
+        esiDeduction = Math.round(grossEarnings * (esiRatePercentage / 100));
+      }
+    }
+
+    const netPay = grossEarnings - pf - finesDeduction - tax - esiDeduction;
 
     const newPayslip: Payslip = {
       id: "pay-" + Date.now(),
@@ -2013,6 +2066,7 @@ async function startServer() {
       finesDeducted: finesDeduction,
       pfDeduction: pf,
       taxDeduction: tax,
+      esiDeduction,
       netPay,
       status: "Generated",
       generatedAt: new Date().toISOString(),
@@ -2063,6 +2117,72 @@ async function startServer() {
       writeDatabase(db);
     }
     res.json({ success: true, updatedCount, message: `Disbursed ${updatedCount} salary payments for ${month}` });
+  });
+
+  // 22b. Payroll - GET & POST Configuration
+  app.get("/api/payroll/config", async (req, res) => {
+    const companyId = (req.query.companyId as string) || MGM_COMPANY_ID;
+    if (!db.payrollConfigs) {
+      db.payrollConfigs = {};
+    }
+
+    // Try fetching directly from Supabase Cloud Table first
+    let config: PayrollConfig | any = await fetchPayrollConfigFromSupabase(companyId);
+    if (config) {
+      db.payrollConfigs[companyId] = config;
+      db.payrollConfig = config;
+      writeDatabase(db);
+    } else {
+      config = db.payrollConfigs[companyId] || db.payrollConfig || {
+        companyId,
+        ...DEFAULT_PAYROLL_CONFIG,
+      };
+    }
+    res.json({ success: true, config });
+  });
+
+  app.post("/api/payroll/config", async (req, res) => {
+    const body = req.body || {};
+    const companyId = body.companyId || MGM_COMPANY_ID;
+
+    const config: PayrollConfig = {
+      companyId,
+      hraType: body.hraType || "percentage",
+      hraValue: Number(body.hraValue) ?? 40,
+      pfType: body.pfType || "percentage",
+      pfValue: Number(body.pfValue) ?? 12,
+      pfModeDefault: body.pfModeDefault || "percentage",
+      pfExemptEmployeeIds: Array.isArray(body.pfExemptEmployeeIds) ? body.pfExemptEmployeeIds : [],
+      allowancesType: body.allowancesType || "percentage",
+      allowancesValue: Number(body.allowancesValue) ?? 20,
+      taxType: body.taxType || "percentage",
+      taxValue: Number(body.taxValue) ?? 5,
+      tdsOptInDefault: body.tdsOptInDefault !== false,
+      tdsModeDefault: body.tdsModeDefault || "slab",
+      esiEnabled: body.esiEnabled !== false,
+      esiRatePercentage: Number(body.esiRatePercentage) ?? 0.75,
+      esiGrossCeiling: Number(body.esiGrossCeiling) ?? 21000,
+      esiExemptEmployeeIds: Array.isArray(body.esiExemptEmployeeIds) ? body.esiExemptEmployeeIds : [],
+      ltaValue: Number(body.ltaValue) ?? 0,
+      ltaType: body.ltaType || "percentage",
+      telephoneValue: Number(body.telephoneValue) ?? 0,
+      telephoneType: body.telephoneType || "percentage",
+      fuelValue: Number(body.fuelValue) ?? 0,
+      fuelType: body.fuelType || "percentage",
+      professionalDevValue: Number(body.professionalDevValue) ?? 0,
+      professionalDevType: body.professionalDevType || "percentage",
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (!db.payrollConfigs) db.payrollConfigs = {};
+    db.payrollConfigs[companyId] = config;
+    db.payrollConfig = config;
+    writeDatabase(db);
+
+    // Write directly to Supabase Cloud Table 'payroll_configurations'
+    await syncPayrollConfigToSupabase(config);
+
+    res.json({ success: true, config });
   });
 
   // 23. Simulated Emails log

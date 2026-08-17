@@ -13,8 +13,10 @@ import { Employee } from "../types";
  */
 export async function generateGuaranteedUniqueEmployeeId(
   localEmployees: Employee[] = [],
-  supabaseClient?: any
+  supabaseClient?: any,
+  prefix?: string
 ): Promise<string> {
+  const cleanPrefix = (prefix && prefix.trim() !== "" ? prefix.trim() : "EMP").toUpperCase();
   const existingIds = new Set<string>();
 
   // 1. Collect all IDs from local memory state
@@ -42,25 +44,25 @@ export async function generateGuaranteedUniqueEmployeeId(
     }
   }
 
-  // 3. Find the maximum numeric suffix among existing IDs (e.g. EMP-1001, EMP-2002)
-  let maxIdNum = 1000;
+  // 3. Find max number among existing IDs matching PREFIX-XXXX or EMP-XXXX
+  let maxIdNum = 2000;
   existingIds.forEach(idStr => {
-    const match = idStr.match(/^EMP-(\d+)$/i);
-    if (match) {
-      const num = parseInt(match[1], 10);
+    const match = idStr.match(/^([A-Z0-9]+)[-]?(\d+)$/i);
+    if (match && match[2]) {
+      const num = parseInt(match[2], 10);
       if (!isNaN(num) && num > maxIdNum) {
         maxIdNum = num;
       }
     }
   });
 
-  // 4. Generate candidate ID and verify against existingIds set to guarantee zero collisions
+  // 4. Generate candidate ID with the configured prefix and verify against existingIds
   let candidateNum = maxIdNum + 1;
-  let candidateId = `EMP-${candidateNum}`;
+  let candidateId = `${cleanPrefix}-${candidateNum}`;
 
   while (existingIds.has(candidateId.toUpperCase())) {
     candidateNum++;
-    candidateId = `EMP-${candidateNum}`;
+    candidateId = `${cleanPrefix}-${candidateNum}`;
   }
 
   return candidateId;
