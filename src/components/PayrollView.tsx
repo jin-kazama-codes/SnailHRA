@@ -359,17 +359,34 @@ export default function PayrollView({
     return str.trim();
   };
 
-  // Pagination state for Payroll Center list (9 items per page)
+  // Pagination & Search state for Payroll Center list (9 items per page)
   const [currentPage, setCurrentPage] = useState(1);
+  const [nameSearchQuery, setNameSearchQuery] = useState("");
   const ITEMS_PER_PAGE = 9;
 
-  const totalItems = employees.length;
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [nameSearchQuery]);
+
+  const filteredEmployees = React.useMemo(() => {
+    if (!nameSearchQuery || nameSearchQuery.trim() === "") return employees;
+    const q = nameSearchQuery.trim().toLowerCase();
+    return employees.filter(emp => {
+      const name = (emp.fullName || "").toLowerCase();
+      const code = (emp.code || emp.id || "").toLowerCase();
+      const dept = (emp.department || "").toLowerCase();
+      const email = (emp.email || "").toLowerCase();
+      return name.includes(q) || code.includes(q) || dept.includes(q) || email.includes(q);
+    });
+  }, [employees, nameSearchQuery]);
+
+  const totalItems = filteredEmployees.length;
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE) || 1;
   const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
 
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, totalItems);
-  const paginatedEmployees = employees.slice(startIndex, endIndex);
+  const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
 
   const handleCompileSlip = async (empId: string) => {
     if (compilingEmpId) return;
@@ -590,16 +607,39 @@ export default function PayrollView({
                     <p className="text-xs text-slate-400 dark:text-gray-500">Generate structural salary slips with automated email dispatch</p>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      if (confirm(`Disburse salary for all Generated slips in ${selectedMonth}?`)) {
-                        onPayAllPayslips(selectedMonth);
-                      }
-                    }}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
-                  >
-                    Bulk Disburse Payments
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Search by Name / Employee Code */}
+                    <div className="relative min-w-[240px]">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={nameSearchQuery}
+                        onChange={(e) => setNameSearchQuery(e.target.value)}
+                        placeholder="Search employee by name, ID..."
+                        className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 rounded-xl border border-slate-200 dark:border-[#252525] focus:outline-none focus:border-emerald-500 transition-all font-medium placeholder:text-slate-400"
+                      />
+                      {nameSearchQuery && (
+                        <button
+                          onClick={() => setNameSearchQuery("")}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer"
+                          title="Clear search"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (confirm(`Disburse salary for all Generated slips in ${selectedMonth}?`)) {
+                          onPayAllPayslips(selectedMonth);
+                        }
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                    >
+                      Bulk Disburse Payments
+                    </button>
+                  </div>
                 </div>
 
                 <div className="bg-slate-50 dark:bg-[#0a0a0a]/50 p-3 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-[11px] text-slate-500 dark:text-gray-400 leading-normal flex items-start space-x-2">
@@ -769,6 +809,19 @@ export default function PayrollView({
                           </tr>
                         );
                       })}
+                      {paginatedEmployees.length === 0 && (
+                        <tr>
+                          <td colSpan={13} className="py-10 text-center text-slate-400 dark:text-gray-500 text-xs">
+                            No employees found matching "<span className="font-bold text-slate-700 dark:text-gray-200">{nameSearchQuery}</span>".
+                            <button
+                              onClick={() => setNameSearchQuery("")}
+                              className="ml-2 font-bold text-emerald-600 dark:text-emerald-400 underline cursor-pointer"
+                            >
+                              Clear search
+                            </button>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
