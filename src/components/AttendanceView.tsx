@@ -5,7 +5,7 @@ import {
   Play, Square, Pause, RotateCcw, Clock, Calendar as CalendarIcon, CheckCircle2, 
   AlertTriangle, Eye, Sparkles, Coffee, AlertCircle, RefreshCw, Sliders,
   Home, Briefcase, Plus, ChevronRight, ChevronLeft, UserCheck, Check, Edit2, Info,
-  Trash2, X, FileText, User
+  Trash2, X, FileText, User, Loader2, Search
 } from "lucide-react";
 import { AttendancePunch, Employee, UserRole, LeaveRequest, Holiday } from "../types";
 
@@ -49,8 +49,8 @@ export default function AttendanceView({
   companyName = "Your Company"
 }: AttendanceViewProps) {
   // Navigation active tab
-  const [activeTab, setActiveTab] = useState<"personal" | "roster" | "monthly-view">(
-    role === "employee" ? "personal" : "roster"
+  const [activeTab, setActiveTab] = useState<"personal" | "todays-punches" | "roster" | "monthly-view">(
+    role === "employee" ? "personal" : "todays-punches"
   );
   const [currentTime, setCurrentTime] = useState(new Date());
   const [punchLoading, setPunchLoading] = useState(false);
@@ -191,8 +191,12 @@ export default function AttendanceView({
   useEffect(() => {
     if (role === "employee") {
       setSelectedEmployeeId(currentEmployeeId);
-    } else if (!accessibleEmployees.some(e => e.id === selectedEmployeeId)) {
-      setSelectedEmployeeId(accessibleEmployees[0]?.id || currentEmployeeId);
+      setActiveTab("personal");
+    } else {
+      setActiveTab("todays-punches");
+      if (!accessibleEmployees.some(e => e.id === selectedEmployeeId)) {
+        setSelectedEmployeeId(accessibleEmployees[0]?.id || currentEmployeeId);
+      }
     }
   }, [role, currentEmployeeId, accessibleEmployees]);
 
@@ -208,6 +212,7 @@ export default function AttendanceView({
   const [editWfh, setEditWfh] = useState(false);
   const [editNotes, setEditNotes] = useState("");
   const [editBreaks, setEditBreaks] = useState<{ start: string; end: string }[]>([]);
+  const [isSavingDayDetails, setIsSavingDayDetails] = useState(false);
 
   // Manual Punch Form Modal state
   const [showManualForm, setShowManualForm] = useState(false);
@@ -220,6 +225,7 @@ export default function AttendanceView({
   const [manualClockOut, setManualClockOut] = useState(timingSettings?.clockOutTime || "18:00");
   const [manualStatus, setManualStatus] = useState<"Present" | "Late" | "Half Day">("Present");
   const [manualWfh, setManualWfh] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
 
   // Timing Settings Modal state
   const [showTimingSettingsModal, setShowTimingSettingsModal] = useState(false);
@@ -446,11 +452,12 @@ export default function AttendanceView({
       const leave = getApprovedLeaveOnDate(empId, dStr);
 
       if (punch) {
-        if (punch.status === "Present") presentDays++;
-        else if (punch.status === "Late") {
+        const effStatus = getEffectivePunchStatus(punch);
+        if (effStatus === "Present") presentDays++;
+        else if (effStatus === "Late") {
           presentDays++;
           lateDays++;
-        } else if (punch.status === "Half Day") halfDays++;
+        } else if (effStatus === "Half Day") halfDays++;
         
         if (punch.workFromHome) wfhDays++;
         totalHours += calculatePunchHours(punch);
@@ -476,6 +483,36 @@ export default function AttendanceView({
     };
   };
 
+  // Helper to determine if a punch-in occurred after the late threshold (buffer time)
+  const getEffectivePunchStatus = (punch?: AttendancePunch): "Present" | "Late" | "Half Day" | "Absent" | "On Leave" => {
+    if (!punch) return "Present";
+    if (punch.status === "Half Day" || punch.status === "On Leave" || punch.status === "Absent") {
+      return punch.status;
+    }
+    if (!punch.clockIn) return punch.status || "Present";
+
+    const threshold = timingSettings?.lateThreshold || "09:30";
+    const [lateHours, lateMinutes] = threshold.split(":").map(Number);
+
+    const clockInDate = new Date(punch.clockIn);
+    let hours = clockInDate.getHours();
+    let minutes = clockInDate.getMinutes();
+    try {
+      const istStr = clockInDate.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" });
+      const [h, m] = istStr.split(":").map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        hours = h;
+        minutes = m;
+      }
+    } catch (e) {}
+
+    if (hours > lateHours || (hours === lateHours && minutes > lateMinutes)) {
+      return "Late";
+    }
+
+    return punch.status || "Present";
+  };
+
   const currentEmployeeStats = computeEmployeeMonthlyStats(selectedEmployeeId);
 
   // Open Day Details Modal & populate form state
@@ -485,7 +522,7 @@ export default function AttendanceView({
     setSelectedDayModal({ date: dateStr, employeeId: empId });
 
     if (existingPunch) {
-      setEditStatus(existingPunch.status);
+      setEditStatus(getEffectivePunchStatus(existingPunch));
       setEditWfh(!!existingPunch.workFromHome);
       setEditNotes(existingPunch.notes || "");
 
@@ -525,34 +562,41 @@ export default function AttendanceView({
   // Save Day Details (Admin / HR)
   const handleSaveDayDetails = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDayModal) return;
+    if (!selectedDayModal || isSavingDayDetails) return;
 
-    const { date, employeeId } = selectedDayModal;
-    const existingPunch = attendance.find(a => a.employeeId === employeeId && a.date === date);
+    setIsSavingDayDetails(true);
+    try {
+      const { date, employeeId } = selectedDayModal;
+      const existingPunch = attendance.find(a => a.employeeId === employeeId && a.date === date);
 
-    const clockInISO = new Date(`${date}T${editClockInTime}:00`).toISOString();
-    const clockOutISO = editClockOutTime ? new Date(`${date}T${editClockOutTime}:00`).toISOString() : null;
+      const clockInISO = new Date(`${date}T${editClockInTime}:00`).toISOString();
+      const clockOutISO = editClockOutTime ? new Date(`${date}T${editClockOutTime}:00`).toISOString() : null;
 
-    const breakObjects = editBreaks.map(b => ({
-      start: new Date(`${date}T${b.start}:00`).toISOString(),
-      end: b.end ? new Date(`${date}T${b.end}:00`).toISOString() : null
-    }));
+      const breakObjects = editBreaks.map(b => ({
+        start: new Date(`${date}T${b.start}:00`).toISOString(),
+        end: b.end ? new Date(`${date}T${b.end}:00`).toISOString() : null
+      }));
 
-    if (onSaveDayPunch) {
-      await onSaveDayPunch({
-        id: existingPunch?.id,
-        employeeId,
-        date,
-        status: editStatus,
-        clockIn: clockInISO,
-        clockOut: clockOutISO,
-        breaks: breakObjects,
-        workFromHome: editWfh,
-        notes: editNotes
-      });
+      if (onSaveDayPunch) {
+        await onSaveDayPunch({
+          id: existingPunch?.id,
+          employeeId,
+          date,
+          status: editStatus,
+          clockIn: clockInISO,
+          clockOut: clockOutISO,
+          breaks: breakObjects,
+          workFromHome: editWfh,
+          notes: editNotes
+        });
+      }
+
+      setSelectedDayModal(null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSavingDayDetails(false);
     }
-
-    setSelectedDayModal(null);
   };
 
   // Delete Punch (Admin / HR)
@@ -814,6 +858,16 @@ export default function AttendanceView({
               My Punches
             </button>
 
+            {/* Today's Punches Tab: Visible ONLY to Admin and HR */}
+            {role !== "employee" && (
+              <button 
+                onClick={() => setActiveTab("todays-punches")}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "todays-punches" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white font-bold text-emerald-600 dark:text-emerald-400" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                Today's Punches
+              </button>
+            )}
+
             {/* Roster Tab: Visible ONLY to Admin and HR */}
             {role !== "employee" && (
               <button 
@@ -910,19 +964,245 @@ export default function AttendanceView({
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-gray-300">{formatPunchDuration(punch)}</td>
                         <td className="py-3 px-3 text-right">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
-                            punch.status === "Present" 
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-                              : punch.status === "Late"
-                              ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
-                              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-                          }`}>
-                            {punch.status}
-                          </span>
+                          {(() => {
+                            const status = getEffectivePunchStatus(punch);
+                            return (
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
+                                status === "Present" 
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                  : status === "Late"
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                  : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                              }`}>
+                                {status}
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
                   })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* NEW TAB: Today's Punches (Admin & HR Only) */}
+      {activeTab === "todays-punches" && role !== "employee" && (
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md flex items-center gap-2">
+                <span>Today's Punches</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-bold border border-emerald-200 dark:border-emerald-800/50">
+                  {todayStr}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 dark:text-gray-400 mt-0.5">
+                {role === "hr" 
+                  ? `Live real-time punches recorded today for employees in ${userBranch}` 
+                  : "Live real-time punches recorded today for all staff across all branches"}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onClearAllAttendance && (
+                <button
+                  onClick={onClearAllAttendance}
+                  className="bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 font-semibold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all border border-rose-200 dark:border-rose-900/60 cursor-pointer"
+                  title="Clear all attendance punch records"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear All Attendance</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setManualEmpId(accessibleEmployees[0]?.id || "");
+                  setManualDate(todayStr);
+                  setShowManualForm(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Log Manual Attendance</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Today's Metrics Bar */}
+          {(() => {
+            const todaysList = attendance.filter(punch => 
+              punch.date === todayStr && accessibleEmployees.some(e => e.id === punch.employeeId)
+            );
+            const workingCount = todaysList.filter(p => !p.clockOut).length;
+            const completedCount = todaysList.filter(p => !!p.clockOut).length;
+
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="p-3 bg-slate-50 dark:bg-[#1a1a1a]/50 rounded-xl border border-slate-100 dark:border-[#2a2a2a] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Today's Total Punches</span>
+                    <span className="text-xl font-bold text-slate-800 dark:text-white font-mono mt-0.5 block">{todaysList.length}</span>
+                  </div>
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl text-emerald-600">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-[#1a1a1a]/50 rounded-xl border border-slate-100 dark:border-[#2a2a2a] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Currently Working</span>
+                    <span className="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 block">{workingCount}</span>
+                  </div>
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl text-emerald-600">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-[#1a1a1a]/50 rounded-xl border border-slate-100 dark:border-[#2a2a2a] flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Shifts Completed</span>
+                    <span className="text-xl font-bold text-blue-600 dark:text-blue-400 font-mono mt-0.5 block">{completedCount}</span>
+                  </div>
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-blue-600">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Today's Punches Table */}
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">
+                  <th className="py-2.5 px-3">Employee Name</th>
+                  <th className="py-2.5 px-3">Branch / Dept</th>
+                  <th className="py-2.5 px-3">Clock In</th>
+                  <th className="py-2.5 px-3">Clock Out</th>
+                  <th className="py-2.5 px-3">Mode</th>
+                  <th className="py-2.5 px-3">Breaks</th>
+                  <th className="py-2.5 px-3">Hours</th>
+                  <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
+                {(() => {
+                  const todaysPunches = attendance
+                    .filter(punch => punch.date === todayStr && accessibleEmployees.some(e => e.id === punch.employeeId))
+                    .sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
+
+                  if (todaysPunches.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-400 italic">
+                          No attendance punches recorded yet for today ({todayStr}).
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return todaysPunches.map(punch => {
+                    const isExpanded = expandedBreaksRowId === punch.id;
+                    const breakCount = punch.breaks?.length || 0;
+                    
+                    return (
+                      <React.Fragment key={punch.id}>
+                        <tr className="hover:bg-slate-50/80 dark:hover:bg-[#1a1a1a]/60 transition-colors">
+                          <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300">
+                            {getEmployeeName(punch.employeeId)}
+                          </td>
+                          <td className="py-3 px-3 text-slate-500 dark:text-gray-400 font-medium">
+                            {getEmployeeBranch(punch.employeeId)} ({getEmployeeDept(punch.employeeId)})
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
+                            {new Date(punch.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-600 dark:text-gray-400">
+                            {punch.clockOut 
+                              ? new Date(punch.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : <span className="text-emerald-500 animate-pulse font-semibold">Working...</span>
+                            }
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                              punch.workFromHome 
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400" 
+                                : "bg-slate-100 text-slate-600 dark:bg-[#1a1a1a] dark:text-gray-400"
+                            }`}>
+                              {punch.workFromHome ? <Home className="w-3 h-3 text-blue-500" /> : <Briefcase className="w-3 h-3 text-slate-400" />}
+                              {punch.workFromHome ? "WFH" : "Office"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {breakCount > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedBreaksRowId(isExpanded ? null : punch.id)}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${
+                                  breakCount > 1
+                                    ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200/50 dark:border-rose-800/40 hover:scale-105"
+                                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/40 hover:bg-amber-100/50"
+                                }`}
+                              >
+                                <Coffee className="w-3.5 h-3.5" />
+                                <span>{breakCount} {breakCount === 1 ? "Break" : "Breaks"} ({formatBreakDuration(punch)})</span>
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 dark:text-slate-500 font-semibold bg-slate-50 dark:bg-[#1a1a1a]/50 px-2.5 py-0.5 rounded-xl border border-slate-100 dark:border-[#222]/30 text-[10px] select-none">No Breaks</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-slate-700 dark:text-gray-300">{formatPunchDuration(punch)}</td>
+                          <td className="py-3 px-3 text-center">
+                            {(() => {
+                              const status = getEffectivePunchStatus(punch);
+                              return (
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
+                                  status === "Present" 
+                                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                    : status === "Late"
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                                    : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                                }`}>
+                                  {status}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              onClick={() => openDayDetailsModal(punch.date, punch.employeeId)}
+                              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 dark:text-emerald-400 font-semibold px-2.5 py-1 rounded-lg text-[11px] transition-colors cursor-pointer"
+                            >
+                              Edit / Details
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && punch.breaks && punch.breaks.length > 0 && (
+                          <tr className="bg-amber-50/40 dark:bg-amber-950/10">
+                            <td colSpan={9} className="py-2.5 px-4">
+                              <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                                <span className="font-bold text-amber-800 dark:text-amber-400 flex items-center gap-1">
+                                  <Coffee className="w-3.5 h-3.5" />
+                                  <span>Break Intervals Breakdown:</span>
+                                </span>
+                                {punch.breaks.map((b, idx) => (
+                                  <span key={idx} className="bg-white dark:bg-[#1a1a1a] px-2.5 py-1 rounded-lg border border-amber-200/60 dark:border-amber-900/40 font-mono text-slate-700 dark:text-gray-300">
+                                    Break {idx + 1}: <b>{new Date(b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b> to <b>{b.end ? new Date(b.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Active"}</b>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -945,6 +1225,26 @@ export default function AttendanceView({
             </div>
             
             <div className="flex items-center gap-2">
+              {/* Employee search filter */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search by employee name..."
+                  value={rosterSearch}
+                  onChange={e => setRosterSearch(e.target.value)}
+                  className="bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-200 text-xs pl-8 pr-8 py-2 rounded-xl border border-slate-200 dark:border-[#2a2a2a] focus:outline-none focus:ring-1 focus:ring-emerald-400 w-52 transition-all"
+                />
+                {rosterSearch && (
+                  <button
+                    onClick={() => setRosterSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs font-bold"
+                  >
+                    &times;
+                  </button>
+                )}
+              </div>
+
               {onClearAllAttendance && (
                 <button
                   onClick={onClearAllAttendance}
@@ -986,14 +1286,25 @@ export default function AttendanceView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
-                {attendance
-                  .filter(punch => accessibleEmployees.some(e => e.id === punch.employeeId))
-                  .sort((a, b) => {
-                    const dateCompare = b.date.localeCompare(a.date);
-                    if (dateCompare !== 0) return dateCompare;
-                    return new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime();
-                  })
-                  .map(punch => {
+                {(() => {
+                    const rosterQ = rosterSearch.trim().toLowerCase();
+                    return attendance
+                      .filter(punch => {
+                        if (!accessibleEmployees.some(e => e.id === punch.employeeId)) return false;
+                        if (rosterQ) {
+                          const emp = accessibleEmployees.find(e => e.id === punch.employeeId);
+                          const empName = (emp?.fullName || "").toLowerCase();
+                          const empId = (punch.employeeId || "").toLowerCase();
+                          if (!empName.includes(rosterQ) && !empId.includes(rosterQ)) return false;
+                        }
+                        return true;
+                      })
+                      .sort((a, b) => {
+                        const dateCompare = b.date.localeCompare(a.date);
+                        if (dateCompare !== 0) return dateCompare;
+                        return new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime();
+                      })
+                      .map(punch => {
                     const hrs = calculatePunchHours(punch);
                     const isExpanded = expandedBreaksRowId === punch.id;
                     const breakCount = punch.breaks?.length || 0;
@@ -1092,7 +1403,8 @@ export default function AttendanceView({
                         )}
                       </React.Fragment>
                     );
-                  })}
+                  });
+                })()}
               </tbody>
             </table>
           </div>
@@ -1706,9 +2018,17 @@ export default function AttendanceView({
                     </button>
                     <button
                       type="submit"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2 rounded-xl transition-all shadow-xs cursor-pointer"
+                      disabled={isSavingDayDetails}
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-5 py-2 rounded-xl transition-all shadow-xs cursor-pointer flex items-center justify-center gap-2"
                     >
-                      Save Changes
+                      {isSavingDayDetails ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Changes</span>
+                      )}
                     </button>
                   </div>
                 </div>

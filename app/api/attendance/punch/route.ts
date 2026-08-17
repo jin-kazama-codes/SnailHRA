@@ -233,8 +233,16 @@ export async function POST(request: Request) {
       const now = new Date();
       const clockInTimeStr = body.clockIn || now.toISOString();
       const clockInObj = new Date(clockInTimeStr);
-      const hours = clockInObj.getHours();
-      const minutes = clockInObj.getMinutes();
+      let hours = clockInObj.getHours();
+      let minutes = clockInObj.getMinutes();
+      try {
+        const istStr = clockInObj.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" });
+        const [h, m] = istStr.split(":").map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          hours = h;
+          minutes = m;
+        }
+      } catch (e) {}
 
       const companyId = await getCompanyIdForEmployee(employeeId);
       let lateTime = "09:30";
@@ -315,18 +323,21 @@ export async function POST(request: Request) {
           }
 
           if (!sbAlreadyFined) {
-            let lateInfr = (db.infractionTypes || []).find(
-              (t: any) => (t.name || "").toLowerCase().includes("late") || (t.name || "").toLowerCase().includes("tardiness")
-            );
+            let lateInfr = (db.infractionTypes || []).find((t: any) => {
+              const name = (t.name || "").toLowerCase();
+              return name.includes("late") || name.includes("tardiness") || name.includes("comming") || name.includes("coming");
+            });
             if (!lateInfr && db.infractionTypes && db.infractionTypes.length > 0) {
               lateInfr = db.infractionTypes[0];
             }
 
             const reason = lateInfr?.name || "Late Coming";
-            const amount = Number(lateInfr?.defaultAmount) > 0 ? Number(lateInfr.defaultAmount) : 500;
+            const rawAmt = lateInfr ? (lateInfr.defaultAmount ?? (lateInfr as any).default_amount ?? (lateInfr as any).amount) : undefined;
+            const parsedAmt = Number(rawAmt);
+            const amount = (!isNaN(parsedAmt) && parsedAmt > 0) ? parsedAmt : 700;
 
-            const emp = (db.employees || []).find((e: any) => e.id === employeeId);
-            const empName = emp ? emp.fullName : `Employee ${employeeId}`;
+            const emp = (db.employees || []).find((e: any) => (e.id || "").toLowerCase() === (employeeId || "").toLowerCase());
+            const empName = emp ? (emp.fullName || (emp as any).full_name || `Employee ${employeeId}`) : `Employee ${employeeId}`;
 
             const autoFine: Fine = {
               id: `fin-auto-${Date.now()}`,

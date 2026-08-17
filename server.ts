@@ -1465,7 +1465,18 @@ async function startServer() {
         lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
       }
       const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
-      if (now.getHours() > lateHours || (now.getHours() === lateHours && now.getMinutes() > lateMinutes)) {
+      let nowHours = now.getHours();
+      let nowMinutes = now.getMinutes();
+      try {
+        const istStr = now.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" });
+        const [h, m] = istStr.split(":").map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          nowHours = h;
+          nowMinutes = m;
+        }
+      } catch (e) {}
+
+      if (nowHours > lateHours || (nowHours === lateHours && nowMinutes > lateMinutes)) {
         status = "Late";
       }
 

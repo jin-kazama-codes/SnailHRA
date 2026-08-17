@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase, initialOnboardingChecklistTemplates, initialExitChecklistTemplates } from "@/src/lib/db";
-import { supabase } from "@/src/lib/supabase";
+import { supabase, syncFineToSupabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
@@ -837,6 +837,89 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       const fCompId = f.companyId || f.company_id || MGM_COMPANY_ID;
       return fCompId === companyId;
     });
+  }
+
+  // Auto-issue or update missing/outdated Late Coming fines for any attendance punch recorded past lateThreshold
+  if (db.attendance && db.attendance.length > 0) {
+    if (!db.fines) db.fines = [];
+
+    const lateTimeThreshold = db.timingSettings?.lateThreshold || "09:30";
+    const [lateH, lateM] = lateTimeThreshold.split(":").map(Number);
+
+    // Find late infraction setting configured in System Settings
+    let lateInfr = (db.infractionTypes || []).find((t: any) => {
+      const name = (t.name || "").toLowerCase();
+      return name.includes("late") || name.includes("tardiness") || name.includes("comming") || name.includes("coming");
+    });
+
+    const configuredReason = lateInfr?.name || "Late Coming";
+    const configuredAmtRaw = lateInfr ? (lateInfr.defaultAmount ?? (lateInfr as any).default_amount ?? (lateInfr as any).amount) : undefined;
+    const parsedAmt = Number(configuredAmtRaw);
+    const configuredAmount = (!isNaN(parsedAmt) && parsedAmt > 0) ? parsedAmt : 700;
+
+    for (const punch of db.attendance) {
+      if (!punch.clockIn || !punch.date) continue;
+
+      let hours = 0;
+      let minutes = 0;
+      try {
+        const clockInDate = new Date(punch.clockIn);
+        const istStr = clockInDate.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" });
+        const [h, m] = istStr.split(":").map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          hours = h;
+          minutes = m;
+        }
+      } catch (e) {}
+
+      const isLate = punch.status === "Late" || hours > lateH || (hours === lateH && minutes > lateM);
+
+      if (isLate && punch.status !== "Half Day" && punch.status !== "On Leave") {
+        const emp = (db.employees || []).find((e: any) => (e.id || "").toLowerCase() === (punch.employeeId || "").toLowerCase());
+        const empName = emp ? (emp.fullName || (emp as any).full_name || `Employee ${punch.employeeId}`) : `Employee ${punch.employeeId}`;
+
+        const existingFine = db.fines.find((f: any) =>
+          (f.employeeId || "").toLowerCase() === (punch.employeeId || "").toLowerCase() &&
+          f.date === punch.date &&
+          ((f.reason || "").toLowerCase().includes("late") || (f.reason || "").toLowerCase().includes("comming") || (f.reason || "").toLowerCase().includes("tardiness"))
+        );
+
+        if (!existingFine) {
+          const autoFine = {
+            id: `fin-auto-${punch.employeeId}-${punch.date.replace(/[^a-zA-Z0-9]/g, "")}`,
+            employeeId: punch.employeeId,
+            employeeName: empName,
+            reason: configuredReason,
+            amount: configuredAmount,
+            date: punch.date,
+            status: "Pending" as const
+          };
+
+          db.fines.unshift(autoFine);
+          if (supabase) {
+            syncFineToSupabase(autoFine).catch(e => console.warn("Auto-reconcile fine sync warning:", e));
+          }
+        } else {
+          // Reconcile existing fine if employee name, amount, or reason were outdated
+          let updated = false;
+          if (empName && (existingFine.employeeName.startsWith("Employee EMP-") || existingFine.employeeName.startsWith("Employee Emp-") || !existingFine.employeeName)) {
+            existingFine.employeeName = empName;
+            updated = true;
+          }
+          if (configuredAmount > 0 && (existingFine.amount === 500 || existingFine.amount !== configuredAmount)) {
+            existingFine.amount = configuredAmount;
+            updated = true;
+          }
+          if (configuredReason && existingFine.reason !== configuredReason) {
+            existingFine.reason = configuredReason;
+            updated = true;
+          }
+          if (updated && supabase) {
+            syncFineToSupabase(existingFine).catch(e => console.warn("Auto-reconcile fine update sync warning:", e));
+          }
+        }
+      }
+    }
   }
 
   saveDatabase(db);

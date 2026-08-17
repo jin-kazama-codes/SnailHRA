@@ -33,22 +33,21 @@ export default function FinesView({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReasonFilter, setSelectedReasonFilter] = useState("ALL");
 
-  const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
+  const getEmployeeName = (empId: string, fallbackName?: string) => {
+    const emp = employees.find(e => (e.id || "").toLowerCase() === (empId || "").toLowerCase());
+    if (emp && emp.fullName) return emp.fullName;
+    if (fallbackName && !fallbackName.toLowerCase().startsWith("employee emp-") && !fallbackName.toLowerCase().startsWith("employee ")) {
+      return fallbackName;
+    }
+    return fallbackName || "Unknown Employee";
   };
 
   const getEmployeeDept = (empId: string) => {
-    return employees.find(e => e.id === empId)?.department || "";
+    return employees.find(e => (e.id || "").toLowerCase() === (empId || "").toLowerCase())?.department || "";
   };
 
-  // Helper to normalize common typos like "Late Comming" -> "Late Coming"
   const normalizeReason = (reason: string) => {
-    if (!reason) return "";
-    const clean = reason.trim();
-    if (/^late\s+comming$/i.test(clean)) {
-      return "Late Coming";
-    }
-    return clean;
+    return (reason || "").trim();
   };
 
   // Unique violation reasons list for filter dropdown (deduplicated & normalized)
@@ -101,6 +100,10 @@ export default function FinesView({
       }
 
       return true;
+    }).sort((a, b) => {
+      const dateA = a.date || "";
+      const dateB = b.date || "";
+      return dateB.localeCompare(dateA);
     });
   }, [fines, role, currentEmployeeId, selectedReasonFilter, searchQuery, employees]);
 
@@ -337,10 +340,10 @@ export default function FinesView({
                 <tr key={fine.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/40 transition-colors">
                   <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300 flex items-center space-x-2">
                     <div className="w-6.5 h-6.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[9px] uppercase">
-                      {(fine.employeeName || getEmployeeName(fine.employeeId)).charAt(0)}
+                      {getEmployeeName(fine.employeeId, fine.employeeName).charAt(0)}
                     </div>
                     <div>
-                      <span className="block leading-tight">{fine.employeeName || getEmployeeName(fine.employeeId)}</span>
+                      <span className="block leading-tight">{getEmployeeName(fine.employeeId, fine.employeeName)}</span>
                       <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal">{getEmployeeDept(fine.employeeId)}</span>
                     </div>
                   </td>
