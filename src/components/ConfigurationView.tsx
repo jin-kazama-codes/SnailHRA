@@ -273,6 +273,11 @@ export default function ConfigurationView({
   });
   const [wifiSaving, setWifiSaving] = useState(false);
   const [wifiExpanded, setWifiExpanded] = useState(false);
+  const [empCodeExpanded, setEmpCodeExpanded] = useState(false);
+  const [deptExpanded, setDeptExpanded] = useState(false);
+  const [branchExpanded, setBranchExpanded] = useState(false);
+  const [leaveExpanded, setLeaveExpanded] = useState(false);
+  const [amenityExpanded, setAmenityExpanded] = useState(false);
 
   // Employee Code Prefix State
   const [empCodePrefix, setEmpCodePrefix] = useState<string>(() => {
@@ -633,61 +638,75 @@ export default function ConfigurationView({
       {activeSubTab === "general" && (
         <div className="space-y-6">
 
-          {/* ── Employee Code Prefix Card ── */}
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-4">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-xl shrink-0">
-                  <Shield className="w-4.5 h-4.5 text-amber-500" />
-                </div>
-                <div>
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Employee Code Format</h3>
-                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Set the prefix used in all employee ID codes and payslips (e.g. MGMDIR → MGMDIR0001)</p>
-                </div>
+          {/* ── Employee Code Prefix Card — Collapsible ── */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setEmpCodeExpanded(prev => !prev)}
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+            >
+              <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-xl shrink-0">
+                <Shield className="w-4.5 h-4.5 text-amber-500" />
               </div>
-              {empCodeSaved && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider shrink-0">
-                  ✓ Saved
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Employee ID Prefix</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={empCodePrefixInput}
-                    onChange={e => setEmpCodePrefixInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-                    maxLength={10}
-                    placeholder="e.g. MGMDIR"
-                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:border-amber-400 uppercase tracking-widest"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveEmpCodePrefix}
-                    className="bg-amber-500 hover:bg-amber-400 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    Save
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-1.5">Only letters and numbers. Max 10 characters. Changes apply immediately to all payslips.</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Employee Code Format</h3>
+                <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                  {empCodePrefix ? `Current prefix: ${empCodePrefix} (e.g. ${empCodePrefix}0001)` : "Set the prefix used in all employee ID codes and payslips"}
+                </p>
               </div>
-              <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-3">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Preview</p>
-                <div className="space-y-1">
-                  {[1, 2, 3].map(n => (
-                    <div key={n} className="flex items-center gap-2">
-                      <span className="text-[10px] text-slate-400">Employee {n}:</span>
-                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs">
-                        {(empCodePrefixInput.trim() || empCodePrefix).toUpperCase()}{String(n).padStart(4, "0")}
-                      </span>
+              <div className="flex items-center gap-2.5 shrink-0">
+                {empCodeSaved && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                    Saved
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${empCodeExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
+            </button>
+            {empCodeExpanded && (
+              <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Employee ID Prefix</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={empCodePrefixInput}
+                        onChange={e => setEmpCodePrefixInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                        maxLength={10}
+                        placeholder="e.g. MGMDIR"
+                        className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:border-amber-400 uppercase tracking-widest"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSaveEmpCodePrefix}
+                        className="bg-amber-500 hover:bg-amber-400 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        Save
+                      </button>
                     </div>
-                  ))}
+                    <p className="text-[10px] text-slate-400 mt-1.5">Only letters and numbers. Max 10 characters. Changes apply immediately to all payslips.</p>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Preview</p>
+                    <div className="space-y-1">
+                      {[1, 2, 3].map(n => (
+                        <div key={n} className="flex items-center gap-2">
+                          <span className="text-[10px] text-slate-400">Employee {n}:</span>
+                          <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-xs">
+                            {(empCodePrefixInput.trim() || empCodePrefix).toUpperCase()}{String(n).padStart(4, "0")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* WiFi Attendance Restriction — Collapsible Card */}
@@ -935,275 +954,370 @@ export default function ConfigurationView({
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Departments block */}
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
-              <div>
-                <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
+          <div className="space-y-4">
+            {/* Departments block — Collapsible */}
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setDeptExpanded(prev => !prev)}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+              >
+                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl shrink-0">
                   <Landmark className="w-4.5 h-4.5 text-emerald-500" />
+                </div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Company Departments</h3>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                    {customDepartments.length > 0
+                      ? `${customDepartments.length} department(s): ${customDepartments.slice(0, 3).join(", ")}${customDepartments.length > 3 ? " …" : ""}`
+                      : "Add your company departments"}
+                  </p>
                 </div>
-
-                <form onSubmit={handleAddDepartment} className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    placeholder="e.g. Legal, Marketing"
-                    value={newDepartment}
-                    onChange={(e) => setNewDepartment(e.target.value)}
-                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSubmittingDepartment}
-                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
-                    title="Add Department"
-                  >
-                    {isSubmittingDepartment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  </button>
-                </form>
-
-                <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                  {customDepartments.map((dept) => (
-                    <div key={dept} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
-                      <span className="font-semibold text-slate-700 dark:text-gray-300">{dept}</span>
-                      <button
-                        onClick={() => handleRemoveDepartment(dept)}
-                        className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                    customDepartments.length > 0
+                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400"
+                      : "bg-slate-100 dark:bg-[#1a1a1a] border-slate-200 dark:border-[#2a2a2a] text-slate-400"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${customDepartments.length > 0 ? "bg-emerald-500" : "bg-slate-400"}`} />
+                    {customDepartments.length} Active
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${deptExpanded ? "rotate-180" : ""}`} />
                 </div>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customDepartments.length} Departments active</p>
-            </div>
-
-            {/* Office Branches block */}
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
-              <div>
-                <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
-                  <MapPin className="w-4.5 h-4.5 text-blue-500" />
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Corporate Branches</h3>
-                </div>
-
-                <form onSubmit={handleAddBranch} className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    placeholder="e.g. Bangalore Hub"
-                    value={newBranch}
-                    onChange={(e) => setNewBranch(e.target.value)}
-                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSubmittingBranch}
-                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
-                    title="Add Office Branch"
-                  >
-                    {isSubmittingBranch ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  </button>
-                </form>
-
-                <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                  {customBranches.map((branch) => (
-                    <div key={branch} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
-                      <span className="font-semibold text-slate-700 dark:text-gray-300">{branch}</span>
-                      <button
-                        onClick={() => handleRemoveBranch(branch)}
-                        className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customBranches.length} Branches active</p>
-            </div>
-
-            {/* Leave Types block */}
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="w-4.5 h-4.5 text-indigo-500" />
-                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
+              </button>
+              {deptExpanded && (
+                <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                  <form onSubmit={handleAddDepartment} className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      placeholder="e.g. Legal, Marketing"
+                      value={newDepartment}
+                      onChange={(e) => setNewDepartment(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSubmittingDepartment}
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
+                      title="Add Department"
+                    >
+                      {isSubmittingDepartment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    </button>
+                  </form>
+                  <div className="grid grid-cols-2 gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                    {customDepartments.map((dept) => (
+                      <div key={dept} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
+                        <span className="font-semibold text-slate-700 dark:text-gray-300 truncate">{dept}</span>
+                        <button
+                          onClick={() => handleRemoveDepartment(dept)}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  {/* Show / Hide Leave Count Toggle */}
-                  <label className="flex items-center gap-2 cursor-pointer select-none" title="Toggle visibility of leave balance counts in the Leaves section">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      {showLeaveCount ? "Count Visible" : "Count Hidden"}
-                    </span>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={!!showLeaveCount}
-                        onChange={(e) => onToggleLeaveCount?.(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className={`w-8 h-4.5 rounded-full transition-colors duration-200 ${
-                        showLeaveCount
-                          ? "bg-indigo-500"
-                          : "bg-slate-200 dark:bg-slate-700"
-                      }`} />
-                      <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform duration-200 ${
-                        showLeaveCount ? "translate-x-3.5" : "translate-x-0"
-                      }`} />
-                    </div>
-                  </label>
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic mt-3">Currently {customDepartments.length} Departments active</p>
                 </div>
+              )}
+            </div>
 
-                <form onSubmit={handleAddLeaveType} className="flex gap-2 mb-4">
-                  <input
-                    type="text"
-                    placeholder="Policy Name (e.g. Sabbatical)"
-                    value={newLeaveType}
-                    onChange={(e) => setNewLeaveType(e.target.value)}
-                    className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
-                    required
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="365"
-                    placeholder="Days"
-                    value={newLeaveDays}
-                    onChange={(e) => setNewLeaveDays(e.target.value)}
-                    className="w-16 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-2 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden font-mono text-center"
-                    title="Annual Days Quota"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSubmittingLeaveType}
-                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all shrink-0 flex items-center justify-center"
-                    title="Add Leave Policy Type"
-                  >
-                    {isSubmittingLeaveType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  </button>
-                </form>
+            {/* Office Branches block — Collapsible */}
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setBranchExpanded(prev => !prev)}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+              >
+                <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-xl shrink-0">
+                  <MapPin className="w-4.5 h-4.5 text-blue-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Corporate Branches</h3>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                    {customBranches.length > 0
+                      ? `${customBranches.length} branch(es): ${customBranches.slice(0, 3).join(", ")}${customBranches.length > 3 ? " …" : ""}`
+                      : "Add your office locations and branches"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                    customBranches.length > 0
+                      ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-400"
+                      : "bg-slate-100 dark:bg-[#1a1a1a] border-slate-200 dark:border-[#2a2a2a] text-slate-400"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${customBranches.length > 0 ? "bg-blue-500" : "bg-slate-400"}`} />
+                    {customBranches.length} Active
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${branchExpanded ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {branchExpanded && (
+                <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                  <form onSubmit={handleAddBranch} className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      placeholder="e.g. Bangalore Hub"
+                      value={newBranch}
+                      onChange={(e) => setNewBranch(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSubmittingBranch}
+                      className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
+                      title="Add Office Branch"
+                    >
+                      {isSubmittingBranch ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    </button>
+                  </form>
+                  <div className="grid grid-cols-2 gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                    {customBranches.map((branch) => (
+                      <div key={branch} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
+                        <span className="font-semibold text-slate-700 dark:text-gray-300 truncate">{branch}</span>
+                        <button
+                          onClick={() => handleRemoveBranch(branch)}
+                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic mt-3">Currently {customBranches.length} Branches active</p>
+                </div>
+              )}
+            </div>
 
-                <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                  {customLeaveTypes.map((leave) => {
-                    const parsed = parseLeaveType(leave);
-                    return (
-                      <div key={leave} className="flex items-center justify-between text-xs p-2 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl gap-2">
-                        <span className="font-semibold text-slate-700 dark:text-gray-300 truncate flex-1">{parsed.name}</span>
-                        <div className="flex items-center space-x-1 shrink-0">
-                          <input
-                            type="number"
-                            min="0"
-                            max="365"
-                            value={localQuotas[leave] !== undefined ? localQuotas[leave] : parsed.quota}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setLocalQuotas(prev => ({ ...prev, [leave]: val }));
-                            }}
-                            onBlur={() => {
-                              const raw = localQuotas[leave];
-                              if (raw !== undefined) {
-                                const val = parseInt(raw, 10);
-                                handleUpdateLeaveQuota(leave, isNaN(val) ? 0 : val);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+            {/* Leave Types block — Collapsible */}
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setLeaveExpanded(prev => !prev)}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+              >
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/30 rounded-xl shrink-0">
+                  <Calendar className="w-4.5 h-4.5 text-indigo-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                    {customLeaveTypes.length > 0
+                      ? `${customLeaveTypes.length} policy(ies) configured — ${showLeaveCount ? "Count Visible" : "Count Hidden"}`
+                      : "Configure leave types and annual quota days"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                    showLeaveCount
+                      ? "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/50 text-indigo-600 dark:text-indigo-400"
+                      : "bg-slate-100 dark:bg-[#1a1a1a] border-slate-200 dark:border-[#2a2a2a] text-slate-400"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${showLeaveCount ? "bg-indigo-500" : "bg-slate-400"}`} />
+                    {showLeaveCount ? "Count Visible" : "Count Hidden"}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${leaveExpanded ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {leaveExpanded && (
+                <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                  {/* Show / Hide Leave Count Toggle */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Leave Count Visibility</span>
+                    <label className="flex items-center gap-2 cursor-pointer select-none" title="Toggle visibility of leave balance counts in the Leaves section">
+                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        {showLeaveCount ? "Count Visible" : "Count Hidden"}
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={!!showLeaveCount}
+                          onChange={(e) => onToggleLeaveCount?.(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-8 h-4.5 rounded-full transition-colors duration-200 ${
+                          showLeaveCount ? "bg-indigo-500" : "bg-slate-200 dark:bg-slate-700"
+                        }`} />
+                        <div className={`absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-white rounded-full shadow transition-transform duration-200 ${
+                          showLeaveCount ? "translate-x-3.5" : "translate-x-0"
+                        }`} />
+                      </div>
+                    </label>
+                  </div>
+                  <form onSubmit={handleAddLeaveType} className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      placeholder="Policy Name (e.g. Sabbatical)"
+                      value={newLeaveType}
+                      onChange={(e) => setNewLeaveType(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                      required
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="365"
+                      placeholder="Days"
+                      value={newLeaveDays}
+                      onChange={(e) => setNewLeaveDays(e.target.value)}
+                      className="w-16 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-2 py-2 text-xs text-slate-800 dark:text-white focus:outline-hidden font-mono text-center"
+                      title="Annual Days Quota"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSubmittingLeaveType}
+                      className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all shrink-0 flex items-center justify-center"
+                      title="Add Leave Policy Type"
+                    >
+                      {isSubmittingLeaveType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    </button>
+                  </form>
+
+                  <div className="grid grid-cols-2 gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                    {customLeaveTypes.map((leave) => {
+                      const parsed = parseLeaveType(leave);
+                      return (
+                        <div key={leave} className="flex items-center justify-between text-xs p-2 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl gap-2">
+                          <span className="font-semibold text-slate-700 dark:text-gray-300 truncate flex-1">{parsed.name}</span>
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <input
+                              type="number"
+                              min="0"
+                              max="365"
+                              value={localQuotas[leave] !== undefined ? localQuotas[leave] : parsed.quota}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLocalQuotas(prev => ({ ...prev, [leave]: val }));
+                              }}
+                              onBlur={() => {
                                 const raw = localQuotas[leave];
                                 if (raw !== undefined) {
                                   const val = parseInt(raw, 10);
                                   handleUpdateLeaveQuota(leave, isNaN(val) ? 0 : val);
                                 }
-                              }
-                            }}
-                            className="w-12 bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-lg px-1.5 py-0.5 text-[11px] font-mono text-center text-indigo-600 dark:text-indigo-400 font-bold focus:outline-hidden"
-                            title="Click to edit annual quota days (Press Enter or click away to save)"
-                          />
-                          <span className="text-[10px] text-slate-400 font-mono">Days</span>
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const raw = localQuotas[leave];
+                                  if (raw !== undefined) {
+                                    const val = parseInt(raw, 10);
+                                    handleUpdateLeaveQuota(leave, isNaN(val) ? 0 : val);
+                                  }
+                                }
+                              }}
+                              className="w-12 bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-lg px-1.5 py-0.5 text-[11px] font-mono text-center text-indigo-600 dark:text-indigo-400 font-bold focus:outline-hidden"
+                              title="Click to edit annual quota days (Press Enter or click away to save)"
+                            />
+                            <span className="text-[10px] text-slate-400 font-mono">Days</span>
+                            <button
+                              onClick={() => handleRemoveLeaveType(leave)}
+                              className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer ml-0.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic mt-3">Currently {customLeaveTypes.length} Leave types configured</p>
+                </div>
+              )}
+            </div>
+
+            {/* Room Amenities block — Collapsible */}
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAmenityExpanded(prev => !prev)}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+              >
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-xl shrink-0">
+                  <Star className="w-4.5 h-4.5 text-amber-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Room Amenities</h3>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                    {customAmenities.length > 0
+                      ? `${customAmenities.length} amenity(ies): ${customAmenities.slice(0, 3).map(a => a.split("|")[0]).join(", ")}${customAmenities.length > 3 ? " …" : ""}`
+                      : "Add amenities for meeting rooms"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                    customAmenities.length > 0
+                      ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400"
+                      : "bg-slate-100 dark:bg-[#1a1a1a] border-slate-200 dark:border-[#2a2a2a] text-slate-400"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full inline-block ${customAmenities.length > 0 ? "bg-amber-500" : "bg-slate-400"}`} />
+                    {customAmenities.length} Active
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${amenityExpanded ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {amenityExpanded && (
+                <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                  <form onSubmit={handleAddAmenity} className="space-y-3 mb-4">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. Smart TV, HDMI Cable"
+                        value={newAmenity}
+                        onChange={(e) => setNewAmenity(e.target.value)}
+                        className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-xs text-slate-800 dark:text-white focus:outline-hidden"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSubmittingAmenity}
+                        className="bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
+                        title="Add Room Amenity"
+                      >
+                        {isSubmittingAmenity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Icon</label>
+                      <div className="flex flex-wrap gap-1.5 bg-slate-50/50 dark:bg-[#1a1a1a]/20 p-2 rounded-xl border border-slate-100/50 dark:border-[#2a2a2a]">
+                        {ICON_OPTIONS.map(opt => (
                           <button
-                            onClick={() => handleRemoveLeaveType(leave)}
-                            className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer ml-0.5"
+                            key={opt.name}
+                            type="button"
+                            onClick={() => setSelectedIcon(opt.name)}
+                            className={`p-2 rounded-lg cursor-pointer transition-all border ${selectedIcon === opt.name
+                              ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                              : "bg-white dark:bg-[#0f0f0f] text-slate-500 border-slate-100 dark:border-[#1a1a1a] hover:border-amber-300"
+                              }`}
+                            title={opt.name}
+                          >
+                            {opt.icon}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </form>
+                  <div className="grid grid-cols-3 gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                    {customAmenities.map((amenity) => {
+                      const [name, iconName] = amenity.split("|");
+                      return (
+                        <div key={amenity} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            {AMENITY_ICONS[iconName || "Star"] || <Star className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
+                            <span className="font-semibold text-slate-700 dark:text-gray-300 truncate">{name}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveAmenity(amenity)}
+                            className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customLeaveTypes.length} Leave types configured</p>
-            </div>
-
-            {/* Room Amenities block */}
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow flex flex-col justify-between space-y-4">
-              <div>
-                <div className="flex items-center space-x-2 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] mb-3">
-                  <Star className="w-4.5 h-4.5 text-amber-500" />
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Room Amenities</h3>
-                </div>
-
-                <form onSubmit={handleAddAmenity} className="space-y-3 mb-4">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. Smart TV, HDMI Cable"
-                      value={newAmenity}
-                      onChange={(e) => setNewAmenity(e.target.value)}
-                      className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-xs text-slate-800 dark:text-white focus:outline-hidden"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isSubmittingAmenity}
-                      className="bg-amber-600 hover:bg-amber-500 disabled:opacity-60 disabled:cursor-not-allowed text-white p-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center"
-                      title="Add Room Amenity"
-                    >
-                      {isSubmittingAmenity ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    </button>
+                      );
+                    })}
                   </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Icon</label>
-                    <div className="flex flex-wrap gap-1.5 bg-slate-50/50 dark:bg-[#1a1a1a]/20 p-2 rounded-xl border border-slate-100/50 dark:border-[#2a2a2a]">
-                      {ICON_OPTIONS.map(opt => (
-                        <button
-                          key={opt.name}
-                          type="button"
-                          onClick={() => setSelectedIcon(opt.name)}
-                          className={`p-2 rounded-lg cursor-pointer transition-all border ${selectedIcon === opt.name
-                            ? "bg-amber-600 text-white border-amber-600 shadow-sm"
-                            : "bg-white dark:bg-[#0f0f0f] text-slate-500 border-slate-100 dark:border-[#1a1a1a] hover:border-amber-300"
-                            }`}
-                          title={opt.name}
-                        >
-                          {opt.icon}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </form>
-
-                <div className="space-y-1.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                  {customAmenities.map((amenity) => {
-                    const [name, iconName] = amenity.split("|");
-                    return (
-                      <div key={amenity} className="flex items-center justify-between text-xs p-2.5 bg-slate-50/50 dark:bg-[#1a1a1a]/30 border border-slate-100/30 dark:border-transparent rounded-xl">
-                        <div className="flex items-center space-x-2">
-                          {AMENITY_ICONS[iconName || "Star"] || <Star className="w-3.5 h-3.5 text-slate-400" />}
-                          <span className="font-semibold text-slate-700 dark:text-gray-300">{name}</span>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveAmenity(amenity)}
-                          className="text-slate-400 hover:text-rose-500 transition-colors p-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                  <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic mt-3">Currently {customAmenities.length} Room amenities active</p>
                 </div>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono italic">Currently {customAmenities.length} Room amenities active</p>
+              )}
             </div>
           </div>
         </div>
