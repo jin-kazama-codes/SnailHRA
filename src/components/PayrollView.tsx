@@ -148,12 +148,16 @@ export default function PayrollView({
         calculatedPf = Math.round(basic * ((config?.pfValue || 12) / 100));
       }
 
+      const configHra = config?.hraType === "percentage"
+        ? Math.round(basic * ((config?.hraValue || 0) / 100))
+        : (config?.hraValue || 0);
+
       let calculatedEsi = 0;
       if (editEsiOptIn) {
         if (editEsiMode === "custom" && editEsiCustom !== "") {
           calculatedEsi = Number(editEsiCustom) || 0;
         } else {
-          const gross = basic + (editingEmpForSalary.salary?.hra || 0) + Number(editTel) + Number(editFuel) + Number(editProfDev) + Number(editLta) + Number(editSpAllow);
+          const gross = basic + configHra + Number(editTel) + Number(editFuel) + Number(editProfDev) + Number(editLta) + Number(editSpAllow);
           const esiGrossCeiling = config?.esiGrossCeiling ?? 21000;
           if (esiGrossCeiling <= 0 || gross <= esiGrossCeiling) {
             calculatedEsi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
@@ -433,7 +437,10 @@ export default function PayrollView({
 
   // Get all salary components with defaults — falls back to config-derived values when employee has no per-field override
   const getEmpSalaryComponents = (emp: Employee) => {
-    const basic = emp.salary.basic || 0;
+    const basic = emp.salary?.basic || 0;
+    const configHra = config?.hraType === "percentage"
+      ? Math.round(basic * ((config.hraValue ?? 40) / 100))
+      : (config?.hraValue ?? 0);
     const configTel = config?.telephoneType === "percentage"
       ? Math.round(basic * ((config.telephoneValue || 0) / 100))
       : (config?.telephoneValue || 0);
@@ -451,14 +458,14 @@ export default function PayrollView({
       : (config?.allowancesValue || 0);
     return {
       basic,
-      hra: emp.salary.hra || 0,
-      telephone: emp.salary.telephone || configTel,
-      fuel: emp.salary.fuel || configFuel,
-      professionalDev: emp.salary.professionalDev || configProfDev,
-      lta: emp.salary.lta || configLta,
-      allowances: emp.salary.allowances || configSpAllow,
-      pfDeduction: emp.salary.pfDeduction || 0,
-      tdsDeduction: emp.salary.tdsDeduction || 0,
+      hra: configHra,
+      telephone: emp.salary?.telephone || configTel,
+      fuel: emp.salary?.fuel || configFuel,
+      professionalDev: emp.salary?.professionalDev || configProfDev,
+      lta: emp.salary?.lta || configLta,
+      allowances: emp.salary?.allowances || configSpAllow,
+      pfDeduction: emp.salary?.pfDeduction || 0,
+      tdsDeduction: emp.salary?.tdsDeduction || 0,
     };
   };
 
@@ -728,13 +735,13 @@ export default function PayrollView({
                                 </div>
                               </div>
                             </td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-700 dark:text-gray-300 font-semibold whitespace-nowrap">₹{sal.basic.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.hra.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.telephone.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.fuel.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.professionalDev.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.lta.toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{sal.allowances.toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-700 dark:text-gray-300 font-semibold whitespace-nowrap">₹{(hasSlip ? hasSlip.basic : sal.basic).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.hra : sal.hra).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.telephone : sal.telephone).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.fuel : sal.fuel).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.professionalDev : sal.professionalDev).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.lta : sal.lta).toLocaleString()}</td>
+                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.allowances : sal.allowances).toLocaleString()}</td>
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes + esiEst).toLocaleString()}</td>
                             <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
                               ₹{hasSlip ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
@@ -2181,8 +2188,10 @@ export default function PayrollView({
 
                 {/* Live Gross & Net Pay preview box */}
                 {(() => {
-                  const basic = editingEmpForSalary.salary.basic || 0;
-                  const hra = editingEmpForSalary.salary.hra || 0;
+                  const basic = editingEmpForSalary.salary?.basic || 0;
+                  const hra = config?.hraType === "percentage"
+                    ? Math.round(basic * ((config?.hraValue || 0) / 100))
+                    : (config?.hraValue || 0);
                   const tel = Number(editTel) || 0;
                   const fuel = Number(editFuel) || 0;
                   const profDev = Number(editProfDev) || 0;
