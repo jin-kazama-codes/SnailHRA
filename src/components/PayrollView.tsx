@@ -176,7 +176,7 @@ export default function PayrollView({
         pfDeduction: calculatedPf,
         tdsOptIn: editTdsOptIn,
         tdsMode: editTdsMode,
-        tdsDeduction: editTdsOptIn ? (editTdsMode === "custom" ? (Number(editTdsCustom) || 0) : editingEmpForSalary.salary.tdsDeduction) : 0,
+        tdsDeduction: editTdsOptIn ? (editTdsMode === "custom" ? (Number(editTdsCustom) || 0) : 0) : 0,
         esiOptIn: editEsiOptIn,
         esiMode: editEsiMode,
         esiDeduction: calculatedEsi,
@@ -696,7 +696,14 @@ export default function PayrollView({
                         const empPendingFines = (fines || [])
                           .filter(f => f.employeeId === emp.id && f.status === "Deducted From Payroll")
                           .reduce((sum, f) => sum + f.amount, 0);
-                        const defaultTaxes = sal.tdsDeduction || Math.round(grossEarnings * 0.05);
+                        const empTdsOptIn = emp.salary?.tdsOptIn !== false;
+                        const defaultTaxes = !empTdsOptIn
+                          ? 0
+                          : (emp.salary?.tdsMode === "custom" && emp.salary?.tdsDeduction !== undefined && emp.salary?.tdsDeduction > 0)
+                            ? emp.salary.tdsDeduction
+                            : (config?.taxType === "fixed"
+                                ? (config?.taxValue ?? 0)
+                                : Math.round(grossEarnings * ((config?.taxValue ?? 5) / 100)));
 
                         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
                           (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||

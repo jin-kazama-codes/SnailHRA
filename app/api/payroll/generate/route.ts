@@ -231,14 +231,13 @@ export async function POST(request: Request) {
     let tax = 0;
     if (employee.salary?.tdsOptIn === false) {
       tax = 0;
-    } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined) {
-      tax = employee.salary.tdsDeduction;
-    } else if (employee.salary?.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
+    } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
     } else {
-      tax = config.taxType === "percentage"
-        ? Math.round(gross * (config.taxValue / 100))
-        : config.taxValue;
+      const taxRate = config?.taxValue ?? 5;
+      tax = (config?.taxType === "fixed")
+        ? taxRate
+        : Math.round(gross * (taxRate / 100));
     }
 
     // Calculate ESI Deduction

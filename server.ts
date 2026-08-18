@@ -2027,10 +2027,18 @@ async function startServer() {
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Pending");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
-    // Use configured TDS/Profession Tax if available, otherwise calculate roughly
-    const tax = typeof employee.salary.tdsDeduction === "number"
-      ? employee.salary.tdsDeduction
-      : Math.round(grossEarnings * 0.05);
+    // Use configured TDS/Profession Tax if available, otherwise calculate from config
+    let tax = 0;
+    if (employee.salary?.tdsOptIn === false) {
+      tax = 0;
+    } else if (employee.salary?.tdsMode === "custom" && typeof employee.salary.tdsDeduction === "number" && employee.salary.tdsDeduction > 0) {
+      tax = employee.salary.tdsDeduction;
+    } else {
+      const taxRate = payrollConfig?.taxValue ?? 5;
+      tax = (payrollConfig?.taxType === "fixed")
+        ? taxRate
+        : Math.round(grossEarnings * (taxRate / 100));
+    }
 
     // Calculate ESI deduction — respects employee opt-in flag, exemptions, and gross salary ceiling from config
     const reqCompanyId = req.body.companyId || employee.companyId || MGM_COMPANY_ID;
