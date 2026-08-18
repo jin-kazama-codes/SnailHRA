@@ -132,12 +132,13 @@ export default function PayrollView({
       ? Math.round(basic * ((config.allowancesValue || 0) / 100))
       : (config?.allowancesValue || 0);
 
-    // Use employee's stored value if set, otherwise fall back to config-calculated default
-    setEditTel(emp.salary?.telephone ? String(emp.salary.telephone) : configTel ? String(configTel) : "");
-    setEditFuel(emp.salary?.fuel ? String(emp.salary.fuel) : configFuel ? String(configFuel) : "");
-    setEditProfDev(emp.salary?.professionalDev ? String(emp.salary.professionalDev) : configProfDev ? String(configProfDev) : "");
-    setEditLta(emp.salary?.lta ? String(emp.salary.lta) : configLta ? String(configLta) : "");
-    setEditSpAllow(emp.salary?.allowances ? String(emp.salary.allowances) : configSpAllow ? String(configSpAllow) : "");
+    // Use config-derived value when a config rule is set (matches what the table shows).
+    // Only fall back to stored employee value if no config formula is defined.
+    setEditTel(configTel ? String(configTel) : (emp.salary?.telephone ? String(emp.salary.telephone) : ""));
+    setEditFuel(configFuel ? String(configFuel) : (emp.salary?.fuel ? String(emp.salary.fuel) : ""));
+    setEditProfDev(configProfDev ? String(configProfDev) : (emp.salary?.professionalDev ? String(emp.salary.professionalDev) : ""));
+    setEditLta(configLta ? String(configLta) : (emp.salary?.lta ? String(emp.salary.lta) : ""));
+    setEditSpAllow(configSpAllow ? String(configSpAllow) : (emp.salary?.allowances ? String(emp.salary.allowances) : ""));
     const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(emp.id) ||
                        (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
                        emp.salary?.pfMode === "exempt";
@@ -150,8 +151,20 @@ export default function PayrollView({
       (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
       emp.salary?.esiOptIn === false;
     setEditEsiOptIn(!isEsiExempt);
-    setEditEsiMode(emp.salary?.esiMode || (emp.salary?.esiDeduction && emp.salary?.esiDeduction > 0 ? "custom" : "auto"));
-    setEditEsiCustom(emp.salary?.esiDeduction ? String(emp.salary.esiDeduction) : "");
+    // Always recalculate ESI from the config-derived gross (same logic as the table)
+    // so stale stored esiDeduction values never show in the modal
+    const configHraForEsi = config?.hraType === "percentage"
+      ? Math.round(basic * ((config?.hraValue || 0) / 100))
+      : (config?.hraValue || 0);
+    const configGross = basic + configHraForEsi + configTel + configFuel + configProfDev + configLta + configSpAllow;
+    const esiCeiling = config?.esiGrossCeiling ?? 21000;
+    const recalcEsi = (!isEsiExempt && (esiCeiling <= 0 || configGross <= esiCeiling))
+      ? Math.round(configGross * ((config?.esiRatePercentage || 0.75) / 100))
+      : 0;
+    const esiMode = emp.salary?.esiMode === "custom" ? "custom" : "auto";
+    setEditEsiMode(esiMode);
+    // If custom mode, populate with the freshly recalculated value (not stale stored value)
+    setEditEsiCustom(esiMode === "custom" ? String(recalcEsi) : "");
   };
 
   const handleSaveAllowances = async (e: React.FormEvent) => {
@@ -2371,9 +2384,10 @@ export default function PayrollView({
                 {/* Live Gross & Net Pay preview box */}
                 {(() => {
                   const basic = editingEmpForSalary.salary?.basic || 0;
-                  const hra = editingEmpForSalary.salary?.hra ?? (config?.hraType === "percentage"
+                  // Always compute HRA from config (same as the table), never from stale stored value
+                  const hra = config?.hraType === "percentage"
                     ? Math.round(basic * ((config?.hraValue || 0) / 100))
-                    : (config?.hraValue || 0));
+                    : (config?.hraValue || 0);
                   const tel = Number(editTel) || 0;
                   const fuel = Number(editFuel) || 0;
                   const profDev = Number(editProfDev) || 0;
