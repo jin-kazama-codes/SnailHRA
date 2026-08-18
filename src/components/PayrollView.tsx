@@ -6,7 +6,9 @@ import {
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
   ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X, Pencil
 } from "lucide-react";
-import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig } from "../types";
+import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig, EmployeeTaxProfile } from "../types";
+import TaxProfileModal from "./TaxProfileModal";
+import { computeMonthlyTDSFromEmployee } from "../lib/taxEngine";
 
 interface PayrollViewProps {
   employees: Employee[];
@@ -20,7 +22,7 @@ interface PayrollViewProps {
   onRemoveDesignation: (id: string) => void;
   onGeneratePayslip: (employeeId: string, month: string) => Promise<void> | void;
   onPayAllPayslips: (month: string) => void;
-  onResetPayslip?: (employeeId: string, month: string) => Promise<void> | void;
+  onResetPayslip?: (employeeId: string, month: string, payslipId?: string) => Promise<void> | void;
   onUpdateEmployee?: (id: string, updatedData: any) => Promise<void> | void;
   companyName?: string;
   companyId?: string;
@@ -33,26 +35,17 @@ export function computeIncomeTax(gross: number, taxType: "percentage" | "fixed" 
     return taxValue ?? 0;
   }
   if (taxType === "slab") {
-    // 0%, 10%, 20%, 30% progressive tax slabs
-    // Up to 25,000 / mo (3L): 0%
-    // 25,001 to 50,000 / mo (3L to 6L): 10%
-    // 50,001 to 83,333 / mo (6L to 10L): 20%
-    // Above 83,333 / mo (Above 10L): 30%
-    if (gross <= 25000) return 0;
-    let tax = 0;
-    if (gross > 25000) {
-      const slab10 = Math.min(gross - 25000, 25000);
-      tax += slab10 * 0.10;
-    }
-    if (gross > 50000) {
-      const slab20 = Math.min(gross - 50000, 33333);
-      tax += slab20 * 0.20;
-    }
-    if (gross > 83333) {
-      const slab30 = gross - 83333;
-      tax += slab30 * 0.30;
-    }
-    return Math.round(tax);
+    return computeMonthlyTDSFromEmployee(
+      {
+        basic: Math.round(gross * 0.5),
+        hra: Math.round(gross * 0.2),
+        allowances: Math.round(gross * 0.3),
+        pfDeduction: Math.round(gross * 0.5 * 0.12),
+        tdsOptIn: true,
+      },
+      "slab",
+      0
+    );
   }
   // percentage
   return Math.round(gross * ((taxValue ?? 5) / 100));
@@ -116,6 +109,7 @@ export default function PayrollView({
   const [editEsiMode, setEditEsiMode] = useState<"auto" | "custom">("auto");
   const [editEsiCustom, setEditEsiCustom] = useState("");
   const [isSavingSalary, setIsSavingSalary] = useState(false);
+  const [taxProfileEmp, setTaxProfileEmp] = useState<Employee | null>(null);
 
   const openEditAllowancesModal = (emp: Employee) => {
     setEditingEmpForSalary(emp);
@@ -758,9 +752,11 @@ export default function PayrollView({
                         const empTdsOptIn = emp.salary?.tdsOptIn !== false;
                         const defaultTaxes = !empTdsOptIn
                           ? 0
-                          : (emp.salary?.tdsMode === "custom" && emp.salary?.tdsDeduction !== undefined && emp.salary?.tdsDeduction > 0)
-                            ? emp.salary.tdsDeduction
-                            : computeIncomeTax(grossEarnings, config?.taxType || "percentage", config?.taxValue ?? 5);
+                          : computeMonthlyTDSFromEmployee(
+                              { ...emp.salary, taxProfile: emp.salary?.taxProfile as any },
+                              config?.taxType || "percentage",
+                              config?.taxValue ?? 5
+                            );
 
                         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
                           (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
@@ -836,7 +832,7 @@ export default function PayrollView({
                                     <button
                                       onClick={() => {
                                         if (confirm(`Reset and delete the generated payslip for ${emp.fullName} for ${selectedMonth}? This will release the fine deductions back to payroll.`)) {
-                                          onResetPayslip(emp.id, selectedMonth);
+                                          onResetPayslip(emp.id, selectedMonth, hasSlip?.id);
                                         }
                                       }}
                                       className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-1 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition-colors"
@@ -855,6 +851,15 @@ export default function PayrollView({
                                       title="Edit Monthly Allowances (Tel, Fuel, Prof Dev, LTA)"
                                     >
                                       <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {(role === "admin" || role === "hr") && onUpdateEmployee && (
+                                    <button
+                                      onClick={() => setTaxProfileEmp(emp)}
+                                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-violet-50 dark:bg-[#1a1a1a] dark:hover:bg-violet-950/40 text-slate-600 hover:text-violet-600 dark:text-gray-300 dark:hover:text-violet-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                      title="Set Tax Profile (Regime, HRA, 80C, etc.)"
+                                    >
+                                      <Calculator className="w-3.5 h-3.5" />
                                     </button>
                                   )}
                                   <button
@@ -1392,33 +1397,54 @@ export default function PayrollView({
                           <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
                             0% (NIL)
                           </span>
-                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Up to ₹25,000</p>
-                          <p className="text-[9px] text-slate-400">Annual: Up to ₹3L</p>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Up to ₹33,333/mo</p>
+                          <p className="text-[9px] text-slate-400">Annual: Up to ₹4L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-400">
+                            5%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹33,334–₹66,667</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹4L–₹8L</p>
                         </div>
                         <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
                           <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
                             10%
                           </span>
-                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹25,001 - ₹50,000</p>
-                          <p className="text-[9px] text-slate-400">Annual: ₹3L - ₹6L</p>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹66,668–₹1,00,000</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹8L–₹12L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400">
+                            15%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹1,00,001–₹1,33,333</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹12L–₹16L</p>
                         </div>
                         <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
                           <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
                             20%
                           </span>
-                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹50,001 - ₹83,333</p>
-                          <p className="text-[9px] text-slate-400">Annual: ₹6L - ₹10L</p>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹1,33,334–₹1,66,667</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹16L–₹20L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400">
+                            25%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹1,66,668–₹2,00,000</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹20L–₹24L</p>
                         </div>
                         <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
                           <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400">
                             30%
                           </span>
-                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Above ₹83,333</p>
-                          <p className="text-[9px] text-slate-400">Annual: Above ₹10L</p>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Above ₹2,00,000</p>
+                          <p className="text-[9px] text-slate-400">Annual: Above ₹24L</p>
                         </div>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-gray-400 italic">
-                        Progressive Tax Slabs (0%, 10%, 20%, 30%) auto-applied dynamically based on monthly gross earnings.
+                        India New Tax Regime FY 2025-26 (Budget 2025) — 7 slabs (0%–30%) applied progressively on monthly gross earnings.
                       </p>
                     </div>
                   ) : (
@@ -1688,7 +1714,18 @@ export default function PayrollView({
                   const isExempt = (config.pfExemptEmployeeIds || []).includes(simEmp.id);
                   const isEsiSimExempt = (config.esiExemptEmployeeIds || []).includes(simEmp.id);
                   const pf = isExempt ? 0 : (config.pfModeDefault === "fixed_1800" ? 1800 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue));
-                  const tax = computeIncomeTax(gross, config.taxType, config.taxValue);
+                  const tax = computeMonthlyTDSFromEmployee(
+                    {
+                      basic, hra, allowances, telephone, fuel, professionalDev: profDev, lta,
+                      pfDeduction: pf,
+                      tdsOptIn: simEmp.salary?.tdsOptIn !== false,
+                      tdsMode: simEmp.salary?.tdsMode,
+                      tdsDeduction: simEmp.salary?.tdsDeduction,
+                      taxProfile: simEmp.salary?.taxProfile as any,
+                    },
+                    config.taxType,
+                    config.taxValue
+                  );
                   const esiGrossCeiling = config.esiGrossCeiling ?? 21000;
                   const esi = (config.esiEnabled !== false && !isEsiSimExempt && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling)) ? Math.round(gross * ((config.esiRatePercentage || 0.75) / 100)) : 0;
                   const net = Math.max(0, gross - pf - tax - esi);
@@ -1763,7 +1800,7 @@ export default function PayrollView({
                         </div>
 
                         <div className="flex justify-between text-slate-600 dark:text-gray-300">
-                          <span>- Tax / TDS ({config.taxType === "slab" ? "Slabs: 0%, 10%, 20%, 30%" : config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
+                          <span>- Tax / TDS ({config.taxType === "slab" ? "FY 2025-26 Slabs (0%–30%)" : config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
                           <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">₹{tax.toLocaleString()}</span>
                         </div>
 
@@ -2065,6 +2102,24 @@ export default function PayrollView({
           </div>
         );
       })()}
+      {/* Tax Profile Modal */}
+      {taxProfileEmp && (
+        <TaxProfileModal
+          employee={taxProfileEmp}
+          defaultRegime={config?.defaultTaxRegime ?? "new"}
+          onClose={() => setTaxProfileEmp(null)}
+          onSave={async (empId, taxProfile) => {
+            if (onUpdateEmployee) {
+              const emp = employees.find(e => e.id === empId);
+              if (emp) {
+                await onUpdateEmployee(empId, {
+                  salary: { ...emp.salary, taxProfile },
+                });
+              }
+            }
+          }}
+        />
+      )}
       {/* Adjust Monthly Allowances Modal */}
       {editingEmpForSalary && (
         <div
@@ -2210,7 +2265,22 @@ export default function PayrollView({
                 {/* TDS Opt-In & Mode Settings */}
                 <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">Income Tax (TDS) Status</label>
+                    <div className="flex items-center space-x-2">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">Income Tax (TDS) Status</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const emp = editingEmpForSalary;
+                          setEditingEmpForSalary(null);
+                          setTaxProfileEmp(emp);
+                        }}
+                        className="text-[10px] text-violet-600 dark:text-violet-400 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        title="Configure Regime, HRA, 80C, etc."
+                      >
+                        <Calculator className="w-3 h-3" />
+                        <span>Configure Tax Profile</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setEditTdsOptIn(!editTdsOptIn)}
@@ -2227,7 +2297,7 @@ export default function PayrollView({
                           onClick={() => setEditTdsMode("slab")}
                           className={`py-1 px-2 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${editTdsMode === "slab" ? "bg-rose-600 text-white border-rose-600 shadow-xs" : "bg-white dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border-slate-200 dark:border-[#252525]"}`}
                         >
-                          Auto Tax Slab ({config?.taxValue || 5}%)
+                          {config?.taxType === "slab" ? "Auto Tax Slab (FY 2025-26)" : `${config?.taxValue || 5}% of Gross`}
                         </button>
                         <button
                           type="button"
@@ -2254,7 +2324,10 @@ export default function PayrollView({
                 {/* ESI Opt-In & Amount */}
                 <div className="bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3 rounded-xl border border-slate-200 dark:border-[#1a1a1a] space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">ESI Deduction Rule</label>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-gray-300">ESI Deduction Rule</label>
+                      <span className="text-[10px] text-slate-400 block">Exempt if Monthly Gross &gt; ₹21,000</span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setEditEsiOptIn(!editEsiOptIn)}
@@ -2298,9 +2371,9 @@ export default function PayrollView({
                 {/* Live Gross & Net Pay preview box */}
                 {(() => {
                   const basic = editingEmpForSalary.salary?.basic || 0;
-                  const hra = config?.hraType === "percentage"
+                  const hra = editingEmpForSalary.salary?.hra ?? (config?.hraType === "percentage"
                     ? Math.round(basic * ((config?.hraValue || 0) / 100))
-                    : (config?.hraValue || 0);
+                    : (config?.hraValue || 0));
                   const tel = Number(editTel) || 0;
                   const fuel = Number(editFuel) || 0;
                   const profDev = Number(editProfDev) || 0;
@@ -2317,7 +2390,17 @@ export default function PayrollView({
                   let tds = 0;
                   if (editTdsOptIn) {
                     if (editTdsMode === "custom") tds = Number(editTdsCustom) || 0;
-                    else tds = Math.round(gross * ((config?.taxValue || 5) / 100));
+                    else {
+                      tds = computeMonthlyTDSFromEmployee(
+                        {
+                          basic, hra, telephone: tel, fuel, professionalDev: profDev, lta, allowances: spAllow,
+                          pfDeduction: pf, tdsOptIn: true,
+                          taxProfile: editingEmpForSalary.salary?.taxProfile as any,
+                        },
+                        config?.taxType || "percentage",
+                        config?.taxValue ?? 5
+                      );
+                    }
                   }
 
                   let esi = 0;

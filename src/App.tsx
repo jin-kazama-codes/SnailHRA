@@ -1617,15 +1617,19 @@ export default function App() {
     }
   };
 
-  const handleResetPayslip = async (employeeId: string, month: string) => {
+  const handleResetPayslip = async (employeeId: string, month: string, payslipId?: string) => {
     try {
       // INSTANT OPTIMISTIC STATE UPDATE: Immediately clear payslip from state!
-      setPayslips(prev => (prev || []).filter(p => !(p.employeeId === employeeId && p.month === month)));
+      setPayslips(prev => (prev || []).filter(p => {
+        if (payslipId && p.id === payslipId) return false;
+        if (employeeId && month && p.employeeId === employeeId && p.month === month) return false;
+        return true;
+      }));
 
       const res = await fetch("/api/payroll/generate", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, month })
+        body: JSON.stringify({ employeeId, month, id: payslipId })
       });
       const data = await res.json();
       if (res.ok) {

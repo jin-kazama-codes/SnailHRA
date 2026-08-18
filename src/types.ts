@@ -54,6 +54,26 @@ export interface OnboardingTask {
   dueDate: string;
 }
 
+/** Per-employee Income Tax profile — regime choice + all declarations */
+export interface EmployeeTaxProfile {
+  regime: "new" | "old";              // Tax regime chosen by employee
+  monthlyRentPaid?: number;           // For HRA exemption (Old Regime)
+  cityType?: "metro" | "non-metro";  // Metro: 50% of Basic, Non-metro: 40%
+  // Chapter VI-A (Old Regime only)
+  section80C?: number;      // PPF/ELSS/LIC/EPF/Home Loan Principal — max ₹1,50,000
+  section80CCD1B?: number;  // NPS self-contribution — max ₹50,000
+  section80D?: number;      // Health insurance premium — max ₹25,000
+  section80E?: number;      // Education loan interest — no limit
+  section80G?: number;      // Donations to approved funds
+  section80EEA?: number;    // Affordable home loan interest — max ₹1,50,000
+  // Both regimes
+  employerNPS?: number;     // 80CCD(2) — max 10% of basic
+  professionalTax?: number; // Annual professional tax (state-specific)
+  // Manual override
+  manualMonthlyTDS?: number; // Fixed monthly TDS if locked
+  tdsLocked?: boolean;       // If true, skip calculation and use manual value
+}
+
 export interface Employee {
   id: string;
   companyId?: string; // tenant company reference
@@ -86,6 +106,7 @@ export interface Employee {
     esiOptIn?: boolean;
     esiMode?: "auto" | "custom";
     esiDeduction?: number;
+    taxProfile?: EmployeeTaxProfile;  // Per-employee tax declarations + regime
   };
   bankDetails: {
     accountNumber: string;
@@ -317,6 +338,7 @@ export interface PayrollConfig {
   fuelType?: "percentage" | "fixed";
   professionalDevValue?: number;
   professionalDevType?: "percentage" | "fixed";
+  defaultTaxRegime?: "new" | "old";   // Company-level default tax regime
   updatedAt?: string;
 }
 

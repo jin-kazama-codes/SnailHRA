@@ -97,6 +97,7 @@ export async function GET(request: Request) {
             fuelType: data.fuel_type || "percentage",
             professionalDevValue: Number(data.professional_dev_value) ?? 0,
             professionalDevType: data.professional_dev_type || "percentage",
+            defaultTaxRegime: data.default_tax_regime || "new",
             updatedAt: data.updated_at,
           };
           db.payrollConfigs[companyId] = config;
@@ -146,6 +147,7 @@ export async function POST(request: Request) {
       fuelType: body.fuelType || "percentage",
       professionalDevValue: Number(body.professionalDevValue) ?? 0,
       professionalDevType: body.professionalDevType || "percentage",
+      defaultTaxRegime: body.defaultTaxRegime || "new",
       updatedAt: new Date().toISOString(),
     };
 

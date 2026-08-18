@@ -618,9 +618,7 @@ export default function DirectoryView({
           ? Math.round(basicVal * (cfg.pfValue / 100))
           : cfg.pfValue));
 
-    const tax = cfg.taxType === "slab"
-      ? (gross <= 25000 ? 0 : Math.round((gross > 25000 ? Math.min(gross - 25000, 25000) * 0.10 : 0) + (gross > 50000 ? Math.min(gross - 50000, 33333) * 0.20 : 0) + (gross > 83333 ? (gross - 83333) * 0.30 : 0)))
-      : (cfg.taxType === "fixed" ? cfg.taxValue : Math.round(gross * (cfg.taxValue / 100)));
+    const tax = computeIncomeTax(gross, cfg.taxType, cfg.taxValue);
 
     const esiGrossCeiling = cfg.esiGrossCeiling ?? 21000;
     const esiRate = cfg.esiRatePercentage ?? 0.75;
@@ -960,9 +958,7 @@ export default function DirectoryView({
             ? Math.round(grossVal * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
             : 0;
           const tdsVal = onboardPayrollConfig
-            ? (onboardPayrollConfig.taxType === "slab"
-                ? (grossVal <= 25000 ? 0 : Math.round((grossVal > 25000 ? Math.min(grossVal - 25000, 25000) * 0.10 : 0) + (grossVal > 50000 ? Math.min(grossVal - 50000, 33333) * 0.20 : 0) + (grossVal > 83333 ? (grossVal - 83333) * 0.30 : 0)))
-                : (onboardPayrollConfig.taxType === "fixed" ? onboardPayrollConfig.taxValue : Math.round(grossVal * (onboardPayrollConfig.taxValue / 100))))
+            ? computeIncomeTax(grossVal, onboardPayrollConfig.taxType, onboardPayrollConfig.taxValue)
             : Math.round(grossVal * 0.05);
 
           return {

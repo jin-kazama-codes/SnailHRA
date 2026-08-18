@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { updateFineStatusInSupabase, syncPayslipToSupabase, supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { Payslip, SimulatedEmail } from "@/src/types";
+import { computeMonthlyTDSFromEmployee } from "@/src/lib/taxEngine";
 async function syncLocalDbWithSupabase(db: any) {
   const dbClient = supabaseAdmin || supabase;
   if (!dbClient) return;
@@ -275,21 +276,13 @@ export async function POST(request: Request) {
       tax = 0;
     } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
-    } else if (config?.taxType === "slab") {
-      if (gross <= 25000) {
-        tax = 0;
-      } else {
-        let t = 0;
-        if (gross > 25000) t += Math.min(gross - 25000, 25000) * 0.10;
-        if (gross > 50000) t += Math.min(gross - 50000, 33333) * 0.20;
-        if (gross > 83333) t += (gross - 83333) * 0.30;
-        tax = Math.round(t);
-      }
     } else {
-      const taxRate = config?.taxValue ?? 5;
-      tax = (config?.taxType === "fixed")
-        ? taxRate
-        : Math.round(gross * (taxRate / 100));
+      // Use central tax engine for slab, percentage, fixed
+      tax = computeMonthlyTDSFromEmployee(
+        { ...employee.salary },
+        config?.taxType || "percentage",
+        config?.taxValue ?? 5
+      );
     }
 
     // Calculate ESI Deduction
@@ -374,33 +367,50 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const { employeeId, month } = await request.json();
-    if (!employeeId || !month) {
-      return NextResponse.json({ error: "Employee ID and Month are required" }, { status: 400 });
+    const { employeeId, month, id: payslipId } = await request.json();
+    if (!employeeId && !payslipId) {
+      return NextResponse.json({ error: "Employee ID or Payslip ID is required" }, { status: 400 });
     }
-
-    const db = loadDatabase();
-    const payslip = db.payslips.find(p => p.employeeId === employeeId && p.month === month);
-    if (!payslip) {
-      return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
-    }
-
-    // Remove the payslip
-    db.payslips = db.payslips.filter(p => p.id !== payslip.id);
-
-    // Revert "Deducted" fines for this employee back to "Deducted From Payroll"
-    const employeeFines = (db.fines || []).filter(f => f.employeeId === employeeId && f.status === "Deducted");
-    employeeFines.forEach(f => {
-      f.status = "Deducted From Payroll";
-    });
-
-    saveDatabase(db);
 
     const writeClient = supabaseAdmin || supabase;
+
+    // Delete directly from Supabase by (employee_id and month) OR by id
     if (writeClient) {
-      await writeClient.from("payslips").delete().eq("id", payslip.id);
-      for (const fine of employeeFines) {
-        await updateFineStatusInSupabase(fine.id, "Deducted From Payroll");
+      let query = writeClient.from("payslips").delete();
+      if (payslipId) {
+        query = query.eq("id", payslipId);
+      } else {
+        query = query.eq("employee_id", employeeId).eq("month", month);
+      }
+      const { error: sbDeleteErr } = await query;
+      if (sbDeleteErr) {
+        console.warn("Supabase payslip delete warning:", sbDeleteErr.message);
+      }
+    }
+
+    // Also update local JSON db if present
+    const db = loadDatabase();
+    if (db && db.payslips) {
+      db.payslips = db.payslips.filter(p => {
+        if (payslipId && p.id === payslipId) return false;
+        if (employeeId && month && p.employeeId === employeeId && p.month === month) return false;
+        return true;
+      });
+
+      // Revert "Deducted" fines for this employee back to "Deducted From Payroll"
+      if (employeeId) {
+        const employeeFines = (db.fines || []).filter(f => f.employeeId === employeeId && f.status === "Deducted");
+        employeeFines.forEach(f => {
+          f.status = "Deducted From Payroll";
+        });
+        saveDatabase(db);
+        if (writeClient) {
+          for (const fine of employeeFines) {
+            await updateFineStatusInSupabase(fine.id, "Deducted From Payroll");
+          }
+        }
+      } else {
+        saveDatabase(db);
       }
     }
 

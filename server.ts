@@ -27,6 +27,7 @@ import {
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting,
   GrievanceTicket, PerformanceRecord, PayrollConfig
 } from "./src/types";
+import { computeMonthlyTDSFromEmployee } from "./src/lib/taxEngine.js";
 
 // Default MGM Financiers company ID (matches migration script)
 const MGM_COMPANY_ID = "a1b2c3d4-0001-0001-0001-000000000001";
@@ -2047,21 +2048,13 @@ async function startServer() {
       tax = 0;
     } else if (employee.salary?.tdsMode === "custom" && typeof employee.salary.tdsDeduction === "number" && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
-    } else if (payrollConfig?.taxType === "slab") {
-      if (grossEarnings <= 25000) {
-        tax = 0;
-      } else {
-        let t = 0;
-        if (grossEarnings > 25000) t += Math.min(grossEarnings - 25000, 25000) * 0.10;
-        if (grossEarnings > 50000) t += Math.min(grossEarnings - 50000, 33333) * 0.20;
-        if (grossEarnings > 83333) t += (grossEarnings - 83333) * 0.30;
-        tax = Math.round(t);
-      }
     } else {
-      const taxRate = payrollConfig?.taxValue ?? 5;
-      tax = (payrollConfig?.taxType === "fixed")
-        ? taxRate
-        : Math.round(grossEarnings * (taxRate / 100));
+      // Use central tax engine for slab, percentage, fixed — includes per-employee taxProfile
+      tax = computeMonthlyTDSFromEmployee(
+        { ...employee.salary },
+        payrollConfig?.taxType || "percentage",
+        payrollConfig?.taxValue ?? 5
+      );
     }
 
     // Calculate ESI deduction — respects employee opt-in flag, exemptions, and gross salary ceiling from config
@@ -2147,6 +2140,30 @@ async function startServer() {
       writeDatabase(db);
     }
     res.json({ success: true, updatedCount, message: `Disbursed ${updatedCount} salary payments for ${month}` });
+  });
+
+  // 22a. Payroll - Reset / Delete Payslip
+  app.delete("/api/payroll/generate", (req, res) => {
+    const { employeeId, month, id: payslipId } = req.body;
+    if (!employeeId && !payslipId) {
+      return res.status(400).json({ error: "Employee ID or Payslip ID is required" });
+    }
+
+    db.payslips = (db.payslips || []).filter(p => {
+      if (payslipId && p.id === payslipId) return false;
+      if (employeeId && month && p.employeeId === employeeId && p.month === month) return false;
+      return true;
+    });
+
+    if (employeeId) {
+      const employeeFines = (db.fines || []).filter(f => f.employeeId === employeeId && f.status === "Deducted");
+      employeeFines.forEach(f => {
+        f.status = "Deducted From Payroll";
+      });
+    }
+
+    writeDatabase(db);
+    res.json({ success: true, message: "Payslip deleted successfully." });
   });
 
   // 22b. Payroll - GET & POST Configuration
