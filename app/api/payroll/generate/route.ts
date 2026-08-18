@@ -41,12 +41,6 @@ async function syncLocalDbWithSupabase(db: any) {
             esiOptIn: (row.salary_esi_opt_in !== null && row.salary_esi_opt_in !== undefined) ? Boolean(row.salary_esi_opt_in) : (salaryFromRow?.esiOptIn !== undefined ? Boolean(salaryFromRow.esiOptIn) : true),
             esiDeduction: Number(row.salary_esi_deduction ?? salaryFromRow?.esiDeduction ?? 0),
             esiMode: row.salary_esi_mode || salaryFromRow?.esiMode || "auto",
-            // Preserve full taxProfile (regime, 80C deductions, etc.) for accurate slab TDS computation
-            taxProfile: (() => {
-              const rawProfile = row.salary_tax_profile ?? salaryFromRow?.taxProfile;
-              if (!rawProfile) return undefined;
-              return typeof rawProfile === "string" ? JSON.parse(rawProfile) : rawProfile;
-            })(),
           },
           bankDetails: {
             accountNumber: String(row.bank_account_number ?? bankDetailsFromRow?.accountNumber ?? ""),
@@ -283,15 +277,10 @@ export async function POST(request: Request) {
     } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
     } else {
-      // When the employee's own tdsMode is "slab", always use the slab engine regardless
-      // of what config.taxType is set to — this prevents TDS from being zeroed out when
-      // config.taxType is "percentage" but the employee is configured for slab-based TDS.
-      const effectiveTaxType = (employee.salary?.tdsMode === "slab" || config?.taxType === "slab")
-        ? "slab"
-        : (config?.taxType || "percentage");
+      // Use central tax engine for slab, percentage, fixed
       tax = computeMonthlyTDSFromEmployee(
         { ...employee.salary },
-        effectiveTaxType,
+        config?.taxType || "percentage",
         config?.taxValue ?? 5
       );
     }
