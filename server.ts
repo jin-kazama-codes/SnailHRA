@@ -2047,6 +2047,16 @@ async function startServer() {
       tax = 0;
     } else if (employee.salary?.tdsMode === "custom" && typeof employee.salary.tdsDeduction === "number" && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
+    } else if (payrollConfig?.taxType === "slab") {
+      if (grossEarnings <= 25000) {
+        tax = 0;
+      } else {
+        let t = 0;
+        if (grossEarnings > 25000) t += Math.min(grossEarnings - 25000, 25000) * 0.10;
+        if (grossEarnings > 50000) t += Math.min(grossEarnings - 50000, 33333) * 0.20;
+        if (grossEarnings > 83333) t += (grossEarnings - 83333) * 0.30;
+        tax = Math.round(t);
+      }
     } else {
       const taxRate = payrollConfig?.taxValue ?? 5;
       tax = (payrollConfig?.taxType === "fixed")

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig, ChecklistItemTemplate } from "../types";
 import ChecklistCard from "./ChecklistCard";
+import { computeIncomeTax } from "./PayrollView";
 
 const isValidPAN = (p: string) => !p.trim() || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(p.trim().toUpperCase());
 const isValidUAN = (u: string) => !u.trim() || /^[0-9]{12}$/.test(u.trim());
@@ -617,9 +618,9 @@ export default function DirectoryView({
           ? Math.round(basicVal * (cfg.pfValue / 100))
           : cfg.pfValue));
 
-    const tax = cfg.taxType === "percentage"
-      ? Math.round(gross * (cfg.taxValue / 100))
-      : cfg.taxValue;
+    const tax = cfg.taxType === "slab"
+      ? (gross <= 25000 ? 0 : Math.round((gross > 25000 ? Math.min(gross - 25000, 25000) * 0.10 : 0) + (gross > 50000 ? Math.min(gross - 50000, 33333) * 0.20 : 0) + (gross > 83333 ? (gross - 83333) * 0.30 : 0)))
+      : (cfg.taxType === "fixed" ? cfg.taxValue : Math.round(gross * (cfg.taxValue / 100)));
 
     const esiGrossCeiling = cfg.esiGrossCeiling ?? 21000;
     const esiRate = cfg.esiRatePercentage ?? 0.75;
@@ -959,7 +960,9 @@ export default function DirectoryView({
             ? Math.round(grossVal * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
             : 0;
           const tdsVal = onboardPayrollConfig
-            ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(grossVal * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
+            ? (onboardPayrollConfig.taxType === "slab"
+                ? (grossVal <= 25000 ? 0 : Math.round((grossVal > 25000 ? Math.min(grossVal - 25000, 25000) * 0.10 : 0) + (grossVal > 50000 ? Math.min(grossVal - 50000, 33333) * 0.20 : 0) + (grossVal > 83333 ? (grossVal - 83333) * 0.30 : 0)))
+                : (onboardPayrollConfig.taxType === "fixed" ? onboardPayrollConfig.taxValue : Math.round(grossVal * (onboardPayrollConfig.taxValue / 100))))
             : Math.round(grossVal * 0.05);
 
           return {
@@ -3255,7 +3258,7 @@ export default function DirectoryView({
                                   ? Math.round(gross * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
                                   : 0;
                                 const tax = onboardPayrollConfig
-                                  ? (onboardPayrollConfig.taxType === "percentage" ? Math.round(gross * (onboardPayrollConfig.taxValue / 100)) : onboardPayrollConfig.taxValue)
+                                  ? computeIncomeTax(gross, onboardPayrollConfig.taxType, onboardPayrollConfig.taxValue)
                                   : Math.round(gross * 0.05);
                                 const net = Math.max(0, gross - pf - tax - esi);
 

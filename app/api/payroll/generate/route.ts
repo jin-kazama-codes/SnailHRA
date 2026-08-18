@@ -275,6 +275,16 @@ export async function POST(request: Request) {
       tax = 0;
     } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
+    } else if (config?.taxType === "slab") {
+      if (gross <= 25000) {
+        tax = 0;
+      } else {
+        let t = 0;
+        if (gross > 25000) t += Math.min(gross - 25000, 25000) * 0.10;
+        if (gross > 50000) t += Math.min(gross - 50000, 33333) * 0.20;
+        if (gross > 83333) t += (gross - 83333) * 0.30;
+        tax = Math.round(t);
+      }
     } else {
       const taxRate = config?.taxValue ?? 5;
       tax = (config?.taxType === "fixed")

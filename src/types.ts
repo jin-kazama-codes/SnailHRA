@@ -301,7 +301,7 @@ export interface PayrollConfig {
   pfExemptEmployeeIds: string[];
   allowancesType: "percentage" | "fixed";
   allowancesValue: number;
-  taxType: "percentage" | "fixed";
+  taxType: "percentage" | "fixed" | "slab";
   taxValue: number;
   tdsOptInDefault?: boolean;
   tdsModeDefault?: "slab" | "custom";

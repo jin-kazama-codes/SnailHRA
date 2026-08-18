@@ -131,7 +131,7 @@ export async function POST(request: Request) {
       allowancesType: body.allowancesType || "percentage",
       allowancesValue: Number(body.allowancesValue) ?? 20,
       taxType: body.taxType || "percentage",
-      taxValue: Number(body.taxValue) ?? 5,
+      taxValue: Number(body.taxValue) || 0,
       tdsOptInDefault: body.tdsOptInDefault !== false,
       tdsModeDefault: body.tdsModeDefault || "slab",
       esiEnabled: body.esiEnabled !== false,

@@ -28,6 +28,36 @@ interface PayrollViewProps {
   empCodePrefix?: string; // e.g. "MGMDIR" — set by admin in System Settings
 }
 
+export function computeIncomeTax(gross: number, taxType: "percentage" | "fixed" | "slab" | string | undefined, taxValue: number | undefined): number {
+  if (taxType === "fixed") {
+    return taxValue ?? 0;
+  }
+  if (taxType === "slab") {
+    // 0%, 10%, 20%, 30% progressive tax slabs
+    // Up to 25,000 / mo (3L): 0%
+    // 25,001 to 50,000 / mo (3L to 6L): 10%
+    // 50,001 to 83,333 / mo (6L to 10L): 20%
+    // Above 83,333 / mo (Above 10L): 30%
+    if (gross <= 25000) return 0;
+    let tax = 0;
+    if (gross > 25000) {
+      const slab10 = Math.min(gross - 25000, 25000);
+      tax += slab10 * 0.10;
+    }
+    if (gross > 50000) {
+      const slab20 = Math.min(gross - 50000, 33333);
+      tax += slab20 * 0.20;
+    }
+    if (gross > 83333) {
+      const slab30 = gross - 83333;
+      tax += slab30 * 0.30;
+    }
+    return Math.round(tax);
+  }
+  // percentage
+  return Math.round(gross * ((taxValue ?? 5) / 100));
+}
+
 export default function PayrollView({
   employees,
   designations,
@@ -730,9 +760,7 @@ export default function PayrollView({
                           ? 0
                           : (emp.salary?.tdsMode === "custom" && emp.salary?.tdsDeduction !== undefined && emp.salary?.tdsDeduction > 0)
                             ? emp.salary.tdsDeduction
-                            : (config?.taxType === "fixed"
-                                ? (config?.taxValue ?? 0)
-                                : Math.round(grossEarnings * ((config?.taxValue ?? 5) / 100)));
+                            : computeIncomeTax(grossEarnings, config?.taxType || "percentage", config?.taxValue ?? 5);
 
                         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
                           (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
@@ -1326,7 +1354,7 @@ export default function PayrollView({
 
                 {/* Tax / TDS Setting */}
                 <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/50 p-4 rounded-xl border border-slate-100 dark:border-[#1a1a1a] space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <p className="font-bold text-slate-700 dark:text-gray-200 text-xs">Income Tax (TDS) Default Rules</p>
                       <p className="text-[11px] text-slate-400">Flexibility: Employees can opt in/out or set manual TDS</p>
@@ -1347,25 +1375,70 @@ export default function PayrollView({
                       >
                         ₹ Fixed
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, taxType: "slab" }))}
+                        className={`px-3 py-1 rounded-md transition-all ${config.taxType === "slab" ? "bg-rose-600 text-white shadow-xs font-bold" : "text-slate-500"}`}
+                      >
+                        Tax Slabs
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-3 pt-1">
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        value={config.taxValue}
-                        onChange={e => setConfig(prev => ({ ...prev, taxValue: Number(e.target.value) || 0 }))}
-                        className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-rose-500"
-                      />
-                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
-                        {config.taxType === "percentage" ? "%" : "₹"}
-                      </span>
+                  {config.taxType === "slab" ? (
+                    <div className="pt-2 space-y-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400">
+                            0% (NIL)
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Up to ₹25,000</p>
+                          <p className="text-[9px] text-slate-400">Annual: Up to ₹3L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400">
+                            10%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹25,001 - ₹50,000</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹3L - ₹6L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400">
+                            20%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">₹50,001 - ₹83,333</p>
+                          <p className="text-[9px] text-slate-400">Annual: ₹6L - ₹10L</p>
+                        </div>
+                        <div className="bg-white dark:bg-[#141414] border border-slate-200/80 dark:border-[#222] rounded-xl p-2.5 text-center">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400">
+                            30%
+                          </span>
+                          <p className="text-[11px] font-bold text-slate-700 dark:text-gray-200 mt-1.5 font-mono">Above ₹83,333</p>
+                          <p className="text-[9px] text-slate-400">Annual: Above ₹10L</p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-gray-400 italic">
+                        Progressive Tax Slabs (0%, 10%, 20%, 30%) auto-applied dynamically based on monthly gross earnings.
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-400">
-                      {config.taxType === "percentage" ? `Tax = ${config.taxValue}% of Gross Pay` : `Fixed ₹${config.taxValue.toLocaleString()} per month`}
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="flex items-center space-x-3 pt-1">
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          value={config.taxValue}
+                          onChange={e => setConfig(prev => ({ ...prev, taxValue: Number(e.target.value) || 0 }))}
+                          className="w-full bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#1a1a1a] rounded-xl px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-gray-200 focus:outline-none focus:border-rose-500"
+                        />
+                        <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">
+                          {config.taxType === "percentage" ? "%" : "₹"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {config.taxType === "percentage" ? `Tax = ${config.taxValue}% of Gross Pay` : `Fixed ₹${config.taxValue.toLocaleString()} per month`}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1615,7 +1688,7 @@ export default function PayrollView({
                   const isExempt = (config.pfExemptEmployeeIds || []).includes(simEmp.id);
                   const isEsiSimExempt = (config.esiExemptEmployeeIds || []).includes(simEmp.id);
                   const pf = isExempt ? 0 : (config.pfModeDefault === "fixed_1800" ? 1800 : (config.pfType === "percentage" ? Math.round(basic * (config.pfValue / 100)) : config.pfValue));
-                  const tax = config.taxType === "percentage" ? Math.round(gross * (config.taxValue / 100)) : config.taxValue;
+                  const tax = computeIncomeTax(gross, config.taxType, config.taxValue);
                   const esiGrossCeiling = config.esiGrossCeiling ?? 21000;
                   const esi = (config.esiEnabled !== false && !isEsiSimExempt && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling)) ? Math.round(gross * ((config.esiRatePercentage || 0.75) / 100)) : 0;
                   const net = Math.max(0, gross - pf - tax - esi);
@@ -1690,7 +1763,7 @@ export default function PayrollView({
                         </div>
 
                         <div className="flex justify-between text-slate-600 dark:text-gray-300">
-                          <span>- Tax / TDS ({config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
+                          <span>- Tax / TDS ({config.taxType === "slab" ? "Slabs: 0%, 10%, 20%, 30%" : config.taxType === "percentage" ? `${config.taxValue}%` : "Fixed"})</span>
                           <span className="font-mono font-semibold text-rose-600 dark:text-rose-400">₹{tax.toLocaleString()}</span>
                         </div>
 
