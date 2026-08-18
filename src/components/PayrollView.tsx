@@ -363,24 +363,53 @@ export default function PayrollView({
     return str.trim();
   };
 
-  // Pagination & Search state for Payroll Center list (9 items per page)
+  // Pagination & Search state for Payroll Center list (15 items per page)
   const [currentPage, setCurrentPage] = useState(1);
   const [nameSearchQuery, setNameSearchQuery] = useState("");
-  const ITEMS_PER_PAGE = 9;
+  const ITEMS_PER_PAGE = 15;
 
   React.useEffect(() => {
     setCurrentPage(1);
   }, [nameSearchQuery]);
 
   const filteredEmployees = React.useMemo(() => {
-    if (!nameSearchQuery || nameSearchQuery.trim() === "") return employees;
-    const q = nameSearchQuery.trim().toLowerCase();
-    return employees.filter(emp => {
-      const name = (emp.fullName || "").toLowerCase();
-      const code = (emp.code || emp.id || "").toLowerCase();
-      const dept = (emp.department || "").toLowerCase();
-      const email = (emp.email || "").toLowerCase();
-      return name.includes(q) || code.includes(q) || dept.includes(q) || email.includes(q);
+    let list = employees;
+    if (nameSearchQuery && nameSearchQuery.trim() !== "") {
+      const q = nameSearchQuery.trim().toLowerCase();
+      list = list.filter(emp => {
+        const name = (emp.fullName || "").toLowerCase();
+        const code = (emp.code || emp.id || "").toLowerCase();
+        const dept = (emp.department || "").toLowerCase();
+        const email = (emp.email || "").toLowerCase();
+        return name.includes(q) || code.includes(q) || dept.includes(q) || email.includes(q);
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      // 1. If createdAt is present, sort latest date first
+      const aCreated = (a as any).createdAt || (a as any).created_at;
+      const bCreated = (b as any).createdAt || (b as any).created_at;
+      if (aCreated && bCreated) {
+        const diff = new Date(bCreated).getTime() - new Date(aCreated).getTime();
+        if (diff !== 0) return diff;
+      }
+      // 2. If employeeNumber is present, highest number first
+      if (a.employeeNumber && b.employeeNumber) {
+        const diff = b.employeeNumber - a.employeeNumber;
+        if (diff !== 0) return diff;
+      }
+      // 3. Numeric code/id extraction (e.g. EMP-2126 vs EMP-2112)
+      const numA = parseInt((a.code || a.id || "").replace(/\D/g, ""), 10) || 0;
+      const numB = parseInt((b.code || b.id || "").replace(/\D/g, ""), 10) || 0;
+      if (numA !== numB && numA > 0 && numB > 0) {
+        return numB - numA;
+      }
+      // 4. Joining Date latest first
+      if (a.joiningDate && b.joiningDate) {
+        const diff = new Date(b.joiningDate).getTime() - new Date(a.joiningDate).getTime();
+        if (diff !== 0) return diff;
+      }
+      return 0;
     });
   }, [employees, nameSearchQuery]);
 
@@ -459,11 +488,11 @@ export default function PayrollView({
     return {
       basic,
       hra: configHra,
-      telephone: emp.salary?.telephone || configTel,
-      fuel: emp.salary?.fuel || configFuel,
-      professionalDev: emp.salary?.professionalDev || configProfDev,
-      lta: emp.salary?.lta || configLta,
-      allowances: emp.salary?.allowances || configSpAllow,
+      telephone: configTel,
+      fuel: configFuel,
+      professionalDev: configProfDev,
+      lta: configLta,
+      allowances: configSpAllow,
       pfDeduction: emp.salary?.pfDeduction || 0,
       tdsDeduction: emp.salary?.tdsDeduction || 0,
     };
@@ -683,14 +712,14 @@ export default function PayrollView({
                           emp.salary?.pfMode === "exempt";
                         let pfDeduction = 0;
                         if (!isPfExempt) {
-                          if (emp.salary?.pfMode === "fixed_1800") {
+                          if (emp.salary?.pfMode === "fixed_1800" || config?.pfModeDefault === "fixed_1800") {
                             pfDeduction = 1800;
-                          } else if (emp.salary?.pfMode === "custom" && emp.salary?.pfDeduction !== undefined) {
+                          } else if (emp.salary?.pfMode === "custom" && emp.salary?.pfDeduction !== undefined && emp.salary?.pfDeduction > 0) {
                             pfDeduction = emp.salary.pfDeduction;
                           } else {
-                            pfDeduction = (emp.salary?.pfDeduction !== undefined && emp.salary?.pfDeduction > 0)
-                              ? emp.salary.pfDeduction
-                              : Math.round(sal.basic * ((config?.pfValue || 12) / 100));
+                            pfDeduction = (config?.pfType === "fixed")
+                              ? (config?.pfValue ?? 1800)
+                              : Math.round(sal.basic * ((config?.pfValue ?? 12) / 100));
                           }
                         }
                         const empPendingFines = (fines || [])
@@ -710,12 +739,12 @@ export default function PayrollView({
                           emp.salary?.esiOptIn === false;
                         let esiEst = 0;
                         if (config?.esiEnabled !== false && !isEsiExempt) {
-                          if (emp.salary?.esiDeduction && emp.salary.esiDeduction > 0) {
+                          if (emp.salary?.esiMode === "custom" && emp.salary?.esiDeduction !== undefined && emp.salary.esiDeduction > 0) {
                             esiEst = emp.salary.esiDeduction;
                           } else {
                             const esiCeiling = config?.esiGrossCeiling ?? 21000;
                             if (esiCeiling <= 0 || grossEarnings <= esiCeiling) {
-                              esiEst = Math.round(grossEarnings * ((config?.esiRatePercentage || 0.75) / 100));
+                              esiEst = Math.round(grossEarnings * ((config?.esiRatePercentage ?? 0.75) / 100));
                             }
                           }
                         }

@@ -128,12 +128,18 @@ export async function POST(request: Request) {
 
       if (dbClient) {
         try {
-          await dbClient.from("payroll_configurations").upsert({
-            company_id: resolvedCompanyId,
-            pf_exempt_employee_ids: pfExempts,
-            esi_exempt_employee_ids: esiExempts,
-            updated_at: new Date().toISOString()
-          }, { onConflict: "company_id" });
+          const { error: updateErr } = await dbClient
+            .from("payroll_configurations")
+            .update({
+              pf_exempt_employee_ids: pfExempts,
+              esi_exempt_employee_ids: esiExempts,
+              updated_at: new Date().toISOString()
+            })
+            .eq("company_id", resolvedCompanyId);
+
+          if (updateErr) {
+            console.warn("Failed to update tenant exemption config on employee onboard:", updateErr);
+          }
         } catch (cfgErr) {
           console.warn("Failed to sync tenant exemption config on employee onboard:", cfgErr);
         }

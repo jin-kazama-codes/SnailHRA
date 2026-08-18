@@ -2021,14 +2021,25 @@ async function startServer() {
     const lta = employee.salary.lta || 0;
     const allowances = employee.salary.allowances;
     const grossEarnings = basic + hra + telephone + fuel + professionalDev + lta + allowances;
-    const pf = employee.salary.pfDeduction || Math.round(basic * 0.08);
-    
+
     // Find pending fines for this employee to deduct
     const pendingFines = db.fines.filter(f => f.employeeId === employeeId && f.status === "Pending");
     const finesDeduction = pendingFines.reduce((sum, f) => sum + f.amount, 0);
 
     const reqCompanyId = req.body.companyId || employee.companyId || MGM_COMPANY_ID;
     const payrollConfig = db.payrollConfigs?.[reqCompanyId] || db.payrollConfig;
+
+    const isPfExempt = (payrollConfig?.pfExemptEmployeeIds || []).includes(employeeId) || employee.salary?.pfMode === "exempt";
+    let pf = 0;
+    if (isPfExempt) {
+      pf = 0;
+    } else if (employee.salary?.pfMode === "fixed_1800" || payrollConfig?.pfModeDefault === "fixed_1800") {
+      pf = 1800;
+    } else if (employee.salary?.pfMode === "custom" && typeof employee.salary.pfDeduction === "number" && employee.salary.pfDeduction > 0) {
+      pf = employee.salary.pfDeduction;
+    } else {
+      pf = Math.round(basic * ((payrollConfig?.pfValue ?? 12) / 100));
+    }
 
     // Use configured TDS/Profession Tax if available, otherwise calculate from config
     let tax = 0;
@@ -2050,7 +2061,7 @@ async function startServer() {
     const isEsiExempt = (payrollConfig?.esiExemptEmployeeIds || []).includes(employeeId);
     let esiDeduction = 0;
     if (esiEnabled && !isEsiExempt && employee.salary.esiOptIn !== false) {
-      if (typeof employee.salary.esiDeduction === "number" && employee.salary.esiDeduction > 0) {
+      if (employee.salary?.esiMode === "custom" && typeof employee.salary.esiDeduction === "number" && employee.salary.esiDeduction > 0) {
         // Use the custom ESI amount stored on the employee
         esiDeduction = employee.salary.esiDeduction;
       } else if (esiGrossCeiling <= 0 || grossEarnings <= esiGrossCeiling) {
