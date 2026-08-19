@@ -214,13 +214,6 @@ export async function POST(request: Request) {
       ? Math.round(basic * (config.hraValue / 100))
       : config.hraValue;
 
-    // For each allowance component: use employee's individually-set value first (from "Adjust Allowances" modal save),
-    // if not set fall back to the tenant config formula (same as the Live Salary Simulator)
-    const storedTel = Number(employee.salary?.telephone);
-    const storedFuel = Number(employee.salary?.fuel);
-    const storedProfDev = Number(employee.salary?.professionalDev);
-    const storedLta = Number(employee.salary?.lta);
-
     const configTelephone = config.telephoneType === "percentage"
       ? Math.round(basic * ((config.telephoneValue || 0) / 100))
       : (config.telephoneValue || 0);
@@ -234,13 +227,24 @@ export async function POST(request: Request) {
       ? Math.round(basic * ((config.ltaValue || 0) / 100))
       : (config.ltaValue || 0);
 
-    const telephone = configTelephone;
-    const fuel = configFuel;
-    const professionalDev = configProfDev;
-    const lta = configLta;
-    const allowances = config.allowancesType === "percentage"
+    const telephone = (employee.salary?.telephone !== undefined && employee.salary?.telephone !== null)
+      ? Number(employee.salary.telephone)
+      : configTelephone;
+    const fuel = (employee.salary?.fuel !== undefined && employee.salary?.fuel !== null)
+      ? Number(employee.salary.fuel)
+      : configFuel;
+    const professionalDev = (employee.salary?.professionalDev !== undefined && employee.salary?.professionalDev !== null)
+      ? Number(employee.salary.professionalDev)
+      : configProfDev;
+    const lta = (employee.salary?.lta !== undefined && employee.salary?.lta !== null)
+      ? Number(employee.salary.lta)
+      : configLta;
+    const configAllowances = config.allowancesType === "percentage"
       ? Math.round(basic * (config.allowancesValue / 100))
       : config.allowancesValue;
+    const allowances = (employee.salary?.allowances !== undefined && employee.salary?.allowances !== null)
+      ? Number(employee.salary.allowances)
+      : configAllowances;
 
     const gross = basic + hra + telephone + fuel + professionalDev + lta + allowances;
 
@@ -277,9 +281,20 @@ export async function POST(request: Request) {
     } else if (employee.salary?.tdsMode === "custom" && employee.salary.tdsDeduction !== undefined && employee.salary.tdsDeduction > 0) {
       tax = employee.salary.tdsDeduction;
     } else {
-      // Use central tax engine for slab, percentage, fixed
+      // Use central tax engine with the RESOLVED salary components (employee overrides applied)
+      // so TDS is computed against the actual gross used in this payslip, not stale stored values
       tax = computeMonthlyTDSFromEmployee(
-        { ...employee.salary },
+        {
+          ...employee.salary,
+          basic,
+          hra,
+          telephone,
+          fuel,
+          professionalDev,
+          lta,
+          allowances,
+          pfDeduction: pf,
+        },
         config?.taxType || "percentage",
         config?.taxValue ?? 5
       );

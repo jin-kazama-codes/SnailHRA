@@ -132,13 +132,13 @@ export default function PayrollView({
       ? Math.round(basic * ((config.allowancesValue || 0) / 100))
       : (config?.allowancesValue || 0);
 
-    // Use config-derived value when a config rule is set (matches what the table shows).
-    // Only fall back to stored employee value if no config formula is defined.
-    setEditTel(configTel ? String(configTel) : (emp.salary?.telephone ? String(emp.salary.telephone) : ""));
-    setEditFuel(configFuel ? String(configFuel) : (emp.salary?.fuel ? String(emp.salary.fuel) : ""));
-    setEditProfDev(configProfDev ? String(configProfDev) : (emp.salary?.professionalDev ? String(emp.salary.professionalDev) : ""));
-    setEditLta(configLta ? String(configLta) : (emp.salary?.lta ? String(emp.salary.lta) : ""));
-    setEditSpAllow(configSpAllow ? String(configSpAllow) : (emp.salary?.allowances ? String(emp.salary.allowances) : ""));
+    // Prefer the employee's saved value (set via a previous "Save & Update") over the
+    // config-derived default. Fall back to config only when no employee-specific value exists.
+    setEditTel(emp.salary?.telephone !== undefined ? String(emp.salary.telephone) : String(configTel));
+    setEditFuel(emp.salary?.fuel !== undefined ? String(emp.salary.fuel) : String(configFuel));
+    setEditProfDev(emp.salary?.professionalDev !== undefined ? String(emp.salary.professionalDev) : String(configProfDev));
+    setEditLta(emp.salary?.lta !== undefined ? String(emp.salary.lta) : String(configLta));
+    setEditSpAllow(emp.salary?.allowances !== undefined ? String(emp.salary.allowances) : String(configSpAllow));
     const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(emp.id) ||
                        (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
                        emp.salary?.pfMode === "exempt";
@@ -522,14 +522,23 @@ export default function PayrollView({
     const configSpAllow = config?.allowancesType === "percentage"
       ? Math.round(basic * ((config.allowancesValue || 0) / 100))
       : (config?.allowancesValue || 0);
+
+    // Prefer employee-specific saved values (set via "Adjust Allowances" modal) over
+    // the global config-derived defaults. emp.salary.telephone etc. are set on Save & Update.
+    const telephone = emp.salary?.telephone !== undefined ? emp.salary.telephone : configTel;
+    const fuel = emp.salary?.fuel !== undefined ? emp.salary.fuel : configFuel;
+    const professionalDev = emp.salary?.professionalDev !== undefined ? emp.salary.professionalDev : configProfDev;
+    const lta = emp.salary?.lta !== undefined ? emp.salary.lta : configLta;
+    const allowances = emp.salary?.allowances !== undefined ? emp.salary.allowances : configSpAllow;
+
     return {
       basic,
       hra: configHra,
-      telephone: configTel,
-      fuel: configFuel,
-      professionalDev: configProfDev,
-      lta: configLta,
-      allowances: configSpAllow,
+      telephone,
+      fuel,
+      professionalDev,
+      lta,
+      allowances,
       pfDeduction: emp.salary?.pfDeduction || 0,
       tdsDeduction: emp.salary?.tdsDeduction || 0,
     };
