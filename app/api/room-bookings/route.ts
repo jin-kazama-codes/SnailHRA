@@ -26,9 +26,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const db = loadDatabase();
 
+    const companyId = body.companyId || body.company_id || "";
     const booking: RoomBooking = {
-      id: body.id || `booking-${Date.now()}`,
-      companyId: body.companyId || "",
+      id: body.id || `booking-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      companyId: companyId,
       roomId: body.roomId || "",
       roomName: body.roomName || "",
       requestedBy: body.requestedBy || "",

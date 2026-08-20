@@ -2029,10 +2029,11 @@ export default function App() {
   const handleSaveSeatLayout = async (layout: SeatLayout): Promise<boolean> => {
     try {
       const changer = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
+      const resolvedCompanyId = layout.companyId || companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
       const res = await fetch("/api/seating", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...layout, updatedBy: changer })
+        body: JSON.stringify({ ...layout, companyId: resolvedCompanyId, updatedBy: changer })
       });
       if (res.ok) {
         const resData = await res.json();
@@ -2070,10 +2071,11 @@ export default function App() {
   // Workspace: Save room
   const handleSaveRoom = async (room: Room): Promise<boolean> => {
     try {
+      const resolvedCompanyId = room.companyId || companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(room)
+        body: JSON.stringify({ ...room, companyId: resolvedCompanyId })
       });
       if (res.ok) {
         const resData = await res.json();
@@ -2111,10 +2113,11 @@ export default function App() {
   // Workspace: Request room booking
   const handleBookRoom = async (bookingData: any): Promise<boolean> => {
     try {
+      const resolvedCompanyId = bookingData.companyId || companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
       const res = await fetch("/api/room-bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bookingData)
+        body: JSON.stringify({ ...bookingData, companyId: resolvedCompanyId })
       });
       if (res.ok) {
         const resData = await res.json();

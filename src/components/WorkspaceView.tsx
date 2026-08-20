@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Map, DoorOpen, Plus, Trash2, Edit3, Save, X, Check, Clock,
   Users, Wifi, Monitor, Presentation, ChevronDown, Search,
@@ -43,21 +43,14 @@ const AMENITY_ICONS: Record<string, React.ReactNode> = {
   "Whiteboard": <Presentation className="w-3.5 h-3.5" />,
   "Video Conferencing": <Monitor className="w-3.5 h-3.5" />,
   "WiFi": <Wifi className="w-3.5 h-3.5" />,
-  "Coffee": <Coffee className="w-3.5 h-3.5" />,
-  "AC": <Zap className="w-3.5 h-3.5" />,
-  "Monitor": <Monitor className="w-3.5 h-3.5" />,
-  "Presentation": <Presentation className="w-3.5 h-3.5" />,
-  "Wifi": <Wifi className="w-3.5 h-3.5" />,
-  "Tv": <Tv className="w-3.5 h-3.5" />,
-  "Cable": <Cable className="w-3.5 h-3.5" />,
-  "Cpu": <Cpu className="w-3.5 h-3.5" />,
-  "Volume": <Volume2 className="w-3.5 h-3.5" />,
-  "Shield": <Shield className="w-3.5 h-3.5" />,
-  "Star": <Star className="w-3.5 h-3.5" />,
-  "Snowflake": <Snowflake className="w-3.5 h-3.5" />,
-  "Phone": <Phone className="w-3.5 h-3.5" />,
-  "Lightbulb": <Lightbulb className="w-3.5 h-3.5" />,
-  "Mic": <Mic className="w-3.5 h-3.5" />,
+  "TV / Display": <Tv className="w-3.5 h-3.5" />,
+  "HDMI Cables": <Cable className="w-3.5 h-3.5" />,
+  "Speakerphone": <Volume2 className="w-3.5 h-3.5" />,
+  "Coffee Machine": <Coffee className="w-3.5 h-3.5" />,
+  "Air Conditioning": <Snowflake className="w-3.5 h-3.5" />,
+  "Microphone": <Mic className="w-3.5 h-3.5" />,
+  "Conference Phone": <Phone className="w-3.5 h-3.5" />,
+  "Smart Board": <Presentation className="w-3.5 h-3.5" />,
 };
 
 const ALL_AMENITIES = ["Projector", "Whiteboard", "Video Conferencing", "WiFi", "Coffee", "AC"];
@@ -65,34 +58,69 @@ const ALL_AMENITIES = ["Projector", "Whiteboard", "Video Conferencing", "WiFi", 
 // ─── Section Colors ────────────────────────────────────────────────────────────
 
 const SECTION_COLORS = [
-  { label: "Emerald", value: "#10b981", dark: "#064e3b" },
-  { label: "Sky", value: "#0ea5e9", dark: "#0c4a6e" },
-  { label: "Purple", value: "#a855f7", dark: "#3b0764" },
-  { label: "Rose", value: "#f43f5e", dark: "#4c0519" },
-  { label: "Amber", value: "#f59e0b", dark: "#451a03" },
-  { label: "Indigo", value: "#6366f1", dark: "#1e1b4b" },
-  { label: "Teal", value: "#14b8a6", dark: "#042f2e" },
-  { label: "Orange", value: "#f97316", dark: "#431407" },
+  { label: "Emerald", value: "#10b981" },
+  { label: "Sky Blue", value: "#0ea5e9" },
+  { label: "Purple", value: "#a855f7" },
+  { label: "Amber", value: "#f59e0b" },
+  { label: "Rose", value: "#f43f5e" },
+  { label: "Indigo", value: "#6366f1" },
+  { label: "Teal", value: "#14b8a6" },
+  { label: "Slate", value: "#64748b" },
 ];
 
 // ─── Seat Chair SVG ───────────────────────────────────────────────────────────
 
-function ChairIcon({ color, size = 36 }: { color: string; size?: number }) {
+function ChairIcon({ color = "#6b7280", size = 40 }: { color?: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* backrest */}
-      <rect x="8" y="4" width="24" height="14" rx="4" fill={color} />
+      <rect x="8" y="4" width="24" height="14" rx="4" fill={color} opacity="0.9" />
       {/* seat */}
       <rect x="6" y="18" width="28" height="12" rx="3" fill={color} opacity="0.85" />
       {/* legs */}
       <rect x="10" y="30" width="4" height="8" rx="2" fill={color} opacity="0.6" />
       <rect x="26" y="30" width="4" height="8" rx="2" fill={color} opacity="0.6" />
-      <rect x="8" y="17" width="24" height="4" rx="2" fill={color} opacity="0.5" />
     </svg>
   );
 }
 
 // ─── DEFAULT LAYOUT BUILDER ───────────────────────────────────────────────────
+
+// ─── DEFAULT & CUSTOM LAYOUT BUILDERS ───────────────────────────────────────────
+
+function buildBlankLayout(
+  companyId: string,
+  name: string,
+  initialSectionName: string = "General Workspace",
+  initialDesksCount: number = 8,
+  initialColor: string = "#10b981"
+): SeatLayout {
+  const secId = `sec-${Date.now()}`;
+  const sections: SeatSection[] = initialSectionName.trim()
+    ? [{ id: secId, name: initialSectionName.trim(), color: initialColor }]
+    : [];
+
+  const seats: Seat[] = [];
+  for (let i = 1; i <= initialDesksCount; i++) {
+    seats.push({
+      id: `seat-${Date.now()}-${i}`,
+      seatNumber: String(i),
+      sectionId: secId,
+      x: (i - 1) % 6,
+      y: Math.floor((i - 1) / 6),
+      type: "desk",
+    });
+  }
+
+  return {
+    id: `layout-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    companyId,
+    name: name.trim() || "Main Office Layout",
+    sections,
+    seats,
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 function buildDefaultLayout(companyId: string, companyName: string): SeatLayout {
   const sections: SeatSection[] = [
@@ -148,9 +176,9 @@ function buildDefaultLayout(companyId: string, companyName: string): SeatLayout 
   }
 
   return {
-    id: `layout-default-${companyId}`,
+    id: `layout-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     companyId,
-    name: `${companyName} — Main Office`,
+    name: companyName ? `${companyName}` : "Main Office",
     sections,
     seats,
     updatedAt: new Date().toISOString(),
@@ -165,25 +193,48 @@ function SeatingPlan({
 }: Pick<WorkspaceViewProps, "role"|"companyId"|"companyName"|"employees"|"currentEmployeeId"|"seatLayouts"|"onSaveSeatLayout"|"onDeleteSeatLayout">) {
 
   const canEdit = role === "admin" || role === "hr";
+  const currentEmployee = employees.find(e => e.id === currentEmployeeId);
+  const effectiveCompanyId = companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "");
 
-  // Use first layout if available, else show empty state
-  const companyLayouts = seatLayouts.filter(l => l.companyId === companyId);
+  // Use layouts for this company
+  const companyLayouts = seatLayouts.filter(l => !effectiveCompanyId || l.companyId === effectiveCompanyId);
   const effectiveLayouts = companyLayouts.length > 0 ? companyLayouts : [];
 
   const [selectedLayoutId, setSelectedLayoutId] = useState<string>(effectiveLayouts[0]?.id || "");
-  const activeLayout = effectiveLayouts.find(l => l.id === selectedLayoutId) || null;
+
+  useEffect(() => {
+    if (effectiveLayouts.length > 0) {
+      if (!selectedLayoutId || !effectiveLayouts.some(l => l.id === selectedLayoutId)) {
+        setSelectedLayoutId(effectiveLayouts[0].id);
+      }
+    }
+  }, [effectiveLayouts, selectedLayoutId]);
+
+  const activeLayout = effectiveLayouts.find(l => l.id === selectedLayoutId) || effectiveLayouts[0] || null;
 
   const [editMode, setEditMode] = useState(false);
   const [draftLayout, setDraftLayout] = useState<SeatLayout | null>(null);
   const [saving, setSaving] = useState(false);
-  const [assignModal, setAssignModal] = useState<{ seat: Seat } | null>(null);
+  
+  // Modals
   const [addSectionModal, setAddSectionModal] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [newSectionColor, setNewSectionColor] = useState(SECTION_COLORS[0].value);
-  const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [newSectionDesks, setNewSectionDesks] = useState(6);
+
+  const [editSectionModal, setEditSectionModal] = useState<SeatSection | null>(null);
+  const [editSectionName, setEditSectionName] = useState("");
+  const [editSectionColor, setEditSectionColor] = useState(SECTION_COLORS[0].value);
+
+  const [selectedSeatModal, setSelectedSeatModal] = useState<{ seat: Seat; isViewingOnly?: boolean } | null>(null);
   const [showNewLayoutModal, setShowNewLayoutModal] = useState(false);
-  const [newLayoutName, setNewLayoutName] = useState("");
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renamedLayoutName, setRenamedLayoutName] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterAvailability, setFilterAvailability] = useState<"all" | "available" | "occupied" | "my">("all");
+  const [filterSectionId, setFilterSectionId] = useState<string>("all");
+  const [hoveredSeat, setHoveredSeat] = useState<string | null>(null);
 
   const layout = editMode && draftLayout ? draftLayout : activeLayout;
 
@@ -201,7 +252,8 @@ function SeatingPlan({
   const saveLayout = async () => {
     if (!draftLayout) return;
     setSaving(true);
-    const ok = await onSaveSeatLayout(draftLayout);
+    const resolvedCompanyId = draftLayout.companyId || effectiveCompanyId || companyId || "";
+    const ok = await onSaveSeatLayout({ ...draftLayout, companyId: resolvedCompanyId });
     if (ok) {
       setEditMode(false);
       setDraftLayout(null);
@@ -209,81 +261,215 @@ function SeatingPlan({
     setSaving(false);
   };
 
-  const createNewLayout = async () => {
-    if (!newLayoutName.trim()) return;
-    const newLayout = buildDefaultLayout(companyId, newLayoutName.trim());
-    newLayout.name = newLayoutName.trim();
+  const createNewLayout = async (
+    name: string,
+    mode: "blank" | "custom" | "template",
+    customSectionName?: string,
+    customDesks?: number,
+    customColor?: string
+  ) => {
+    if (!name.trim()) return;
+    const resolvedCompanyId = effectiveCompanyId || companyId || "";
+    let newLayout: SeatLayout;
+
+    if (mode === "template") {
+      newLayout = buildDefaultLayout(resolvedCompanyId, name.trim());
+    } else if (mode === "custom") {
+      newLayout = buildBlankLayout(
+        resolvedCompanyId,
+        name.trim(),
+        customSectionName || "General Workspace",
+        customDesks || 8,
+        customColor || "#10b981"
+      );
+    } else {
+      // blank
+      newLayout = buildBlankLayout(resolvedCompanyId, name.trim(), "", 0);
+    }
+
     setSaving(true);
     const ok = await onSaveSeatLayout(newLayout);
     if (ok) {
       setSelectedLayoutId(newLayout.id);
       setShowNewLayoutModal(false);
-      setNewLayoutName("");
+      // Automatically open in edit mode if blank or custom
+      if (mode === "blank" || mode === "custom") {
+        setDraftLayout(JSON.parse(JSON.stringify(newLayout)));
+        setEditMode(true);
+      }
     }
     setSaving(false);
   };
 
-  const updateDraftSeat = (seatId: string, changes: Partial<Seat>) => {
-    if (!draftLayout) return;
+  const handleDeleteCurrentLayout = async () => {
+    if (!activeLayout) return;
+    if (window.confirm(`Are you sure you want to delete layout "${activeLayout.name}"? This action cannot be undone.`)) {
+      await onDeleteSeatLayout(activeLayout.id);
+    }
+  };
+
+  const handleRenameCurrentLayout = async () => {
+    if (!activeLayout || !renamedLayoutName.trim()) return;
+    setSaving(true);
+    const resolvedCompanyId = activeLayout.companyId || effectiveCompanyId || companyId || "";
+    const ok = await onSaveSeatLayout({
+      ...activeLayout,
+      name: renamedLayoutName.trim(),
+      companyId: resolvedCompanyId,
+    });
+    if (ok) {
+      setShowRenameModal(false);
+      setRenamedLayoutName("");
+    }
+    setSaving(false);
+  };
+
+  // Section actions
+  const addSection = () => {
+    if (!draftLayout || !newSectionName.trim()) return;
+    const newSectionId = `sec-${Date.now()}`;
+    const newSection: SeatSection = {
+      id: newSectionId,
+      name: newSectionName.trim(),
+      color: newSectionColor,
+    };
+
+    const newSeats: Seat[] = [];
+    const currentMaxSeatNum = draftLayout.seats.reduce((max, s) => {
+      const n = parseInt(s.seatNumber);
+      return !isNaN(n) ? Math.max(max, n) : max;
+    }, draftLayout.seats.length);
+
+    for (let i = 1; i <= newSectionDesks; i++) {
+      newSeats.push({
+        id: `seat-${Date.now()}-${i}`,
+        seatNumber: String(currentMaxSeatNum + i),
+        sectionId: newSectionId,
+        x: (i - 1) % 6,
+        y: Math.floor((i - 1) / 6),
+        type: "desk",
+      });
+    }
+
     setDraftLayout({
       ...draftLayout,
-      seats: draftLayout.seats.map(s => s.id === seatId ? { ...s, ...changes } : s)
+      sections: [...draftLayout.sections, newSection],
+      seats: [...draftLayout.seats, ...newSeats],
     });
+    setNewSectionName("");
+    setNewSectionDesks(6);
+    setAddSectionModal(false);
+  };
+
+  const saveEditSection = () => {
+    if (!draftLayout || !editSectionModal || !editSectionName.trim()) return;
+    setDraftLayout({
+      ...draftLayout,
+      sections: draftLayout.sections.map(s =>
+        s.id === editSectionModal.id
+          ? { ...s, name: editSectionName.trim(), color: editSectionColor }
+          : s
+      ),
+    });
+    setEditSectionModal(null);
+  };
+
+  const deleteSection = (sectionId: string) => {
+    if (!draftLayout) return;
+    if (window.confirm("Are you sure you want to remove this section and all its desks?")) {
+      setDraftLayout({
+        ...draftLayout,
+        sections: draftLayout.sections.filter(s => s.id !== sectionId),
+        seats: draftLayout.seats.filter(s => s.sectionId !== sectionId),
+      });
+    }
+  };
+
+  // Seat actions
+  const addSingleSeat = (sectionId: string) => {
+    if (!draftLayout) return;
+    const currentMax = draftLayout.seats.reduce((max, s) => {
+      const n = parseInt(s.seatNumber);
+      return !isNaN(n) ? Math.max(max, n) : max;
+    }, draftLayout.seats.length);
+
+    const sectionSeats = draftLayout.seats.filter(s => s.sectionId === sectionId);
+    const newSeat: Seat = {
+      id: `seat-${Date.now()}`,
+      seatNumber: String(currentMax + 1),
+      sectionId,
+      x: sectionSeats.length % 6,
+      y: Math.floor(sectionSeats.length / 6),
+      type: "desk",
+    };
+    setDraftLayout({ ...draftLayout, seats: [...draftLayout.seats, newSeat] });
+    // Reset filters so the new desk is immediately visible
+    setFilterAvailability("all");
+    setFilterSectionId("all");
+  };
+
+  const bulkAddSeats = (sectionId: string, count: number) => {
+    if (!draftLayout || count <= 0) return;
+    const currentMax = draftLayout.seats.reduce((max, s) => {
+      const n = parseInt(s.seatNumber);
+      return !isNaN(n) ? Math.max(max, n) : max;
+    }, draftLayout.seats.length);
+
+    const sectionSeats = draftLayout.seats.filter(s => s.sectionId === sectionId);
+    const newSeats: Seat[] = [];
+    for (let i = 1; i <= count; i++) {
+      newSeats.push({
+        id: `seat-${Date.now()}-${i}`,
+        seatNumber: String(currentMax + i),
+        sectionId,
+        x: (sectionSeats.length + i - 1) % 6,
+        y: Math.floor((sectionSeats.length + i - 1) / 6),
+        type: "desk",
+      });
+    }
+    setDraftLayout({ ...draftLayout, seats: [...draftLayout.seats, ...newSeats] });
+    // Reset filters so new desks are immediately visible
+    setFilterAvailability("all");
+    setFilterSectionId("all");
   };
 
   const deleteSeat = (seatId: string) => {
     if (!draftLayout) return;
     setDraftLayout({ ...draftLayout, seats: draftLayout.seats.filter(s => s.id !== seatId) });
+    if (selectedSeatModal?.seat.id === seatId) {
+      setSelectedSeatModal(null);
+    }
   };
 
-  const addSeat = (sectionId: string) => {
+  const saveSeatDetails = (
+    seatId: string,
+    seatNumber: string,
+    label: string,
+    type: Seat["type"],
+    sectionId: string,
+    assignedEmployeeId: string | null
+  ) => {
     if (!draftLayout) return;
-    const sectionSeats = draftLayout.seats.filter(s => s.sectionId === sectionId);
-    const maxX = sectionSeats.reduce((m, s) => Math.max(m, s.x), -1);
-    const y = sectionSeats.length > 0 ? sectionSeats[sectionSeats.length - 1].y : 0;
-    const newNum = draftLayout.seats.length + 1;
-    const newSeat: Seat = {
-      id: `seat-${Date.now()}`,
-      seatNumber: String(newNum),
-      sectionId,
-      x: maxX + 1,
-      y,
-      type: "desk"
-    };
-    setDraftLayout({ ...draftLayout, seats: [...draftLayout.seats, newSeat] });
-  };
-
-  const addSection = () => {
-    if (!draftLayout || !newSectionName.trim()) return;
-    const newSection: SeatSection = {
-      id: `sec-${Date.now()}`,
-      name: newSectionName.trim(),
-      color: newSectionColor,
-    };
-    setDraftLayout({ ...draftLayout, sections: [...draftLayout.sections, newSection] });
-    setNewSectionName("");
-    setAddSectionModal(false);
-  };
-
-  const deleteSection = (sectionId: string) => {
-    if (!draftLayout) return;
-    setDraftLayout({
-      ...draftLayout,
-      sections: draftLayout.sections.filter(s => s.id !== sectionId),
-      seats: draftLayout.seats.filter(s => s.sectionId !== sectionId),
-    });
-  };
-
-  const assignEmployee = (seatId: string, empId: string | null) => {
-    if (!draftLayout) return;
-    // Unassign from any other seat first
-    const updated = draftLayout.seats.map(s => {
-      if (s.id === seatId) return { ...s, assignedEmployeeId: empId };
-      if (empId && s.assignedEmployeeId === empId) return { ...s, assignedEmployeeId: null };
+    // Unassign this employee if already assigned to another seat
+    const updatedSeats = draftLayout.seats.map(s => {
+      if (s.id === seatId) {
+        return {
+          ...s,
+          seatNumber: seatNumber.trim() || s.seatNumber,
+          label: label.trim() || undefined,
+          type,
+          sectionId,
+          assignedEmployeeId,
+        };
+      }
+      if (assignedEmployeeId && s.assignedEmployeeId === assignedEmployeeId) {
+        return { ...s, assignedEmployeeId: null };
+      }
       return s;
     });
-    setDraftLayout({ ...draftLayout, seats: updated });
-    setAssignModal(null);
+
+    setDraftLayout({ ...draftLayout, seats: updatedSeats });
+    setSelectedSeatModal(null);
   };
 
   const getEmployeeForSeat = (seat: Seat): Employee | undefined => {
@@ -291,62 +477,98 @@ function SeatingPlan({
   };
 
   const getSectionColor = (sectionId: string): string => {
-    const section = layout?.sections.find(s => s.id === sectionId);
-    return section?.color || "#6b7280";
+    return layout?.sections.find(s => s.id === sectionId)?.color || "#6b7280";
   };
 
   const getSectionName = (sectionId: string): string => {
-    return layout?.sections.find(s => s.id === sectionId)?.name || "Unknown";
+    return layout?.sections.find(s => s.id === sectionId)?.name || "General";
   };
 
-  const currentEmployee = employees.find(e => e.id === currentEmployeeId);
   const mySeats = layout?.seats.filter(s => s.assignedEmployeeId === currentEmployeeId) || [];
 
   // Group seats by section for rendering
-  const seatsBySection = layout?.sections.map(section => ({
-    section,
-    seats: (layout?.seats || [])
-      .filter(s => s.sectionId === section.id)
-      .sort((a, b) => a.y === b.y ? a.x - b.x : a.y - b.y)
-  })) || [];
+  const allSections = layout?.sections || [];
+  const allSeats = layout?.seats || [];
 
-  const filteredSeatsBySection = searchQuery
-    ? seatsBySection.map(({ section, seats }) => ({
-        section,
-        seats: seats.filter(s => {
+  // KPI calculations
+  const totalDesksCount = allSeats.length;
+  const occupiedDesksCount = allSeats.filter(s => !!s.assignedEmployeeId).length;
+  const availableDesksCount = totalDesksCount - occupiedDesksCount;
+  const cabinsCount = allSeats.filter(s => s.type === "cabin" || s.type === "reserved").length;
+  const occupancyPercent = totalDesksCount > 0 ? Math.round((occupiedDesksCount / totalDesksCount) * 100) : 0;
+
+  const seatsBySection = allSections.map(section => ({
+    section,
+    seats: allSeats
+      .filter(s => s.sectionId === section.id)
+      .sort((a, b) => {
+        const numA = parseInt(a.seatNumber);
+        const numB = parseInt(b.seatNumber);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.seatNumber.localeCompare(b.seatNumber);
+      })
+  }));
+
+  // Filtered seats — in edit mode, always show all seats in sections (ignore availability filter)
+  // so that newly added desks are always visible to the editor
+  const filteredSeatsBySection = seatsBySection
+    .filter(({ section }) => filterSectionId === "all" || section.id === filterSectionId)
+    .map(({ section, seats }) => {
+      let result = seats;
+
+      // Only apply availability filter in view mode (not edit mode)
+      if (!editMode) {
+        if (filterAvailability === "available") {
+          result = result.filter(s => !s.assignedEmployeeId);
+        } else if (filterAvailability === "occupied") {
+          result = result.filter(s => !!s.assignedEmployeeId);
+        } else if (filterAvailability === "my") {
+          result = result.filter(s => s.assignedEmployeeId === currentEmployeeId);
+        }
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        result = result.filter(s => {
           const emp = getEmployeeForSeat(s);
-          return s.seatNumber.includes(searchQuery) ||
-            emp?.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            s.label?.toLowerCase().includes(searchQuery.toLowerCase());
-        })
-      })).filter(({ seats }) => seats.length > 0)
-    : seatsBySection;
+          return (
+            s.seatNumber.toLowerCase().includes(q) ||
+            (s.label && s.label.toLowerCase().includes(q)) ||
+            (emp && emp.fullName.toLowerCase().includes(q)) ||
+            (emp && emp.department.toLowerCase().includes(q)) ||
+            section.name.toLowerCase().includes(q)
+          );
+        });
+      }
+
+      return { section, seats: result };
+    });
 
   if (effectiveLayouts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 space-y-5">
-        <div className="w-20 h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center">
-          <Armchair className="w-10 h-10 text-emerald-500" />
+      <div className="flex flex-col items-center justify-center py-20 px-4 space-y-6">
+        <div className="w-20 h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+          <Armchair className="w-10 h-10 text-emerald-600 dark:text-emerald-400" />
         </div>
-        <div className="text-center">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white">No Seating Plan Yet</h3>
-          <p className="text-sm text-slate-400 mt-1 max-w-xs">
-            {canEdit ? "Create your first seating layout to start managing seat assignments." : "No seating plan has been configured yet."}
+        <div className="text-center max-w-md">
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white">Create Your Seating Plan</h3>
+          <p className="text-sm text-slate-500 dark:text-gray-400 mt-2 leading-relaxed">
+            {canEdit
+              ? "Start managing office floors, custom department bays, cabins, and dynamic employee seat allocations."
+              : "No seating plans configured yet for this organization."}
           </p>
         </div>
         {canEdit && (
           <button
             onClick={() => setShowNewLayoutModal(true)}
-            className="flex items-center space-x-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg shadow-emerald-600/20"
+            className="flex items-center space-x-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl transition-all shadow-xl shadow-emerald-600/25"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Seating Plan</span>
+            <span>Create First Seating Layout</span>
           </button>
         )}
         {showNewLayoutModal && (
           <NewLayoutModal
-            name={newLayoutName}
-            setName={setNewLayoutName}
             onConfirm={createNewLayout}
             onClose={() => setShowNewLayoutModal(false)}
             saving={saving}
@@ -357,63 +579,102 @@ function SeatingPlan({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Layout selector */}
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-slate-400" />
-          <select
-            value={selectedLayoutId}
-            onChange={e => { setSelectedLayoutId(e.target.value); cancelEditMode(); }}
-            className="text-sm font-semibold bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
-          >
-            {effectiveLayouts.map(l => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
+    <div className="space-y-5">
+      {/* Top Header Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl shadow-sm">
+        {/* Left: Layout Selection & Rename */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-1.5">
+            <Layers className="w-4 h-4 text-emerald-500" />
+            <select
+              value={selectedLayoutId}
+              onChange={e => { setSelectedLayoutId(e.target.value); cancelEditMode(); }}
+              className="text-sm font-bold bg-transparent text-slate-800 dark:text-gray-200 focus:outline-none cursor-pointer pr-2"
+            >
+              {effectiveLayouts.map(l => (
+                <option key={l.id} value={l.id} className="bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white">
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {canEdit && !editMode && (
+            <button
+              onClick={() => {
+                setRenamedLayoutName(activeLayout?.name || "");
+                setShowRenameModal(true);
+              }}
+              className="p-2 rounded-xl text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-all"
+              title="Rename Layout"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
-        {/* Search */}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+        {/* Center: Search */}
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search seat, name..."
-            className="w-full text-sm bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#2a2a2a] rounded-xl pl-9 pr-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            placeholder="Search desk #, employee, dept..."
+            className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl pl-9 pr-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
           />
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 ml-auto">
           {canEdit && !editMode && (
             <>
               <button
                 onClick={() => setShowNewLayoutModal(true)}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 dark:bg-[#1a1a1a] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-600 dark:text-gray-300 rounded-xl text-xs font-semibold transition-all"
+                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 dark:bg-[#1a1a1a] hover:bg-slate-200 dark:hover:bg-[#252525] text-slate-700 dark:text-gray-200 rounded-xl text-xs font-bold transition-all"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 text-emerald-500" />
                 <span>New Layout</span>
               </button>
+              {effectiveLayouts.length > 1 && (
+                <button
+                  onClick={handleDeleteCurrentLayout}
+                  className="flex items-center space-x-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold transition-all"
+                  title="Delete this layout"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              )}
               <button
                 onClick={enterEditMode}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-all shadow-lg shadow-emerald-600/20"
+                className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit Layout</span>
               </button>
             </>
           )}
+
           {editMode && (
             <>
-              <button onClick={cancelEditMode} className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 hover:bg-slate-200 rounded-xl text-xs font-semibold transition-all">
+              <button
+                onClick={cancelEditMode}
+                className="flex items-center space-x-1.5 px-3 py-2 bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 hover:bg-slate-200 rounded-xl text-xs font-bold transition-all"
+              >
                 <X className="w-3.5 h-3.5" />
                 <span>Cancel</span>
               </button>
               <button
+                onClick={() => setAddSectionModal(true)}
+                className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded-xl text-xs font-bold transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Section</span>
+              </button>
+              <button
                 onClick={saveLayout}
                 disabled={saving}
-                className="flex items-center space-x-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-60"
+                className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-60"
               >
                 {saving ? (
                   <svg className="w-3.5 h-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -430,254 +691,364 @@ function SeatingPlan({
         </div>
       </div>
 
-      {/* Edit mode notice */}
-      {editMode && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-xl text-xs text-amber-700 dark:text-amber-400 font-semibold">
-          <Edit3 className="w-3.5 h-3.5 shrink-0" />
-          <span>Edit mode: click seats to assign employees, manage sections below the map</span>
+      {/* KPI Overview Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl">
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Desks</p>
+          <p className="text-xl font-extrabold text-slate-800 dark:text-white mt-0.5">{totalDesksCount}</p>
         </div>
-      )}
-
-      {/* My Seat Badge */}
-      {mySeats.length > 0 && !editMode && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
-          <Star className="w-3.5 h-3.5 shrink-0" />
-          <span>Your seat: <span className="font-black">#{mySeats.map(s => s.seatNumber).join(", ")}</span> — {getSectionName(mySeats[0].sectionId)}</span>
-        </div>
-      )}
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sections:</span>
-        {layout?.sections.map(s => (
-          <div key={s.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold"
-            style={{ backgroundColor: s.color + "20", color: s.color, border: `1px solid ${s.color}30` }}>
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-            {s.name}
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl">
+          <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Occupied</p>
+          <div className="flex items-baseline gap-2 mt-0.5">
+            <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{occupiedDesksCount}</p>
+            <span className="text-xs text-slate-400 font-bold">({occupancyPercent}%)</span>
           </div>
-        ))}
+        </div>
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl">
+          <p className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 uppercase tracking-wider">Available</p>
+          <p className="text-xl font-extrabold text-sky-600 dark:text-sky-400 mt-0.5">{availableDesksCount}</p>
+        </div>
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl">
+          <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-wider">Cabins & Private</p>
+          <p className="text-xl font-extrabold text-rose-500 mt-0.5">{cabinsCount}</p>
+        </div>
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#222] p-3.5 rounded-2xl">
+          <p className="text-[11px] font-semibold text-purple-500 uppercase tracking-wider">Sections</p>
+          <p className="text-xl font-extrabold text-purple-500 mt-0.5">{allSections.length}</p>
+        </div>
       </div>
 
-      {/* Seat Map */}
-      <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] overflow-hidden">
-        <div className="p-4 space-y-5">
-          {filteredSeatsBySection.map(({ section, seats }) => {
-            // Group seats by row (y)
-            const byRow: Record<number, Seat[]> = {};
-            seats.forEach(s => {
-              if (!byRow[s.y]) byRow[s.y] = [];
-              byRow[s.y].push(s);
-            });
+      {/* Edit Mode Instructions Banner */}
+      {editMode && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-transparent border border-amber-300 dark:border-amber-700/50 rounded-2xl text-xs font-semibold text-amber-800 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <Edit3 className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Dynamic Builder Active:</strong> Click on any desk to customize its name, label, type, or assign an employee. Use the section controls to add desks or sections.
+            </span>
+          </div>
+          <button
+            onClick={() => setAddSectionModal(true)}
+            className="shrink-0 px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold"
+          >
+            + Add New Section
+          </button>
+        </div>
+      )}
+
+      {/* Filter Tabs Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* Availability Filters */}
+        <div className="flex gap-1 bg-slate-100 dark:bg-[#1a1a1a] p-1 rounded-xl w-fit">
+          {[
+            { id: "all", label: `All (${totalDesksCount})` },
+            { id: "available", label: `Available (${availableDesksCount})` },
+            { id: "occupied", label: `Occupied (${occupiedDesksCount})` },
+            ...(mySeats.length > 0 ? [{ id: "my", label: `My Seat (${mySeats.length})` }] : []),
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterAvailability(tab.id as any)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterAvailability === tab.id
+                  ? "bg-white dark:bg-[#0f0f0f] text-slate-800 dark:text-white shadow-sm"
+                  : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Section Pill Filter */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-bold text-slate-400 uppercase">Section:</span>
+          <button
+            onClick={() => setFilterSectionId("all")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+              filterSectionId === "all"
+                ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900"
+                : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-400"
+            }`}
+          >
+            All Sections
+          </button>
+          {allSections.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setFilterSectionId(s.id)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
+                filterSectionId === s.id
+                  ? "ring-2 ring-emerald-500/50"
+                  : "opacity-80 hover:opacity-100"
+              }`}
+              style={{ backgroundColor: s.color + "15", color: s.color, borderColor: s.color + "30" }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }} />
+              {s.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Seating Workspace Grid */}
+      <div className="space-y-5">
+        {filteredSeatsBySection.length === 0 || allSections.length === 0 ? (
+          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-dashed border-slate-200 dark:border-[#222] p-12 text-center space-y-3">
+            <Armchair className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto" />
+            <h4 className="text-base font-bold text-slate-700 dark:text-gray-300">No Desks Match Your Filter</h4>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {allSections.length === 0
+                ? "This layout has no sections yet. Click 'Edit Layout' and '+ Add Section' to start building your floor plan."
+                : "Try resetting your search query or selecting 'All' filters."}
+            </p>
+            {editMode && allSections.length === 0 && (
+              <button
+                onClick={() => setAddSectionModal(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl"
+              >
+                + Add Your First Section
+              </button>
+            )}
+          </div>
+        ) : (
+          filteredSeatsBySection.map(({ section, seats }) => {
+            const sectionTotal = seats.length;
+            const sectionOccupied = seats.filter(s => !!s.assignedEmployeeId).length;
 
             return (
-              <div key={section.id} className="rounded-xl p-4 space-y-2"
-                style={{ backgroundColor: section.color + "08", border: `1px solid ${section.color}20` }}>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: section.color }} />
-                    <span className="text-sm font-bold" style={{ color: section.color }}>{section.name}</span>
-                    <span className="text-[10px] text-slate-400 font-semibold">{seats.length} seats</span>
+              <div
+                key={section.id}
+                className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-200/80 dark:border-[#222] p-4.5 space-y-4 shadow-sm"
+              >
+                {/* Section Header */}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-3.5 h-3.5 rounded-md shadow-sm" style={{ backgroundColor: section.color }} />
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-white">{section.name}</h3>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400">
+                      {sectionOccupied} / {sectionTotal} Desks Occupied
+                    </span>
                   </div>
+
+                  {/* Section Edit Buttons in Edit Mode */}
                   {editMode && (
-                    <div className="flex gap-1.5">
+                    <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => addSeat(section.id)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold text-white transition-all"
+                        onClick={() => addSingleSeat(section.id)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold text-white transition-all shadow-sm"
                         style={{ backgroundColor: section.color }}
+                        title="Add 1 desk"
                       >
-                        <Plus className="w-3 h-3" />Add Seat
+                        <Plus className="w-3 h-3" />
+                        <span>+1 Desk</span>
+                      </button>
+                      <button
+                        onClick={() => bulkAddSeats(section.id, 4)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-[#1a1a1a] hover:bg-slate-200 text-slate-700 dark:text-gray-300 transition-all"
+                        title="Quick add 4 desks"
+                      >
+                        <span>+4 Desks</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditSectionModal(section);
+                          setEditSectionName(section.name);
+                          setEditSectionColor(section.color);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a1a]"
+                        title="Rename/Edit Section"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={() => deleteSection(section.id)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-100 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 transition-all"
+                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        title="Delete Section"
                       >
-                        <Trash2 className="w-3 h-3" />Remove
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
                 </div>
 
-                {Object.entries(byRow).sort(([a], [b]) => Number(a) - Number(b)).map(([rowKey, rowSeats]) => (
-                  <div key={rowKey} className="flex flex-wrap gap-2">
-                    {rowSeats.sort((a, b) => b.x - a.x).map(seat => {
+                {/* Seats Grid */}
+                {seats.length === 0 ? (
+                  <div className="py-8 text-center border border-dashed border-slate-200 dark:border-[#222] rounded-xl">
+                    <p className="text-xs font-semibold text-slate-400">No desks in this section yet.</p>
+                    {editMode && (
+                      <button
+                        onClick={() => addSingleSeat(section.id)}
+                        className="mt-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+                      >
+                        + Add a desk to {section.name}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                    {seats.map(seat => {
                       const emp = getEmployeeForSeat(seat);
-                      const isMySeats = seat.assignedEmployeeId === currentEmployeeId;
-                      const isHovered = hoveredSeat === seat.id;
+                      const isMySeat = seat.assignedEmployeeId === currentEmployeeId;
+                      const isOccupied = !!emp;
 
                       return (
                         <div
                           key={seat.id}
-                          className="relative group"
-                          onMouseEnter={() => setHoveredSeat(seat.id)}
-                          onMouseLeave={() => setHoveredSeat(null)}
+                          onClick={() => setSelectedSeatModal({ seat, isViewingOnly: !editMode })}
+                          className={`relative group rounded-2xl p-3 flex flex-col items-center justify-between text-center transition-all cursor-pointer border ${
+                            isMySeat
+                              ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/20 shadow-md shadow-emerald-500/10"
+                              : isOccupied
+                              ? "bg-slate-50 dark:bg-[#141414] border-slate-200 dark:border-[#262626] hover:border-slate-300 dark:hover:border-[#3a3a3a]"
+                              : "bg-white dark:bg-[#0c0c0c] border-dashed border-slate-200 dark:border-[#262626] hover:border-emerald-400/80 hover:bg-emerald-50/30"
+                          } hover:shadow-lg hover:-translate-y-0.5`}
                         >
-                          <button
-                            onClick={() => editMode && setAssignModal({ seat })}
-                            className={`flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all border ${
-                              isMySeats
-                                ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 shadow-md shadow-emerald-500/20"
-                                : emp
-                                ? "border-slate-200 dark:border-[#2a2a2a] bg-slate-50 dark:bg-[#1a1a1a]"
-                                : "border-dashed border-slate-200 dark:border-[#2a2a2a] bg-transparent hover:bg-slate-50 dark:hover:bg-[#1a1a1a]"
-                            } ${editMode ? "cursor-pointer hover:border-emerald-400 hover:shadow-md" : "cursor-default"}`}
-                          >
-                            <ChairIcon
-                              color={isMySeats ? "#10b981" : emp ? section.color : "#cbd5e1"}
-                              size={32}
-                            />
-                            <span className={`text-[9px] font-bold leading-none ${
-                              isMySeats ? "text-emerald-600 dark:text-emerald-400"
-                                : emp ? "text-slate-600 dark:text-gray-300"
-                                : "text-slate-300 dark:text-slate-600"
-                            }`}>
-                              {seat.label || `#${seat.seatNumber}`}
+                          {/* Seat Header Tag */}
+                          <div className="w-full flex items-center justify-between gap-1 mb-1.5">
+                            <span
+                              className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md"
+                              style={{ backgroundColor: section.color + "20", color: section.color }}
+                            >
+                              #{seat.seatNumber}
                             </span>
-                          </button>
+                            {seat.type === "cabin" && (
+                              <span className="text-[9px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/40 px-1 rounded">
+                                Cabin
+                              </span>
+                            )}
+                            {seat.type === "reserved" && (
+                              <span className="text-[9px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/40 px-1 rounded">
+                                Resv
+                              </span>
+                            )}
+                          </div>
 
-                          {/* Hover tooltip */}
-                          {isHovered && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 pointer-events-none">
-                              <div className="bg-slate-900 dark:bg-white/10 backdrop-blur-md text-white dark:text-gray-100 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg whitespace-nowrap shadow-xl border border-white/10">
-                                {emp ? (
-                                  <>
-                                    <div className="font-bold">{emp.fullName}</div>
-                                    <div className="text-slate-400">{emp.department} · Seat #{seat.seatNumber}</div>
-                                  </>
-                                ) : (
-                                  <span className="text-slate-400">Seat #{seat.seatNumber} — Unoccupied</span>
+                          {/* Chair / Desk Visual */}
+                          <div className="py-1">
+                            <ChairIcon
+                              color={isMySeat ? "#10b981" : isOccupied ? section.color : "#cbd5e1"}
+                              size={34}
+                            />
+                          </div>
+
+                          {/* Occupant / Status Info */}
+                          <div className="w-full mt-1.5">
+                            {emp ? (
+                              <div className="space-y-0.5">
+                                <p className="text-[11px] font-bold text-slate-800 dark:text-gray-200 truncate leading-tight">
+                                  {emp.fullName}
+                                </p>
+                                <p className="text-[9px] text-slate-400 truncate leading-none">
+                                  {seat.label || emp.department}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600">
+                                  Vacant
+                                </span>
+                                {seat.label && (
+                                  <p className="text-[9px] text-slate-400 truncate leading-none">{seat.label}</p>
                                 )}
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
 
-                          {/* Delete seat in edit mode */}
+                          {/* Quick Delete in Edit Mode */}
                           {editMode && (
                             <button
-                              onClick={e => { e.stopPropagation(); deleteSeat(seat.id); }}
-                              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                              onClick={e => {
+                                e.stopPropagation();
+                                deleteSeat(seat.id);
+                              }}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-rose-600 z-10"
+                              title="Delete Seat"
                             >
-                              <X className="w-2.5 h-2.5" />
+                              <X className="w-3 h-3" />
                             </button>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                ))}
+                )}
               </div>
             );
-          })}
-        </div>
+          })
+        )}
       </div>
 
-      {/* Edit mode: section manager */}
-      {editMode && (
-        <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-gray-300">Section Manager</h3>
-            <button
-              onClick={() => setAddSectionModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Section
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {draftLayout?.sections.map(sec => (
-              <div key={sec.id} className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold"
-                style={{ backgroundColor: sec.color + "15", borderColor: sec.color + "30", color: sec.color }}>
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: sec.color }} />
-                {sec.name}
-                <button onClick={() => deleteSection(sec.id)} className="ml-1 opacity-60 hover:opacity-100">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ─── MODALS ───────────────────────────────────────────────────────────── */}
+
+      {/* 1. Interactive Seat Details & Assignment Modal */}
+      {selectedSeatModal && (
+        <SeatDetailsModal
+          seat={selectedSeatModal.seat}
+          sections={allSections}
+          employees={employees}
+          canEdit={canEdit}
+          isEditMode={editMode}
+          onSave={saveSeatDetails}
+          onDelete={deleteSeat}
+          onClose={() => setSelectedSeatModal(null)}
+        />
       )}
 
-      {/* Assign Employee Modal */}
-      {assignModal && editMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-slate-800 dark:text-white">
-                Assign Seat #{assignModal.seat.seatNumber}
-              </h3>
-              <button onClick={() => setAssignModal(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#1a1a1a] text-slate-400">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
-              <button
-                onClick={() => assignEmployee(assignModal.seat.id, null)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-left transition-all border border-dashed border-slate-200 dark:border-[#2a2a2a] text-slate-400 text-sm font-semibold"
-              >
-                <XCircle className="w-4 h-4" />
-                Unassign (Leave Empty)
-              </button>
-              {employees.map(emp => {
-                const isAssigned = assignModal.seat.assignedEmployeeId === emp.id;
-                return (
-                  <button
-                    key={emp.id}
-                    onClick={() => assignEmployee(assignModal.seat.id, emp.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border ${
-                      isAssigned
-                        ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700/50"
-                        : "border-transparent hover:bg-slate-50 dark:hover:bg-[#1a1a1a]"
-                    }`}
-                  >
-                    <img src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=40&auto=format&fit=crop"} alt={emp.fullName} className="w-8 h-8 rounded-full object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-700 dark:text-gray-300 truncate">{emp.fullName}</p>
-                      <p className="text-[10px] text-slate-400">{emp.department} · {emp.role.toUpperCase()}</p>
-                    </div>
-                    {isAssigned && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Section Modal */}
+      {/* 2. Add Section Modal */}
       {addSectionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-base font-bold text-slate-800 dark:text-white mb-4">Add New Section</h3>
-            <div className="space-y-4">
+          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-800 dark:text-white">Add New Section</h3>
+            <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Section Name</label>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Section Name</label>
                 <input
                   value={newSectionName}
                   onChange={e => setNewSectionName(e.target.value)}
-                  placeholder="e.g. Marketing Team"
-                  className="w-full text-sm bg-slate-50 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  placeholder="e.g. Frontend Engineering, Executive Bay"
+                  className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                  autoFocus
                 />
               </div>
+
               <div>
-                <label className="text-xs font-semibold text-slate-500 mb-1.5 block">Section Color</label>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Initial Desks Count</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="50"
+                  value={newSectionDesks}
+                  onChange={e => setNewSectionDesks(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1.5 block">Section Color</label>
                 <div className="flex flex-wrap gap-2">
                   {SECTION_COLORS.map(c => (
                     <button
                       key={c.value}
                       onClick={() => setNewSectionColor(c.value)}
-                      className={`w-8 h-8 rounded-lg border-2 transition-all ${newSectionColor === c.value ? "border-slate-700 dark:border-white scale-110" : "border-transparent"}`}
+                      className={`w-8 h-8 rounded-lg border-2 transition-all ${newSectionColor === c.value ? "border-slate-800 dark:border-white scale-110 shadow-md" : "border-transparent"}`}
                       style={{ backgroundColor: c.value }}
                     />
                   ))}
                 </div>
               </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setAddSectionModal(false)} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-sm font-semibold hover:bg-slate-50 dark:hover:bg-[#1a1a1a]">Cancel</button>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setAddSectionModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-xs font-bold hover:bg-slate-50 dark:hover:bg-[#181818]"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={addSection}
                   disabled={!newSectionName.trim()}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-all disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
                 >
                   Add Section
                 </button>
@@ -687,11 +1058,89 @@ function SeatingPlan({
         </div>
       )}
 
-      {/* New Layout Modal */}
+      {/* 3. Edit Section Modal */}
+      {editSectionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-800 dark:text-white">Edit Section</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1 block">Section Name</label>
+                <input
+                  value={editSectionName}
+                  onChange={e => setEditSectionName(e.target.value)}
+                  className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1.5 block">Section Color</label>
+                <div className="flex flex-wrap gap-2">
+                  {SECTION_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => setEditSectionColor(c.value)}
+                      className={`w-8 h-8 rounded-lg border-2 transition-all ${editSectionColor === c.value ? "border-slate-800 dark:border-white scale-110" : "border-transparent"}`}
+                      style={{ backgroundColor: c.value }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setEditSectionModal(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-xs font-bold hover:bg-slate-50 dark:hover:bg-[#181818]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveEditSection}
+                  disabled={!editSectionName.trim()}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  Update Section
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Rename Layout Modal */}
+      {showRenameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-800 dark:text-white">Rename Seating Layout</h3>
+            <input
+              value={renamedLayoutName}
+              onChange={e => setRenamedLayoutName(e.target.value)}
+              placeholder="e.g. Floor 2 - Engineering Hub"
+              className="w-full text-sm bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              onKeyDown={e => e.key === "Enter" && handleRenameCurrentLayout()}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowRenameModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-xs font-bold hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRenameCurrentLayout}
+                disabled={!renamedLayoutName.trim() || saving}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save Name"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. New Layout Modal */}
       {showNewLayoutModal && (
         <NewLayoutModal
-          name={newLayoutName}
-          setName={setNewLayoutName}
           onConfirm={createNewLayout}
           onClose={() => setShowNewLayoutModal(false)}
           saving={saving}
@@ -701,29 +1150,393 @@ function SeatingPlan({
   );
 }
 
-function NewLayoutModal({ name, setName, onConfirm, onClose, saving }: {
-  name: string; setName: (v: string) => void; onConfirm: () => void; onClose: () => void; saving: boolean;
+// ─── COMPONENT: INTERACTIVE SEAT DETAILS MODAL ─────────────────────────────────
+
+function SeatDetailsModal({
+  seat,
+  sections,
+  employees,
+  canEdit,
+  isEditMode,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  seat: Seat;
+  sections: SeatSection[];
+  employees: Employee[];
+  canEdit: boolean;
+  isEditMode: boolean;
+  onSave: (seatId: string, seatNumber: string, label: string, type: Seat["type"], sectionId: string, assignedEmpId: string | null) => void;
+  onDelete: (seatId: string) => void;
+  onClose: () => void;
 }) {
+  const [seatNumber, setSeatNumber] = useState(seat.seatNumber || "");
+  const [label, setLabel] = useState(seat.label || "");
+  const [seatType, setSeatType] = useState<Seat["type"]>(seat.type || "desk");
+  const [sectionId, setSectionId] = useState(seat.sectionId);
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState<string | null>(seat.assignedEmployeeId || null);
+  const [empSearch, setEmpSearch] = useState("");
+
+  const assignedEmp = employees.find(e => e.id === assignedEmployeeId);
+
+  const filteredEmployees = employees.filter(e =>
+    !empSearch.trim() ||
+    e.fullName.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.department.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.email.toLowerCase().includes(empSearch.toLowerCase())
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-6 w-full max-w-sm shadow-2xl">
-        <h3 className="text-base font-bold text-slate-800 dark:text-white mb-4">Create New Layout</h3>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="e.g. Floor 2 – Marketing Wing"
-          className="w-full text-sm bg-slate-50 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 mb-4"
-          onKeyDown={e => e.key === "Enter" && onConfirm()}
-        />
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-sm font-semibold hover:bg-slate-50">Cancel</button>
-          <button
-            onClick={onConfirm}
-            disabled={!name.trim() || saving}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition-all disabled:opacity-50"
-          >
-            {saving ? "Creating..." : "Create Layout"}
+      <div className="bg-white dark:bg-[#0f0f0f] rounded-3xl border border-slate-200 dark:border-[#222] p-6 w-full max-w-lg shadow-2xl space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-black text-sm">
+              #{seatNumber || seat.seatNumber}
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                {isEditMode ? `Configure Seat #${seatNumber || seat.seatNumber}` : `Seat #${seat.seatNumber} Details`}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {sections.find(s => s.id === sectionId)?.name || "General"}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-[#1a1a1a] text-slate-400">
+            <X className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Edit fields (in Edit mode) */}
+        {isEditMode && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 mb-1 block">Seat Number / Code</label>
+              <input
+                value={seatNumber}
+                onChange={e => setSeatNumber(e.target.value)}
+                placeholder="e.g. 101, A-1"
+                className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 mb-1 block">Custom Label (Optional)</label>
+              <input
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                placeholder="e.g. Team Lead, Reception"
+                className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 mb-1 block">Seat Type</label>
+              <select
+                value={seatType}
+                onChange={e => setSeatType(e.target.value as any)}
+                className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none cursor-pointer"
+              >
+                <option value="desk">Standard Desk</option>
+                <option value="cabin">Executive Cabin</option>
+                <option value="reserved">Reserved / Conference</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-slate-500 mb-1 block">Move to Section</label>
+              <select
+                value={sectionId}
+                onChange={e => setSectionId(e.target.value)}
+                className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none cursor-pointer"
+              >
+                {sections.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Assigned Employee Selection */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              {isEditMode ? "Assign Employee" : "Currently Assigned"}
+            </label>
+            {assignedEmp && isEditMode && (
+              <button
+                onClick={() => setAssignedEmployeeId(null)}
+                className="text-[11px] font-bold text-rose-500 hover:underline"
+              >
+                Unassign Seat
+              </button>
+            )}
+          </div>
+
+          {isEditMode && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                value={empSearch}
+                onChange={e => setEmpSearch(e.target.value)}
+                placeholder="Search employee by name, department..."
+                className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl pl-9 pr-3 py-2 text-slate-700 dark:text-gray-300 focus:outline-none"
+              />
+            </div>
+          )}
+
+          {/* Employee list / active card */}
+          <div className="max-h-56 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+            {isEditMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAssignedEmployeeId(null)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border transition-all text-xs font-semibold ${
+                    !assignedEmployeeId
+                      ? "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
+                      : "border-dashed border-slate-200 dark:border-[#2a2a2a] text-slate-400 hover:bg-slate-50"
+                  }`}
+                >
+                  <XCircle className="w-4 h-4 text-slate-400" />
+                  <span>Unassigned (Keep Desk Empty)</span>
+                </button>
+
+                {filteredEmployees.map(emp => {
+                  const isSelected = assignedEmployeeId === emp.id;
+                  return (
+                    <button
+                      key={emp.id}
+                      type="button"
+                      onClick={() => setAssignedEmployeeId(emp.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left border transition-all ${
+                        isSelected
+                          ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 ring-1 ring-emerald-500/20"
+                          : "border-transparent hover:bg-slate-50 dark:hover:bg-[#181818]"
+                      }`}
+                    >
+                      <img
+                        src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=40&auto=format&fit=crop"}
+                        alt={emp.fullName}
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-slate-800 dark:text-gray-200 truncate">{emp.fullName}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{emp.department} · {emp.role.toUpperCase()}</p>
+                      </div>
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <div>
+                {assignedEmp ? (
+                  <div className="flex items-center gap-3.5 p-3 rounded-2xl bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a]">
+                    <img
+                      src={assignedEmp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=60&auto=format&fit=crop"}
+                      alt={assignedEmp.fullName}
+                      className="w-12 h-12 rounded-2xl object-cover"
+                    />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-white">{assignedEmp.fullName}</h4>
+                      <p className="text-xs text-slate-500 dark:text-gray-400">{assignedEmp.department} · {assignedEmp.role.toUpperCase()}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">{assignedEmp.email}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6 border border-dashed border-slate-200 dark:border-[#2a2a2a] rounded-2xl">
+                    <p className="text-xs font-bold text-slate-400">This desk is currently unoccupied.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions Footer */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+          {isEditMode && (
+            <button
+              onClick={() => onDelete(seat.id)}
+              className="px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl transition-all"
+            >
+              Delete Desk
+            </button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] rounded-xl transition-all"
+            >
+              {isEditMode ? "Cancel" : "Close"}
+            </button>
+            {isEditMode && (
+              <button
+                onClick={() =>
+                  onSave(
+                    seat.id,
+                    seatNumber,
+                    label,
+                    seatType,
+                    sectionId,
+                    assignedEmployeeId
+                  )
+                }
+                className="px-5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-md shadow-emerald-600/20"
+              >
+                Apply Changes
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── COMPONENT: DYNAMIC NEW LAYOUT CREATION MODAL ──────────────────────────────
+
+function NewLayoutModal({
+  onConfirm,
+  onClose,
+  saving,
+}: {
+  onConfirm: (
+    name: string,
+    mode: "blank" | "custom" | "template",
+    customSectionName?: string,
+    customDesks?: number,
+    customColor?: string
+  ) => void;
+  onClose: () => void;
+  saving: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [creationMode, setCreationMode] = useState<"blank" | "custom" | "template">("blank");
+  const [sectionName, setSectionName] = useState("Main Workspace");
+  const [desksCount, setDesksCount] = useState(12);
+  const [selectedColor, setSelectedColor] = useState(SECTION_COLORS[0].value);
+
+  const handleSubmit = () => {
+    if (!name.trim() || saving) return;
+    onConfirm(name.trim(), creationMode, sectionName, desksCount, selectedColor);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-[#0f0f0f] rounded-3xl border border-slate-200 dark:border-[#222] p-6 w-full max-w-md shadow-2xl space-y-5">
+        <div>
+          <h3 className="text-base font-bold text-slate-800 dark:text-white">Create New Seating Plan</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Design a flexible workspace floor plan for your organization.</p>
+        </div>
+
+        <div className="space-y-4">
+          {/* Layout Name */}
+          <div>
+            <label className="text-xs font-bold text-slate-600 dark:text-gray-300 mb-1 block">
+              Layout / Floor Name *
+            </label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Floor 2 – Tech Bay, Marketing Wing"
+              className="w-full text-xs bg-slate-50 dark:bg-[#181818] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              autoFocus
+              onKeyDown={e => e.key === "Enter" && handleSubmit()}
+            />
+          </div>
+
+          {/* Creation Mode Chooser */}
+          <div>
+            <label className="text-xs font-bold text-slate-600 dark:text-gray-300 mb-2 block">
+              Choose Layout Starter
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: "blank", title: "Blank Canvas", desc: "Build dynamically from scratch" },
+                { id: "custom", title: "Quick Bay", desc: "Start with a custom section" },
+                { id: "template", title: "Office Demo", desc: "5 departments pre-filled" },
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setCreationMode(opt.id as any)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    creationMode === opt.id
+                      ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-sm"
+                      : "border-slate-200 dark:border-[#2a2a2a] text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#181818]"
+                  }`}
+                >
+                  <p className="text-xs font-bold">{opt.title}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Section Options if "custom" selected */}
+          {creationMode === "custom" && (
+            <div className="p-3.5 bg-slate-50 dark:bg-[#181818] rounded-2xl border border-slate-200 dark:border-[#2a2a2a] space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 mb-1 block">Initial Section</label>
+                  <input
+                    value={sectionName}
+                    onChange={e => setSectionName(e.target.value)}
+                    placeholder="e.g. Sales Team"
+                    className="w-full text-xs bg-white dark:bg-[#101010] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-gray-200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-500 mb-1 block">Desks Count</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={desksCount}
+                    onChange={e => setDesksCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full text-xs bg-white dark:bg-[#101010] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-2.5 py-1.5 text-slate-800 dark:text-gray-200"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-500 mb-1 block">Section Color</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {SECTION_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setSelectedColor(c.value)}
+                      className={`w-6 h-6 rounded-md border transition-all ${selectedColor === c.value ? "border-slate-800 dark:border-white scale-110" : "border-transparent"}`}
+                      style={{ backgroundColor: c.value }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 text-xs font-bold hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!name.trim() || saving}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+            >
+              {saving ? "Creating..." : "Create Layout"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -772,11 +1585,12 @@ function RoomBookingView({
   const [rBranch, setRBranch] = useState("");
   const [rAmenities, setRAmenities] = useState<string[]>([]);
 
-  const companyRooms = rooms.filter(r => r.companyId === companyId && r.isActive);
-  const companyBookings = roomBookings.filter(b => b.companyId === companyId);
+  const currentEmployee = employees.find(e => e.id === currentEmployeeId);
+  const effectiveCompanyId = companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "");
+  const companyRooms = rooms.filter(r => (!effectiveCompanyId || r.companyId === effectiveCompanyId) && r.isActive);
+  const companyBookings = roomBookings.filter(b => !effectiveCompanyId || b.companyId === effectiveCompanyId);
   const todayBookings = companyBookings.filter(b => b.date === selectedDate && b.status === "Approved");
   const pendingBookings = companyBookings.filter(b => b.status === "Pending");
-  const currentEmployee = employees.find(e => e.id === currentEmployeeId);
 
   const isRoomBusy = (room: Room, date: string) => {
     const now = new Date();
@@ -851,8 +1665,9 @@ function RoomBookingView({
     }
 
     setSaving(true);
+    const resolvedCompanyId = effectiveCompanyId || companyId || "";
     const ok = await onBookRoom({
-      companyId,
+      companyId: resolvedCompanyId,
       roomId: bookingModal.room.id,
       roomName: bookingModal.room.name,
       requestedBy: currentEmployeeId,
@@ -891,9 +1706,10 @@ function RoomBookingView({
   const saveRoom = async () => {
     if (!rName.trim()) return;
     setSaving(true);
+    const resolvedCompanyId = effectiveCompanyId || companyId || "";
     const roomData: Room = {
-      id: roomModal?.room?.id || `room-${Date.now()}`,
-      companyId,
+      id: roomModal?.room?.id || `room-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      companyId: resolvedCompanyId,
       name: rName.trim(),
       capacity: rCapacity,
       amenities: rAmenities,
