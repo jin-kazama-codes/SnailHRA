@@ -146,8 +146,8 @@ export default function PayrollView({
     setEditLta(emp.salary?.lta !== undefined ? String(emp.salary.lta) : String(configLta));
     setEditSpAllow(emp.salary?.allowances !== undefined ? String(emp.salary.allowances) : String(configSpAllow));
     const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(emp.id) ||
-                       (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
-                       emp.salary?.pfMode === "exempt";
+      (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
+      emp.salary?.pfMode === "exempt";
     setEditPfMode(isPfExempt ? "exempt" : (emp.salary?.pfMode || (config?.pfModeDefault === "fixed_1800" ? "fixed_1800" : "percentage")));
     setEditPfCustom(emp.salary?.pfDeduction ? String(emp.salary.pfDeduction) : "");
     setEditTdsOptIn(emp.salary?.tdsOptIn !== undefined ? emp.salary.tdsOptIn : true);
@@ -795,10 +795,10 @@ export default function PayrollView({
                         const defaultTaxes = !empTdsOptIn
                           ? 0
                           : computeMonthlyTDSFromEmployee(
-                              { ...emp.salary, taxProfile: emp.salary?.taxProfile as any },
-                              config?.taxType || "percentage",
-                              config?.taxValue ?? 5
-                            );
+                            { ...emp.salary, taxProfile: emp.salary?.taxProfile as any },
+                            config?.taxType || "percentage",
+                            config?.taxValue ?? 5
+                          );
 
                         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
                           (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
@@ -853,10 +853,10 @@ export default function PayrollView({
                             </td>
                             <td className="py-2 px-2 text-center whitespace-nowrap">
                               <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${hasSlip?.status === "Paid"
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
-                                  : hasSlip?.status === "Generated"
-                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
-                                    : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
+                                : hasSlip?.status === "Generated"
+                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
+                                  : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
                                 }`}>
                                 {hasSlip ? hasSlip.status : "Pending Run"}
                               </span>
@@ -966,8 +966,8 @@ export default function PayrollView({
                           key={page}
                           onClick={() => setCurrentPage(page)}
                           className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${safeCurrentPage === page
-                              ? "bg-emerald-600 text-white shadow-xs"
-                              : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a]"
+                            ? "bg-emerald-600 text-white shadow-xs"
+                            : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a]"
                             }`}
                         >
                           {page}
@@ -1570,8 +1570,8 @@ export default function PayrollView({
                         <label
                           key={emp.id}
                           className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${isExempt
-                              ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/50 shadow-xs"
-                              : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
+                            ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/50 shadow-xs"
+                            : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
                             }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -1669,8 +1669,8 @@ export default function PayrollView({
                         <label
                           key={emp.id}
                           className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all text-xs select-none ${isExempt
-                              ? "bg-blue-50/60 dark:bg-blue-950/20 border-blue-300 dark:border-blue-900/50 shadow-xs"
-                              : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
+                            ? "bg-blue-50/60 dark:bg-blue-950/20 border-blue-300 dark:border-blue-900/50 shadow-xs"
+                            : "bg-slate-50/50 dark:bg-[#0a0a0a]/30 border-slate-100 dark:border-[#1a1a1a] hover:bg-slate-100/60"
                             }`}
                         >
                           <div className="flex items-center space-x-3">
@@ -1919,14 +1919,14 @@ export default function PayrollView({
         ).trim();
 
         const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(activeSlip.employeeId) ||
-                           (emp && ((config?.pfExemptEmployeeIds || []).includes(emp.id) ||
-                                   (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
-                                   emp.salary?.pfMode === "exempt"));
+          (emp && ((config?.pfExemptEmployeeIds || []).includes(emp.id) ||
+            (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
+            emp.salary?.pfMode === "exempt"));
 
         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(activeSlip.employeeId) ||
-                            (emp && ((config?.esiExemptEmployeeIds || []).includes(emp.id) ||
-                                    (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
-                                    emp.salary?.esiOptIn === false));
+          (emp && ((config?.esiExemptEmployeeIds || []).includes(emp.id) ||
+            (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
+            emp.salary?.esiOptIn === false));
 
         const slipTelephone = (activeSlip.telephone && activeSlip.telephone > 0) ? activeSlip.telephone : (emp?.salary?.telephone || 0);
         const slipFuel = (activeSlip.fuel && activeSlip.fuel > 0) ? activeSlip.fuel : (emp?.salary?.fuel || 0);
@@ -2033,22 +2033,20 @@ export default function PayrollView({
               <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 shadow-inner">
                 <button
                   onClick={() => setSlipModalTab("payslip")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                    slipModalTab === "payslip"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${slipModalTab === "payslip"
                       ? "bg-emerald-600 text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200"
-                  }`}
+                    }`}
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>Salary Payslip</span>
                 </button>
                 <button
                   onClick={() => setSlipModalTab("form16")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-                    slipModalTab === "form16"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${slipModalTab === "form16"
                       ? "bg-violet-600 text-white shadow-sm"
                       : "text-slate-400 hover:text-slate-200"
-                  }`}
+                    }`}
                 >
                   <Calculator className="w-3.5 h-3.5" />
                   <span>Form 16 (Tax Part-B)</span>
@@ -2096,7 +2094,7 @@ export default function PayrollView({
                       )}
                       <div>
                         <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 font-sans">
-                          {companyName || "MGM FINANCIERS PRIVATE LIMITED"}
+                          {companyName}
                         </h2>
                       </div>
                     </div>
