@@ -60,20 +60,41 @@ export async function POST(request: Request) {
 
     const dbState = loadDatabase();
     const dbClient = supabaseAdmin || supabase;
+    let resolvedCompanyId = (reqCompanyId as string | undefined)?.trim() || "";
+
     if (dbClient) {
       try {
+        if (!resolvedCompanyId && employeeId) {
+          const { data: empRow } = await dbClient.from("employees").select("company_id").eq("id", employeeId).maybeSingle();
+          if (empRow?.company_id) {
+            resolvedCompanyId = empRow.company_id;
+          }
+        }
+
+        if (!resolvedCompanyId && reqCompanyName) {
+          const { data: compRow } = await dbClient.from("companies").select("id").ilike("name", reqCompanyName.trim()).maybeSingle();
+          if (compRow?.id) {
+            resolvedCompanyId = compRow.id;
+          }
+        }
+
+        let empQuery = dbClient.from("employees").select("*");
+        if (resolvedCompanyId) {
+          empQuery = empQuery.eq("company_id", resolvedCompanyId);
+        }
+
         const [
           empRes, attRes, leavesRes, polRes, invRes, invReqRes, finesRes, slipsRes, holRes
         ] = await Promise.all([
-          dbClient.from("employees").select("*"),
+          empQuery,
           dbClient.from("attendance").select("*"),
-          dbClient.from("leaves").select("*"),
-          dbClient.from("policies").select("*"),
-          dbClient.from("inventory").select("*"),
-          dbClient.from("inventory_requests").select("*"),
+          resolvedCompanyId ? dbClient.from("leaves").select("*").or(`company_id.eq.${resolvedCompanyId},company_id.is.null`) : dbClient.from("leaves").select("*"),
+          resolvedCompanyId ? dbClient.from("policies").select("*").or(`company_id.eq.${resolvedCompanyId},company_id.is.null`) : dbClient.from("policies").select("*"),
+          resolvedCompanyId ? dbClient.from("inventory").select("*").or(`company_id.eq.${resolvedCompanyId},company_id.is.null`) : dbClient.from("inventory").select("*"),
+          resolvedCompanyId ? dbClient.from("inventory_requests").select("*").or(`company_id.eq.${resolvedCompanyId},company_id.is.null`) : dbClient.from("inventory_requests").select("*"),
           dbClient.from("fines").select("*"),
           dbClient.from("payslips").select("*"),
-          dbClient.from("holidays").select("*")
+          resolvedCompanyId ? dbClient.from("holidays").select("*").or(`company_id.eq.${resolvedCompanyId},company_id.is.null`) : dbClient.from("holidays").select("*")
         ]);
 
         if (empRes.data && empRes.data.length > 0) {
@@ -83,6 +104,7 @@ export async function POST(request: Request) {
             const emergencyFromRow = typeof row.emergency_contact === "string" ? JSON.parse(row.emergency_contact) : row.emergency_contact;
             return {
               id: row.id,
+              companyId: row.company_id || "",
               fullName: row.full_name || row.fullName || "",
               email: row.email || "",
               phone: row.phone || "",
@@ -123,113 +145,146 @@ export async function POST(request: Request) {
           });
         }
 
+        if (resolvedCompanyId) {
+          dbState.employees = dbState.employees.filter((e: any) => e.companyId === resolvedCompanyId || e.company_id === resolvedCompanyId);
+        }
+
+        const companyEmpIds = new Set(dbState.employees.map((e: any) => (e.id || "").toLowerCase()));
+
         if (attRes.data && attRes.data.length > 0) {
-          dbState.attendance = attRes.data.map((row: any) => ({
-            id: row.id,
-            employeeId: row.employee_id || row.employeeId || "",
-            date: row.date,
-            clockIn: row.clock_in || row.clockIn,
-            clockOut: row.clock_out || row.clockOut,
-            status: row.status || "Present",
-            workFromHome: row.work_from_home ?? row.workFromHome ?? false,
-            notes: row.notes || "",
-            breaks: []
-          }));
+          dbState.attendance = attRes.data
+            .filter((row: any) => companyEmpIds.has((row.employee_id || row.employeeId || "").toLowerCase()))
+            .map((row: any) => ({
+              id: row.id,
+              employeeId: row.employee_id || row.employeeId || "",
+              date: row.date,
+              clockIn: row.clock_in || row.clockIn,
+              clockOut: row.clock_out || row.clockOut,
+              status: row.status || "Present",
+              workFromHome: row.work_from_home ?? row.workFromHome ?? false,
+              notes: row.notes || "",
+              breaks: []
+            }));
         }
 
         if (leavesRes.data && leavesRes.data.length > 0) {
-          dbState.leaves = leavesRes.data.map((row: any) => ({
-            id: row.id,
-            employeeId: row.employee_id || row.employeeId || "",
-            employeeName: row.employee_name || row.employeeName || "",
-            leaveType: row.leave_type || row.leaveType || "Casual Leave",
-            startDate: row.start_date || row.startDate || "",
-            endDate: row.end_date || row.endDate || "",
-            reason: row.reason || "",
-            status: row.status || "Pending",
-            appliedDate: row.applied_date || row.appliedDate || ""
-          }));
+          dbState.leaves = leavesRes.data
+            .filter((row: any) => companyEmpIds.has((row.employee_id || row.employeeId || "").toLowerCase()) || (resolvedCompanyId && (row.company_id === resolvedCompanyId || row.companyId === resolvedCompanyId)))
+            .map((row: any) => ({
+              id: row.id,
+              employeeId: row.employee_id || row.employeeId || "",
+              employeeName: row.employee_name || row.employeeName || "",
+              leaveType: row.leave_type || row.leaveType || "Casual Leave",
+              startDate: row.start_date || row.startDate || "",
+              endDate: row.end_date || row.endDate || "",
+              reason: row.reason || "",
+              status: row.status || "Pending",
+              appliedDate: row.applied_date || row.appliedDate || ""
+            }));
         }
 
         if (polRes.data && polRes.data.length > 0) {
-          dbState.policies = polRes.data.map((row: any) => ({
-            id: row.id,
-            title: row.title || "",
-            category: row.category || "Conduct & Ethics",
-            content: row.content || "",
-            lastUpdated: row.last_updated || row.lastUpdated || ""
-          }));
+          dbState.policies = polRes.data
+            .filter((row: any) => !resolvedCompanyId || row.company_id === resolvedCompanyId || row.companyId === resolvedCompanyId)
+            .map((row: any) => ({
+              id: row.id,
+              title: row.title || "",
+              category: row.category || "Conduct & Ethics",
+              content: row.content || "",
+              lastUpdated: row.last_updated || row.lastUpdated || ""
+            }));
         }
 
         if (invRes.data && invRes.data.length > 0) {
-          dbState.inventory = invRes.data.map((row: any) => ({
-            id: row.id,
-            name: row.name || "",
-            serialNumber: row.serial_number || row.serialNumber || "",
-            category: row.category || "Laptop",
-            status: row.status || "Available",
-            assignedToEmployeeId: row.assigned_to_employee_id || row.assignedToEmployeeId || null,
-            assignedDate: row.assigned_date || row.assignedDate || null
-          }));
+          dbState.inventory = invRes.data
+            .filter((row: any) => !resolvedCompanyId || row.company_id === resolvedCompanyId || row.companyId === resolvedCompanyId || (row.assigned_to_employee_id && companyEmpIds.has(String(row.assigned_to_employee_id).toLowerCase())))
+            .map((row: any) => ({
+              id: row.id,
+              name: row.name || "",
+              serialNumber: row.serial_number || row.serialNumber || "",
+              category: row.category || "Laptop",
+              status: row.status || "Available",
+              assignedToEmployeeId: row.assigned_to_employee_id || row.assignedToEmployeeId || null,
+              assignedDate: row.assigned_date || row.assignedDate || null
+            }));
         }
 
         if (invReqRes.data && invReqRes.data.length > 0) {
-          dbState.inventoryRequests = invReqRes.data.map((row: any) => ({
-            id: row.id,
-            employeeId: row.employee_id || row.employeeId || "",
-            employeeName: row.employee_name || row.employeeName || "",
-            itemName: row.item_name || row.itemName || "",
-            category: row.category || "Laptop",
-            requestDate: row.request_date || row.requestDate || "",
-            reason: row.reason || "",
-            status: row.status || "Pending"
-          }));
+          dbState.inventoryRequests = invReqRes.data
+            .filter((row: any) => companyEmpIds.has((row.employee_id || row.employeeId || "").toLowerCase()) || (resolvedCompanyId && (row.company_id === resolvedCompanyId || row.companyId === resolvedCompanyId)))
+            .map((row: any) => ({
+              id: row.id,
+              employeeId: row.employee_id || row.employeeId || "",
+              employeeName: row.employee_name || row.employeeName || "",
+              itemName: row.item_name || row.itemName || "",
+              category: row.category || "Laptop",
+              requestDate: row.request_date || row.requestDate || "",
+              reason: row.reason || "",
+              status: row.status || "Pending"
+            }));
         }
 
         if (finesRes.data && finesRes.data.length > 0) {
-          dbState.fines = finesRes.data.map((row: any) => ({
-            id: row.id,
-            employeeId: row.employee_id || row.employeeId || "",
-            employeeName: row.employee_name || row.employeeName || "",
-            reason: row.reason || "Late Coming",
-            amount: Number(row.amount) || 0,
-            date: row.date || "",
-            status: row.status || "Pending"
-          }));
+          dbState.fines = finesRes.data
+            .filter((row: any) => companyEmpIds.has((row.employee_id || row.employeeId || "").toLowerCase()))
+            .map((row: any) => ({
+              id: row.id,
+              employeeId: row.employee_id || row.employeeId || "",
+              employeeName: row.employee_name || row.employeeName || "",
+              reason: row.reason || "Late Coming",
+              amount: Number(row.amount) || 0,
+              date: row.date || "",
+              status: row.status || "Pending"
+            }));
         }
 
         if (slipsRes.data && slipsRes.data.length > 0) {
-          dbState.payslips = slipsRes.data.map((row: any) => ({
-            id: row.id,
-            employeeId: row.employee_id || row.employeeId || "",
-            month: row.month || "",
-            basic: Number(row.basic) || 0,
-            hra: Number(row.hra) || 0,
-            telephone: Number(row.telephone) || 0,
-            fuel: Number(row.fuel) || 0,
-            professionalDev: Number(row.professional_dev ?? row.professionalDev) || 0,
-            lta: Number(row.lta) || 0,
-            allowances: Number(row.allowances) || 0,
-            finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
-            pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
-            taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
-            netPay: Number(row.net_pay ?? row.netPay ?? 0),
-            status: row.status || "Generated",
-            generatedAt: row.generated_at || row.generatedAt || "",
-            sentToEmail: row.sent_to_email || row.sentToEmail || ""
-          }));
+          dbState.payslips = slipsRes.data
+            .filter((row: any) => companyEmpIds.has((row.employee_id || row.employeeId || "").toLowerCase()))
+            .map((row: any) => ({
+              id: row.id,
+              employeeId: row.employee_id || row.employeeId || "",
+              month: row.month || "",
+              basic: Number(row.basic) || 0,
+              hra: Number(row.hra) || 0,
+              telephone: Number(row.telephone) || 0,
+              fuel: Number(row.fuel) || 0,
+              professionalDev: Number(row.professional_dev ?? row.professionalDev) || 0,
+              lta: Number(row.lta) || 0,
+              allowances: Number(row.allowances) || 0,
+              finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
+              pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
+              taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
+              netPay: Number(row.net_pay ?? row.netPay ?? 0),
+              status: row.status || "Generated",
+              generatedAt: row.generated_at || row.generatedAt || "",
+              sentToEmail: row.sent_to_email || row.sentToEmail || ""
+            }));
         }
 
         if (holRes.data && holRes.data.length > 0) {
-          dbState.holidays = holRes.data.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            date: row.date,
-            type: row.type || "National"
-          }));
+          dbState.holidays = holRes.data
+            .filter((row: any) => !resolvedCompanyId || row.company_id === resolvedCompanyId || row.companyId === resolvedCompanyId)
+            .map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              date: row.date,
+              type: row.type || "National"
+            }));
         }
       } catch (sbErr) {
         console.warn("Failed to load live database from Supabase for chatbot, using local fallback:", sbErr);
+      }
+    } else {
+      if (resolvedCompanyId) {
+        dbState.employees = dbState.employees.filter(e => e.companyId === resolvedCompanyId || (e as any).company_id === resolvedCompanyId);
+        const companyEmpIds = new Set(dbState.employees.map(e => (e.id || "").toLowerCase()));
+        dbState.attendance = (dbState.attendance || []).filter(a => companyEmpIds.has((a.employeeId || "").toLowerCase()));
+        dbState.leaves = (dbState.leaves || []).filter(l => companyEmpIds.has((l.employeeId || "").toLowerCase()));
+        dbState.policies = (dbState.policies || []).filter(p => !resolvedCompanyId || p.companyId === resolvedCompanyId || (p as any).company_id === resolvedCompanyId);
+        dbState.fines = (dbState.fines || []).filter(f => companyEmpIds.has((f.employeeId || "").toLowerCase()));
+        dbState.payslips = (dbState.payslips || []).filter(p => companyEmpIds.has((p.employeeId || "").toLowerCase()));
+        dbState.holidays = (dbState.holidays || []).filter(h => !resolvedCompanyId || h.companyId === resolvedCompanyId || (h as any).company_id === resolvedCompanyId);
       }
     }
     const employee = dbState.employees.find(e => e.id === employeeId);
@@ -444,97 +499,266 @@ ${policiesContext}
 }
 
 function getSmartRuleResponse(message: string, dbState: any, employee: any, tenantName: string = "Corporate"): string {
-  const msgLower = message.toLowerCase();
+  const msgLower = message.toLowerCase().trim();
   const userRole = employee ? employee.role : "employee";
+  const employees: any[] = dbState.employees || [];
+  const attendance: any[] = dbState.attendance || [];
+  const leaves: any[] = dbState.leaves || [];
+  const policies: any[] = dbState.policies || [];
+  const holidays: any[] = dbState.holidays || [];
+  const payslips: any[] = dbState.payslips || [];
+  const fines: any[] = dbState.fines || [];
 
-  // 1. Upcoming Holidays
-  if (msgLower.includes("holiday") || msgLower.includes("festival") || msgLower.includes("vacation")) {
-    if (!dbState.holidays || dbState.holidays.length === 0) {
-      return "There are no upcoming company holidays configured at this time.";
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // Helper: Find best matched employee by exact name, ID, email, or token match
+  let matchedEmp: any = null;
+  let bestScore = 0;
+
+  for (const e of employees) {
+    const fullName = (e.fullName || "").toLowerCase();
+    const id = (e.id || "").toLowerCase();
+    const email = (e.email || "").toLowerCase();
+
+    if (id && msgLower.includes(id)) {
+      matchedEmp = e;
+      bestScore = 9999;
+      break;
     }
-    const holidayList = dbState.holidays
-      .map((h: any) => `• **${h.name}**: ${h.date} (${h.type || "Holiday"})`)
-      .join("\n");
-    return `### 📅 Upcoming Company Holidays\n\n${holidayList}\n\n*Plan your leave requests in advance via the Leaves tab!*`;
+    if (email && msgLower.includes(email)) {
+      matchedEmp = e;
+      bestScore = 9999;
+      break;
+    }
+    if (fullName && msgLower.includes(fullName)) {
+      const score = 1000 + fullName.length;
+      if (score > bestScore) {
+        bestScore = score;
+        matchedEmp = e;
+      }
+      continue;
+    }
+
+    const nameParts = fullName.split(/\s+/).filter((p: string) => p.length > 2);
+    let matchedPartsCount = 0;
+    for (const part of nameParts) {
+      if (msgLower.includes(part)) {
+        matchedPartsCount++;
+      }
+    }
+    if (matchedPartsCount > 0 && matchedPartsCount > bestScore) {
+      bestScore = matchedPartsCount;
+      matchedEmp = e;
+    }
   }
 
-  // 2. Who is present today / How many present today
-  if (msgLower.includes("present") || msgLower.includes("attendance today") || msgLower.includes("clocked in")) {
-    const d = new Date();
-    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const todayAttendance = (dbState.attendance || []).filter((a: any) => a.date === todayStr && (a.status === "Present" || a.status === "Late"));
+  // ── 1. Specific Employee Query (Role, Salary, Contact, Details) ──
+  if (matchedEmp) {
+    const empName = matchedEmp.fullName || matchedEmp.id;
+    const empRole = matchedEmp.role?.toUpperCase() || "EMPLOYEE";
+    const salary = matchedEmp.salary || { basic: 0, hra: 0, allowances: 0, pfDeduction: 0, tdsDeduction: 0 };
+    const gross = (salary.basic || 0) + (salary.hra || 0) + (salary.allowances || 0) + (salary.telephone || 0) + (salary.fuel || 0);
+    const deductions = (salary.pfDeduction || 0) + (salary.tdsDeduction || 0);
+    const netPay = Math.max(0, gross - deductions);
+
+    // 1A: Salary / Pay inquiry
+    if (msgLower.includes("salary") || msgLower.includes("basic") || msgLower.includes("hra") || msgLower.includes("pay") || msgLower.includes("ctc") || msgLower.includes("earning")) {
+      const isSelf = employee && employee.id === matchedEmp.id;
+      const isAuthorized = userRole === "admin" || userRole === "hr" || isSelf;
+
+      if (!isAuthorized) {
+        return `🔒 **Confidential Information**: Salary details for **${empName}** are private and only accessible to HR and Administrators.`;
+      }
+
+      return `### 💼 Salary Particulars for **${empName}** (${empRole})\n\n` +
+        `• **Basic Pay**: ₹ ${(salary.basic || 0).toLocaleString('en-IN')}\n` +
+        `• **House Rent Allowance (HRA)**: ₹ ${(salary.hra || 0).toLocaleString('en-IN')}\n` +
+        `• **Special Allowances**: ₹ ${(salary.allowances || 0).toLocaleString('en-IN')}\n` +
+        `• **Provident Fund (PF Deduction)**: ₹ ${(salary.pfDeduction || 0).toLocaleString('en-IN')}\n` +
+        `• **TDS / Tax Deduction**: ₹ ${(salary.tdsDeduction || 0).toLocaleString('en-IN')}\n` +
+        `• **Estimated Net Monthly Pay**: ₹ ${netPay.toLocaleString('en-IN')}\n\n` +
+        `*Department: ${matchedEmp.department || "General"} • Branch: ${matchedEmp.branch || "Head Office"}*`;
+    }
+
+    // 1B: Role / Designation inquiry
+    if (msgLower.includes("role") || msgLower.includes("designation") || msgLower.includes("position") || msgLower.includes("who is") || msgLower.includes("job") || msgLower.includes("work as") || msgLower.includes("department")) {
+      return `### 👤 Employee Profile: **${empName}**\n\n` +
+        `• **Role**: **${empRole}**\n` +
+        `• **Employee Code / ID**: \`${matchedEmp.id}\`\n` +
+        `• **Department**: ${matchedEmp.department || "Operations"}\n` +
+        `• **Branch Office**: ${matchedEmp.branch || "Head Office"}\n` +
+        `• **Email**: ${matchedEmp.email || "N/A"}\n` +
+        `• **Status**: ${matchedEmp.status || "Active"}\n` +
+        `• **Joining Date**: ${matchedEmp.joiningDate || "N/A"}`;
+    }
+
+    // 1C: Contact / Email / Phone inquiry
+    if (msgLower.includes("email") || msgLower.includes("phone") || msgLower.includes("contact") || msgLower.includes("mobile") || msgLower.includes("number")) {
+      return `### 📞 Contact Details for **${empName}**\n\n` +
+        `• **Email**: ${matchedEmp.email || "N/A"}\n` +
+        `• **Phone**: ${matchedEmp.phone || "Not listed"}\n` +
+        `• **Branch**: ${matchedEmp.branch || "Head Office"}\n` +
+        `• **Department**: ${matchedEmp.department || "Operations"}`;
+    }
+
+    // 1D: Attendance / Status of specific employee today
+    if (msgLower.includes("attendance") || msgLower.includes("present") || msgLower.includes("clock") || msgLower.includes("punch") || msgLower.includes("status")) {
+      const punch = attendance.find(a => a.employeeId === matchedEmp.id && a.date === todayStr);
+      if (punch) {
+        return `### ⏱️ Attendance Status for **${empName}** Today (${todayStr})\n\n` +
+          `• **Status**: **${punch.status}**${punch.workFromHome ? " (Work From Home - WFH)" : " (Office)"}\n` +
+          `• **Clock In**: ${punch.clockIn || "N/A"}\n` +
+          `• **Clock Out**: ${punch.clockOut || "Working..."}`;
+      } else {
+        return `### ⏱️ Attendance Status for **${empName}** Today (${todayStr})\n\n` +
+          `**${empName}** has not clocked in yet today.`;
+      }
+    }
+
+    // 1E: General summary for the matched employee
+    return `### 👤 Overview for **${empName}**\n\n` +
+      `• **Role**: **${empRole}**\n` +
+      `• **ID**: \`${matchedEmp.id}\`\n` +
+      `• **Department**: ${matchedEmp.department || "Operations"}\n` +
+      `• **Branch**: ${matchedEmp.branch || "Head Office"}\n` +
+      `• **Email**: ${matchedEmp.email || "N/A"}\n` +
+      `• **Status**: ${matchedEmp.status || "Active"}`;
+  }
+
+  // ── 2. Counts / Role Breakdown (HR count, Admin count, Employee count) ──
+  if (msgLower.includes("how many hr") || msgLower.includes("who is hr") || msgLower.includes("hr list") || msgLower.includes("hrs in")) {
+    const hrList = employees.filter(e => e.role === "hr");
+    const hrNames = hrList.map(e => `• **${e.fullName}** (\`${e.id}\`) — *${e.branch || "Head Office"}*`).join("\n");
+    return `### 👥 HR Team at ${tenantName}\n\n` +
+      `There ${hrList.length === 1 ? "is" : "are"} currently **${hrList.length} HR Manager(s)** registered:\n\n` +
+      `${hrNames || "No HR users registered."}`;
+  }
+
+  if (msgLower.includes("how many admin") || msgLower.includes("who is admin") || msgLower.includes("admin list") || msgLower.includes("admins in")) {
+    const adminList = employees.filter(e => e.role === "admin" || e.role === "super_admin");
+    const adminNames = adminList.map(e => `• **${e.fullName}** (\`${e.id}\`) — *${e.branch || "Head Office"}*`).join("\n");
+    return `### 🛡️ Administrators at ${tenantName}\n\n` +
+      `There ${adminList.length === 1 ? "is" : "are"} currently **${adminList.length} Administrator(s)**:\n\n` +
+      `${adminNames || "No Admin users registered."}`;
+  }
+
+  if (msgLower.includes("how many employee") || msgLower.includes("total employee") || msgLower.includes("employee count") || msgLower.includes("list employee") || msgLower.includes("all employee") || msgLower.includes("list of employee") || msgLower.includes("who works here")) {
+    const active = employees.filter(e => e.status === "Active");
+    const list = employees.map(e => `• **${e.fullName}** (\`${e.id}\`) — *${e.role.toUpperCase()}*, ${e.department || "General"} (${e.branch || "Head Office"})`).join("\n");
+    return `### 🏢 Employees at ${tenantName}\n\n` +
+      `• **Total Registered**: **${employees.length}**\n` +
+      `• **Active Workforce**: **${active.length}**\n\n` +
+      `**Staff Directory:**\n${list}`;
+  }
+
+  // ── 3. Attendance Today (Who is present, late, absent, WFH) ──
+  if (msgLower.includes("present") || msgLower.includes("attendance today") || msgLower.includes("clocked in") || msgLower.includes("who is in office") || msgLower.includes("how many present")) {
+    const todayAttendance = attendance.filter((a: any) => a.date === todayStr && (a.status === "Present" || a.status === "Late"));
     
     if (userRole === "admin" || userRole === "hr") {
       const presentEmps = todayAttendance.map((a: any) => {
-        const emp = (dbState.employees || []).find((e: any) => e.id === a.employeeId);
-        return `• ${emp ? emp.fullName : a.employeeId} (${a.status}${a.workFromHome ? ' - WFH' : ''})`;
+        const emp = employees.find((e: any) => e.id === a.employeeId);
+        return `• **${emp ? emp.fullName : a.employeeId}** (${a.status}${a.workFromHome ? ' - WFH' : ' - Office'}, In: ${a.clockIn || "Recorded"})`;
       });
-      return `### 📊 Today's Attendance Overview (${todayStr})\n\n**Total Present:** ${todayAttendance.length} employee(s)\n\n${presentEmps.length > 0 ? presentEmps.join('\n') : "No employees have clocked in yet today."}`;
+      return `### 📊 Today's Attendance Overview (${todayStr})\n\n` +
+        `**Total Present:** **${todayAttendance.length} employee(s)**\n\n` +
+        `${presentEmps.length > 0 ? presentEmps.join('\n') : "No employees have clocked in yet today."}`;
     } else {
-      return `### 📊 Today's Attendance\n\n**Total Employees Present Today:** ${todayAttendance.length}\n(Detailed attendance rosters are restricted to HR & Admins).`;
+      return `### 📊 Today's Attendance\n\n**Total Employees Present Today:** **${todayAttendance.length}**\n*(Detailed individual rosters are restricted to HR & Admins).*`;
     }
   }
 
-  // 3. Who is on leave today
-  if (msgLower.includes("leave today") || msgLower.includes("who is on leave") || msgLower.includes("absent today")) {
-    const d = new Date();
-    const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const activeLeaves = (dbState.leaves || []).filter((l: any) => l.status === "Approved" && todayStr >= l.startDate && todayStr <= l.endDate);
+  if (msgLower.includes("late") || msgLower.includes("late login") || msgLower.includes("late coming")) {
+    const lateToday = attendance.filter((a: any) => a.date === todayStr && a.status === "Late");
+    const lateList = lateToday.map(a => {
+      const emp = employees.find(e => e.id === a.employeeId);
+      return `• **${emp ? emp.fullName : a.employeeId}** (Clocked in: ${a.clockIn || "Late"})`;
+    });
+    return `### ⏰ Late Logins Today (${todayStr})\n\n` +
+      `**Total Late:** **${lateToday.length} employee(s)**\n\n` +
+      `${lateList.length > 0 ? lateList.join('\n') : "🎉 No late logins recorded today! All staff were on time."}`;
+  }
+
+  // ── 4. Leaves & Holidays ──
+  if (msgLower.includes("leave today") || msgLower.includes("who is on leave") || msgLower.includes("absent today") || msgLower.includes("on leave")) {
+    const activeLeaves = leaves.filter((l: any) => l.status === "Approved" && todayStr >= l.startDate && todayStr <= l.endDate);
 
     if (activeLeaves.length === 0) {
-      return `### 🌴 On Leave Today (${todayStr})\n\nNo employees are currently on approved leave today. All rostered staff are scheduled.`;
+      return `### 🌴 On Leave Today (${todayStr})\n\nNo employees are currently on approved leave today. All rostered staff are active.`;
     }
 
-    if (userRole === "admin" || userRole === "hr") {
-      const leaveList = activeLeaves.map((l: any) => `• **${l.employeeName}**: ${l.leaveType} (${l.startDate} to ${l.endDate})`).join('\n');
-      return `### 🌴 Employees On Approved Leave Today (${todayStr})\n\n${leaveList}`;
-    } else {
-      return `### 🌴 On Leave Today\n\nThere are **${activeLeaves.length} employee(s)** on approved leave today.`;
-    }
+    const leaveList = activeLeaves.map((l: any) => `• **${l.employeeName}**: ${l.leaveType} (${l.startDate} to ${l.endDate})`).join('\n');
+    return `### 🌴 Employees On Approved Leave Today (${todayStr})\n\n${leaveList}`;
   }
 
-  // 4. Leave balance
-  if (msgLower.includes("leave balance") || msgLower.includes("my leaves") || msgLower.includes("remaining leave")) {
+  if (msgLower.includes("leave balance") || msgLower.includes("my leave") || msgLower.includes("remaining leave") || msgLower.includes("leave quota")) {
     if (!employee) {
       return "Please log in to view your personalized leave balance details.";
     }
-    const userLeaves = (dbState.leaves || []).filter((l: any) => l.employeeId === employee.id && l.status === "Approved");
+    const userLeaves = leaves.filter((l: any) => l.employeeId === employee.id && l.status === "Approved");
     const casualUsed = userLeaves.filter((l: any) => l.leaveType === "Casual Leave").length;
     const medicalUsed = userLeaves.filter((l: any) => l.leaveType === "Medical Leave").length;
 
-    return `### 🗓️ Your Leave Balance Summary (${employee.fullName})\n\n` +
-      `• **Casual Leaves**: ${18 - casualUsed} Days Remaining (18 Total Quota)\n` +
-      `• **Medical Leaves**: ${12 - medicalUsed} Days Remaining (12 Total Quota)\n` +
+    return `### 🗓️ Leave Balance Summary for **${employee.fullName}**\n\n` +
+      `• **Casual Leaves**: **${Math.max(0, 18 - casualUsed)} Days Remaining** (Quota: 18)\n` +
+      `• **Medical Leaves**: **${Math.max(0, 12 - medicalUsed)} Days Remaining** (Quota: 12)\n` +
       `• **Earned Leaves**: Accrued monthly according to corporate policy\n\n` +
-      `*You can submit a new leave request under the Leaves tab.*`;
+      `*You can apply for time off directly under the Leaves & Holidays tab.*`;
   }
 
-  // 5. WFH or fine policies
-  if (msgLower.includes("policy") || msgLower.includes("wfh") || msgLower.includes("work from home") || msgLower.includes("fine") || msgLower.includes("late") || msgLower.includes("secure")) {
-    const matchedPolicies = (dbState.policies || []).filter((p: any) => 
-      p.title.toLowerCase().includes("wfh") || 
-      p.title.toLowerCase().includes("fine") || 
-      p.title.toLowerCase().includes("late") ||
-      p.content.toLowerCase().includes("work from home") ||
-      p.content.toLowerCase().includes("late") ||
-      p.content.toLowerCase().includes("secure") ||
-      p.title.toLowerCase().includes("security")
-    );
+  if (msgLower.includes("holiday") || msgLower.includes("festival") || msgLower.includes("vacation") || msgLower.includes("off day")) {
+    if (!holidays || holidays.length === 0) {
+      return `There are no upcoming company holidays configured for ${tenantName} at this time.`;
+    }
+    const holidayList = holidays
+      .map((h: any) => `• **${h.name}**: ${h.date} (${h.type || "National Holiday"})`)
+      .join("\n");
+    return `### 📅 Company Holidays (${tenantName})\n\n${holidayList}\n\n*Plan your leave requests in advance via the Leaves & Holidays tab.*`;
+  }
+
+  // ── 5. Company Policies (WFH, Ethics, Security, Travel) ──
+  if (msgLower.includes("policy") || msgLower.includes("wfh") || msgLower.includes("work from home") || msgLower.includes("fine") || msgLower.includes("guideline") || msgLower.includes("rules") || msgLower.includes("handbook")) {
+    if (!policies || policies.length === 0) {
+      return `### 📖 Company Policies\n\nStandard ${tenantName} compliance guidelines apply. No custom policy documents have been published yet.`;
+    }
+
+    const matchedPolicies = policies.filter((p: any) => {
+      const t = (p.title || "").toLowerCase();
+      const c = (p.content || "").toLowerCase();
+      const cat = (p.category || "").toLowerCase();
+      return msgLower.includes(t) || t.includes("wfh") || t.includes("conduct") || t.includes("security") || c.includes("wfh") || cat.includes("conduct");
+    });
 
     if (matchedPolicies.length > 0) {
       const polText = matchedPolicies.map((p: any) => `#### 📜 ${p.title} (${p.category})\n${p.content}`).join("\n\n");
-      return `### 📖 Relevant Corporate Policies\n\n${polText}`;
+      return `### 📖 Relevant Corporate Policies (${tenantName})\n\n${polText}`;
     }
 
-    const allPolicies = (dbState.policies || []).map((p: any) => `• **${p.title}** (${p.category})`).join("\n");
-    return `### 📖 Company Policies Overview\n\n${allPolicies || `Standard ${tenantName} compliance rules apply.`}`;
+    const allPolicies = policies.map((p: any) => `• **${p.title}** (${p.category})`).join("\n");
+    return `### 📖 ${tenantName} Policies Overview\n\n${allPolicies}\n\n*You can view full policy handbooks under the Policies tab.*`;
   }
 
-  // 6. General query fallback
-  return `Hello! I am your ${tenantName} AI Assistant.\n\n` +
-    `Live status summary:\n` +
-    `• **Active Employees**: ${(dbState.employees || []).length}\n` +
-    `• **Upcoming Holidays**: ${(dbState.holidays || []).length} scheduled\n` +
-    `• **Published Policies**: ${(dbState.policies || []).length} active\n\n` +
-    `How can I assist you with attendance, leaves, company policies, or payroll information?`;
+  // ── 6. Company Info & Branches ──
+  if (msgLower.includes("company") || msgLower.includes("branch") || msgLower.includes("branches") || msgLower.includes("head office")) {
+    const branches = Array.from(new Set(employees.map(e => e.branch).filter(Boolean)));
+    return `### 🏢 **${tenantName}** Overview\n\n` +
+      `• **Total Workforce**: **${employees.length} employees**\n` +
+      `• **Active Branches**: ${branches.length > 0 ? branches.join(", ") : "Main Office"}\n` +
+      `• **Published Policies**: ${policies.length} active\n` +
+      `• **Scheduled Holidays**: ${holidays.length} upcoming`;
+  }
+
+  // ── 7. Default Friendly Fallback ──
+  return `Hello! I am your **${tenantName} AI Assistant**.\n\n` +
+    `Live status for **${tenantName}**:\n` +
+    `• **Active Employees**: ${employees.length}\n` +
+    `• **Upcoming Holidays**: ${holidays.length} scheduled\n` +
+    `• **Published Policies**: ${policies.length} active\n\n` +
+    `You can ask me about:\n` +
+    `• Employee roles, departments & contact details (e.g. *"What is role of Gulam Raza?"*)\n` +
+    `• Salary and pay information for authorized staff (e.g. *"What is basic salary of Mohammad Shah Nawaz?"*)\n` +
+    `• Team breakdowns (e.g. *"How many HR are there in my company?"*)\n` +
+    `• Today's attendance & roster (e.g. *"Who is present today?"*)\n` +
+    `• Leave balances & upcoming holidays`;
 }
