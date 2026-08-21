@@ -245,11 +245,22 @@ export async function POST(request: Request) {
       } catch (e) {}
 
       const companyId = await getCompanyIdForEmployee(employeeId);
+      const emp = (db.employees || []).find(e => e.id === employeeId);
+      const empBranch = emp?.branch || "";
       let lateTime = "09:30";
+
       if (supabase) {
         try {
           let settingsData = null;
-          if (companyId) {
+          if (empBranch && companyId) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).eq("branch", empBranch).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData && empBranch) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("branch", empBranch).maybeSingle();
+            if (data) settingsData = data;
+          }
+          if (!settingsData && companyId) {
             const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
             if (data) settingsData = data;
           }
@@ -262,8 +273,9 @@ export async function POST(request: Request) {
           }
         } catch (e) {}
       } else {
+        const branchSettings = empBranch && db.branchTimingSettings?.[empBranch];
         const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
-        lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
+        lateTime = branchSettings?.lateThreshold || compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
       }
 
       const [lateHours, lateMinutes] = lateTime.split(":").map(Number);

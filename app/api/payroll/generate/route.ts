@@ -49,7 +49,12 @@ async function syncLocalDbWithSupabase(db: any) {
           },
           companyId: row.company_id || row.companyId || "a1b2c3d4-0001-0001-0001-000000000001",
           address: row.address || "",
-
+          pan: String(row.pan || (typeof row.custom_fields === "string" ? JSON.parse(row.custom_fields)?.pan : row.custom_fields?.pan) || ""),
+          uan: String(row.uan || (typeof row.custom_fields === "string" ? JSON.parse(row.custom_fields)?.uan : row.custom_fields?.uan) || ""),
+          customFields: {
+            pan: String(row.pan || (typeof row.custom_fields === "string" ? JSON.parse(row.custom_fields)?.pan : row.custom_fields?.pan) || ""),
+            uan: String(row.uan || (typeof row.custom_fields === "string" ? JSON.parse(row.custom_fields)?.uan : row.custom_fields?.uan) || "")
+          },
           emergencyContact: { name: "", relation: "", phone: "" },
           documents: [],
           onboardingTasks: [],

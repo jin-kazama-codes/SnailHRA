@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase, initialOnboardingChecklistTemplates, initialExitChecklistTemplates } from "@/src/lib/db";
 import { supabase, syncFineToSupabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
+import { toBranchId, toBranchName, encodeBranchPrefix, extractBranchPrefix } from "@/src/lib/branchUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
         payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
         seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes,
-        grievancesRes, performanceRes, checklistTemplatesRes
+        grievancesRes, performanceRes, checklistTemplatesRes, timingSettingsRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -148,7 +149,8 @@ export async function GET(request: Request) {
             : safeQuery(dbClient.from("performance_records").select("*").order("created_at", { ascending: false })),
           companyId
             ? safeQuery(dbClient.from("checklist_templates").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
-            : safeQuery(dbClient.from("checklist_templates").select("*"))
+            : safeQuery(dbClient.from("checklist_templates").select("*")),
+          safeQuery(dbClient.from("timing_settings").select("*"))
         ]),
         queryTimeout(4500)
       ]);
@@ -206,7 +208,8 @@ export async function GET(request: Request) {
           id: row.id,
           title: capitalizeName(row.title),
           department: capitalizeName(row.department),
-          companyId: row.company_id || row.companyId || null
+          companyId: row.company_id || row.companyId || null,
+          branch: row.branch || undefined
         }));
         const desMap = new Map();
         (db.designations || []).forEach((d: any) => { if (d.id) desMap.set(d.id, d); });
@@ -219,6 +222,7 @@ export async function GET(request: Request) {
           id: row.id,
           name: capitalizeName(row.name),
           companyId: row.company_id || row.companyId || null,
+          branch: row.branch || undefined,
           description: row.description || ""
         }));
         const catMap = new Map();
@@ -233,6 +237,7 @@ export async function GET(request: Request) {
           title: row.title || "",
           description: row.description || "",
           companyId: row.company_id || row.companyId || null,
+          branch: row.branch || undefined,
           createdAt: row.created_at || row.createdAt || new Date().toISOString()
         }));
       }
@@ -281,27 +286,41 @@ export async function GET(request: Request) {
       }
 
       if (policiesRes.data) {
-        db.policies = policiesRes.data.map((row: any) => ({
-          id: row.id,
-          title: row.title || "",
-          category: row.category || "Conduct & Ethics",
-          content: row.content || "",
-          lastUpdated: row.last_updated || row.lastUpdated || new Date().toISOString().split("T")[0],
-          companyId: row.company_id || row.companyId || undefined
-        }));
+        db.policies = policiesRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.content);
+          return {
+            id: row.id,
+            title: row.title || "",
+            category: row.category || "Conduct & Ethics",
+            content: extracted.cleanText || row.content || "",
+            branch: row.branch ? toBranchName(row.branch) : extracted.branch,
+            lastUpdated: row.last_updated || row.lastUpdated || new Date().toISOString().split("T")[0],
+            companyId: row.company_id || row.companyId || undefined
+          };
+        });
       }
 
       if (inventoryRequestsRes.data && inventoryRequestsRes.data.length > 0) {
-        const sbRequests = inventoryRequestsRes.data.map((row: any) => ({
-          id: row.id,
-          employeeId: row.employee_id || row.employeeId || "",
-          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
-          itemName: row.item_name || row.itemName || "",
-          category: row.category || "Laptop",
-          requestDate: row.request_date || row.requestDate || "",
-          reason: row.reason || "",
-          status: row.status || "Pending"
-        }));
+        const sbRequests = inventoryRequestsRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.item_name || row.itemName);
+          const emp = (db.employees || []).find((e: any) => e.id === (row.employee_id || row.employeeId));
+          const resolvedBranch = row.branch 
+            ? toBranchName(row.branch) 
+            : (extracted.branch || (emp?.branch ? toBranchName(emp.branch) : undefined));
+
+          return {
+            id: row.id,
+            employeeId: row.employee_id || row.employeeId || "",
+            employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+            itemName: extracted.cleanText || row.item_name || row.itemName || "",
+            category: row.category || "Laptop",
+            requestDate: row.request_date || row.requestDate || "",
+            reason: row.reason || "",
+            branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+            status: row.status || "Pending",
+            companyId: row.company_id || row.companyId || undefined
+          };
+        });
         const reqMap = new Map();
         (db.inventoryRequests || []).forEach((r: any) => { if (r.id) reqMap.set(r.id, r); });
         sbRequests.forEach((r: any) => { reqMap.set(r.id, r); });
@@ -309,17 +328,32 @@ export async function GET(request: Request) {
       }
 
       if (inventoryRes.data) {
-        db.inventory = inventoryRes.data.map((row: any) => ({
-          id: row.id,
-          name: row.name || "",
-          serialNumber: row.serial_number || row.serialNumber || "",
-          category: row.category || "Laptop",
-          status: row.status || "Available",
-          assignedToEmployeeId: row.assigned_to_employee_id || row.assignedToEmployeeId || null,
-          assignedDate: row.assigned_date || row.assignedDate || null,
-          branch: undefined,
-          companyId: row.company_id || row.companyId || undefined
-        }));
+        db.inventory = inventoryRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.name);
+          const assignedEmp = (db.employees || []).find((e: any) => e.id === (row.assigned_to_employee_id || row.assignedToEmployeeId));
+          let serialBranch: string | undefined;
+          if (row.serial_number) {
+            const sn = row.serial_number.toUpperCase();
+            if (sn.startsWith("SHASHTRI") || sn.startsWith("SHAS-") || sn.startsWith("SN-")) serialBranch = "Shashtri Nagar";
+            else if (sn.startsWith("NOIDA") || sn.startsWith("NOI-")) serialBranch = "Noida";
+            else if (sn.startsWith("LUDHIANA") || sn.startsWith("LUD-")) serialBranch = "Ludhiana";
+          }
+          const resolvedBranch = row.branch 
+            ? toBranchName(row.branch) 
+            : (extracted.branch || serialBranch || (assignedEmp?.branch ? toBranchName(assignedEmp.branch) : undefined));
+
+          return {
+            id: row.id,
+            name: extracted.cleanText || row.name || "",
+            serialNumber: row.serial_number || row.serialNumber || "",
+            category: row.category || "Laptop",
+            status: row.status || "Available",
+            assignedToEmployeeId: row.assigned_to_employee_id || row.assignedToEmployeeId || null,
+            assignedDate: row.assigned_date || row.assignedDate || null,
+            branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+            companyId: row.company_id || row.companyId || undefined
+          };
+        });
       }
 
       if (expensesRes.data && expensesRes.data.length > 0) {
@@ -481,7 +515,7 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
             role: row.role || fallbackEmp?.role || "employee",
             designationId: row.designation_id || row.designationId || fallbackEmp?.designationId || "des-4",
             department: row.department || fallbackEmp?.department || "Information Technology",
-            branch: row.branch || row.branch_name || fallbackEmp?.branch || "Mumbai Branch",
+            branch: toBranchName(row.branch || row.branch_name || fallbackEmp?.branch || "Shashtri Nagar"),
             employmentType: row.employment_type || row.employmentType || fallbackEmp?.employmentType || "",
             joiningDate: row.joining_date || row.joiningDate || fallbackEmp?.joiningDate || "2024-03-15",
             status: row.status || fallbackEmp?.status || "Active",
@@ -590,30 +624,39 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       }
 
       if (meetingsRes && meetingsRes.data && meetingsRes.data.length > 0) {
-        db.meetings = meetingsRes.data.map((row: any) => ({
-          id: row.id,
-          companyId: row.company_id || row.companyId || null,
-          title: row.title || "",
-          description: row.description || "",
-          reason: row.reason || "",
-          type: row.type || "Online",
-          organizerId: row.organizer_id || row.organizerId || "",
-          participantIds: Array.isArray(row.participant_ids) 
-            ? row.participant_ids 
-            : typeof row.participant_ids === 'string' 
-              ? JSON.parse(row.participant_ids) 
-              : [],
-          department: row.department || undefined,
-          priority: row.priority || undefined,
-          date: row.date || "",
-          startTime: row.start_time || row.startTime || "",
-          endTime: row.end_time || row.endTime || "",
-          duration: row.duration || undefined,
-          timezone: row.timezone || undefined,
-          location: row.location || undefined,
-          link: row.link || undefined,
-          createdAt: row.created_at || row.createdAt || new Date().toISOString()
-        }));
+        db.meetings = meetingsRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.description);
+          const organizerEmp = (db.employees || []).find((e: any) => e.id === (row.organizer_id || row.organizerId));
+          const resolvedBranch = row.branch 
+            ? toBranchName(row.branch) 
+            : (extracted.branch || (organizerEmp?.branch ? toBranchName(organizerEmp.branch) : undefined));
+
+          return {
+            id: row.id,
+            companyId: row.company_id || row.companyId || null,
+            title: row.title || "",
+            description: extracted.cleanText || row.description || "",
+            reason: row.reason || "",
+            type: row.type || "Online",
+            organizerId: row.organizer_id || row.organizerId || "",
+            participantIds: Array.isArray(row.participant_ids) 
+              ? row.participant_ids 
+              : typeof row.participant_ids === 'string' 
+                ? JSON.parse(row.participant_ids) 
+                : [],
+            department: row.department || undefined,
+            branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+            priority: row.priority || undefined,
+            date: row.date || "",
+            startTime: row.start_time || row.startTime || "",
+            endTime: row.end_time || row.endTime || "",
+            duration: row.duration || undefined,
+            timezone: row.timezone || undefined,
+            location: row.location || undefined,
+            link: row.link || undefined,
+            createdAt: row.created_at || row.createdAt || new Date().toISOString()
+          };
+        });
         if (db.employees && db.employees.length > 0) {
           const companyEmpIds = new Set(db.employees.map((e: any) => e.id));
           db.meetings = (db.meetings || []).filter((m: any) => 
@@ -626,15 +669,19 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       }
 
       if (seatLayoutsRes && seatLayoutsRes.data) {
-        db.seatLayouts = seatLayoutsRes.data.map((row: any) => ({
-          id: row.id,
-          companyId: row.company_id || row.companyId || null,
-          name: row.name || "",
-          sections: typeof row.sections === "string" ? JSON.parse(row.sections) : (row.sections || []),
-          seats: typeof row.seats === "string" ? JSON.parse(row.seats) : (row.seats || []),
-          updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
-          updatedBy: row.updated_by || row.updatedBy || null
-        }));
+        db.seatLayouts = seatLayoutsRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.name);
+          return {
+            id: row.id,
+            companyId: row.company_id || row.companyId || null,
+            name: extracted.cleanText || row.name || "",
+            branch: row.branch ? toBranchName(row.branch) : extracted.branch,
+            sections: typeof row.sections === "string" ? JSON.parse(row.sections) : (row.sections || []),
+            seats: typeof row.seats === "string" ? JSON.parse(row.seats) : (row.seats || []),
+            updatedAt: row.updated_at || row.updatedAt || new Date().toISOString(),
+            updatedBy: row.updated_by || row.updatedBy || null
+          };
+        });
       }
 
       if (roomsRes && roomsRes.data) {
@@ -645,35 +692,60 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
           capacity: Number(row.capacity) || 6,
           amenities: typeof row.amenities === "string" ? JSON.parse(row.amenities) : (row.amenities || []),
           floor: row.floor || undefined,
-          branch: row.branch || undefined,
+          branch: row.branch ? toBranchName(row.branch) : undefined,
           isActive: row.is_active ?? row.isActive ?? true,
           createdAt: row.created_at || row.createdAt || new Date().toISOString()
         }));
       }
 
       if (roomBookingsRes && roomBookingsRes.data) {
-        db.roomBookings = roomBookingsRes.data.map((row: any) => ({
-          id: row.id,
-          companyId: row.company_id || row.companyId || null,
-          roomId: row.room_id || row.roomId || "",
-          roomName: row.room_name || row.roomName || "",
-          requestedBy: row.requested_by || row.requestedBy || "",
-          requestedByName: row.requested_by_name || row.requestedByName || "",
-          title: row.title || "",
-          date: row.date || "",
-          startTime: row.start_time || row.startTime || "",
-          endTime: row.end_time || row.endTime || "",
-          purpose: row.purpose || "",
-          attendees: typeof row.attendees === "string" ? JSON.parse(row.attendees) : (row.attendees || []),
-          status: row.status || "Pending",
-          approvedBy: row.approved_by || row.approvedBy || undefined,
-          approvedAt: row.approved_at || row.approvedAt || undefined,
-          createdAt: row.created_at || row.createdAt || new Date().toISOString()
-        }));
+        db.roomBookings = roomBookingsRes.data.map((row: any) => {
+          const room = (roomsRes.data || []).find((r: any) => r.id === (row.room_id || row.roomId));
+          const resolvedBranch = row.branch ? toBranchName(row.branch) : (room?.branch ? toBranchName(room.branch) : undefined);
+          return {
+            id: row.id,
+            companyId: row.company_id || row.companyId || null,
+            roomId: row.room_id || row.roomId || "",
+            roomName: row.room_name || row.roomName || "",
+            requestedBy: row.requested_by || row.requestedBy || "",
+            requestedByName: row.requested_by_name || row.requestedByName || "",
+            title: row.title || "",
+            date: row.date || "",
+            startTime: row.start_time || row.startTime || "",
+            endTime: row.end_time || row.endTime || "",
+            purpose: row.purpose || "",
+            attendees: typeof row.attendees === "string" ? JSON.parse(row.attendees) : (row.attendees || []),
+            status: row.status || "Pending",
+            approvedBy: row.approved_by || row.approvedBy || undefined,
+            approvedAt: row.approved_at || row.approvedAt || undefined,
+            branch: resolvedBranch,
+            createdAt: row.created_at || row.createdAt || new Date().toISOString()
+          };
+        });
       }
 
       if (deptsRes.data) {
-        db.customDepartments = deptsRes.data.map((d: any) => capitalizeName(d.name)).filter(Boolean);
+        // Separate global (no branch) and per-branch departments
+        const globalDepts: string[] = [];
+        const branchDepts: Record<string, string[]> = {};
+        for (const d of deptsRes.data) {
+          const deptName = capitalizeName(d.name);
+          if (!deptName) continue;
+          if (d.branch) {
+            const bName = toBranchName(d.branch);
+            const bId = toBranchId(d.branch);
+            if (!branchDepts[bName]) branchDepts[bName] = [];
+            if (!branchDepts[bId]) branchDepts[bId] = [];
+            if (!branchDepts[bName].includes(deptName)) branchDepts[bName].push(deptName);
+            if (!branchDepts[bId].includes(deptName)) branchDepts[bId].push(deptName);
+          } else {
+            globalDepts.push(deptName);
+          }
+        }
+        db.customDepartments = globalDepts;
+        if (Object.keys(branchDepts).length > 0) {
+          db.branchDepartments = { ...(db.branchDepartments || {}), ...branchDepts };
+        }
       }
 
       if (branchesRes.data) {
@@ -681,7 +753,8 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       }
 
       const rawLeaveTypes = leaveTypesRes.data || customLeavesRes.data || [];
-      const leaveMap = new Map<string, string>();
+      db.branchLeaveTypes = {};
+
       const safeCapitalizeLeave = (str: string) => {
         if (!str) return "";
         if (str.includes("|")) {
@@ -691,22 +764,95 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         return capitalizeName(str);
       };
       
-      const listToProcess = rawLeaveTypes.length > 0
-        ? rawLeaveTypes.map((l: any) => safeCapitalizeLeave(l.name)).filter(Boolean)
-        : (db.customLeaveTypes || []);
+      const globalLeaveMap = new Map<string, string>();
 
-      listToProcess.forEach((item: string) => {
-        const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
-        if (!leaveMap.has(name) || item.includes("|")) {
-          leaveMap.set(name, item);
+      rawLeaveTypes.forEach((row: any) => {
+        let rawName = String(row.name || "");
+        let branchRaw = row.branch || "";
+        const tagMatch = rawName.match(/^\[([^\]]+)\]\s*(.+)$/);
+        if (tagMatch) {
+          branchRaw = branchRaw || tagMatch[1];
+          rawName = tagMatch[2];
+        }
+
+        const item = safeCapitalizeLeave(rawName);
+        if (!item) return;
+
+        if (branchRaw) {
+          const bName = toBranchName(branchRaw);
+          const bId = toBranchId(branchRaw);
+          
+          const addToBranchList = (bKey: string) => {
+            if (!db.branchLeaveTypes![bKey]) db.branchLeaveTypes![bKey] = [];
+            const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+            const existingIdx = db.branchLeaveTypes![bKey].findIndex((x: string) => (x.includes("|") ? x.split("|")[0] : x).trim().toLowerCase() === name);
+            if (existingIdx >= 0) {
+              if (item.includes("|")) db.branchLeaveTypes![bKey][existingIdx] = item;
+            } else {
+              db.branchLeaveTypes![bKey].push(item);
+            }
+          };
+
+          addToBranchList(branchRaw);
+          if (bName) addToBranchList(bName);
+          if (bId) addToBranchList(bId);
+        } else {
+          const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+          if (!globalLeaveMap.has(name) || item.includes("|")) {
+            globalLeaveMap.set(name, item);
+          }
         }
       });
-      db.customLeaveTypes = Array.from(leaveMap.values());
+      if (globalLeaveMap.size > 0) {
+        db.customLeaveTypes = Array.from(globalLeaveMap.values());
+      }
+
+      db.branchAmenities = {};
+      const globalAmenitiesMap = new Map<string, string>();
 
       if (customAmenitiesRes && customAmenitiesRes.data && customAmenitiesRes.data.length > 0) {
-        db.customAmenities = customAmenitiesRes.data.map((a: any) => {
-          return a.icon ? `${capitalizeName(a.name)}|${a.icon}` : capitalizeName(a.name);
-        }).filter(Boolean);
+        customAmenitiesRes.data.forEach((row: any) => {
+          let rawName = String(row.name || "");
+          let branchRaw = row.branch || "";
+          const tagMatch = rawName.match(/^\[([^\]]+)\]\s*(.+)$/);
+          if (tagMatch) {
+            branchRaw = branchRaw || tagMatch[1];
+            rawName = tagMatch[2];
+          }
+
+          const displayName = capitalizeName(rawName);
+          if (!displayName) return;
+          const item = row.icon ? `${displayName}|${row.icon}` : displayName;
+
+          if (branchRaw) {
+            const bName = toBranchName(branchRaw);
+            const bId = toBranchId(branchRaw);
+
+            const addToBranchList = (bKey: string) => {
+              if (!db.branchAmenities![bKey]) db.branchAmenities![bKey] = [];
+              const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+              const existingIdx = db.branchAmenities![bKey].findIndex((x: string) => (x.includes("|") ? x.split("|")[0] : x).trim().toLowerCase() === name);
+              if (existingIdx >= 0) {
+                if (item.includes("|")) db.branchAmenities![bKey][existingIdx] = item;
+              } else {
+                db.branchAmenities![bKey].push(item);
+              }
+            };
+
+            addToBranchList(branchRaw);
+            if (bName) addToBranchList(bName);
+            if (bId) addToBranchList(bId);
+          } else {
+            const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
+            if (!globalAmenitiesMap.has(name) || item.includes("|")) {
+              globalAmenitiesMap.set(name, item);
+            }
+          }
+        });
+      }
+
+      if (globalAmenitiesMap.size > 0) {
+        db.customAmenities = Array.from(globalAmenitiesMap.values());
       }
 
       if (infractionTypesRes && infractionTypesRes.data && infractionTypesRes.data.length > 0) {
@@ -716,6 +862,7 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
           description: row.description || "",
           defaultAmount: Number(row.default_amount ?? row.defaultAmount ?? 0),
           companyId: row.company_id || row.companyId || null,
+          branch: row.branch ? toBranchName(row.branch) : undefined
         }));
         const typeMap = new Map();
         (db.infractionTypes || []).forEach((t: any) => { if (t.id) typeMap.set(t.id, t); });
@@ -723,25 +870,80 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         db.infractionTypes = Array.from(typeMap.values());
       }
 
+      if (expenseCategoriesRes && expenseCategoriesRes.data && Array.isArray(expenseCategoriesRes.data)) {
+        const sbCategories = expenseCategoriesRes.data.map((row: any) => {
+          let name = row.name || "";
+          let branch = row.branch ? toBranchName(row.branch) : undefined;
+          const tagMatch = name.match(/^\[([^\]]+)\]\s*(.+)$/);
+          if (tagMatch) {
+            branch = branch || toBranchName(tagMatch[1]);
+            name = tagMatch[2];
+          }
+          return {
+            id: row.id,
+            name: capitalizeName(name),
+            description: row.description || "",
+            companyId: row.company_id || row.companyId || null,
+            branch
+          };
+        });
+        const catMap = new Map();
+        (db.expenseCategories || []).forEach((c: any) => { if (c && c.id) catMap.set(c.id, c); });
+        sbCategories.forEach((c: any) => { catMap.set(c.id, c); });
+        db.expenseCategories = Array.from(catMap.values());
+      }
+
+      if (corporateAllowancesFaqRes && corporateAllowancesFaqRes.data && Array.isArray(corporateAllowancesFaqRes.data)) {
+        const sbFaqs = corporateAllowancesFaqRes.data.map((row: any) => {
+          let title = row.title || "";
+          let branch = row.branch ? toBranchName(row.branch) : undefined;
+          const tagMatch = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+          if (tagMatch) {
+            branch = branch || toBranchName(tagMatch[1]);
+            title = tagMatch[2];
+          }
+          return {
+            id: row.id,
+            title,
+            description: row.description || "",
+            companyId: row.company_id || row.companyId || null,
+            branch
+          };
+        });
+        const faqMap = new Map();
+        (db.corporateAllowancesFaqs || []).forEach((f: any) => { if (f && f.id) faqMap.set(f.id, f); });
+        sbFaqs.forEach((f: any) => { faqMap.set(f.id, f); });
+        db.corporateAllowancesFaqs = Array.from(faqMap.values());
+      }
+
       if (grievancesRes && grievancesRes.data && grievancesRes.data.length > 0) {
-        const sbGrievances = grievancesRes.data.map((row: any) => ({
-          id: row.id,
-          companyId: row.company_id || "",
-          employeeId: row.employee_id || "",
-          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
-          title: row.title || "",
-          description: row.description || "",
-          category: row.category || "Other",
-          priority: row.priority || "Medium",
-          status: row.status || "Open",
-          isAnonymous: row.is_anonymous ?? false,
-          createdAt: row.created_at || new Date().toISOString(),
-          resolvedBy: row.resolved_by || undefined,
-          resolvedByName: row.resolved_by_name ? capitalizeName(row.resolved_by_name) : undefined,
-          resolutionMessage: row.resolution_message || undefined,
-          resolvedAt: row.resolved_at || undefined,
-          messages: typeof row.messages === "string" ? JSON.parse(row.messages) : (row.messages || [])
-        }));
+        const sbGrievances = grievancesRes.data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.description);
+          const emp = (db.employees || []).find((e: any) => e.id === (row.employee_id || row.employeeId));
+          const resolvedBranch = row.branch 
+            ? toBranchName(row.branch) 
+            : (extracted.branch || (emp?.branch ? toBranchName(emp.branch) : undefined));
+
+          return {
+            id: row.id,
+            companyId: row.company_id || "",
+            employeeId: row.employee_id || "",
+            employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+            title: row.title || "",
+            description: extracted.cleanText || row.description || "",
+            category: row.category || "Other",
+            branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+            priority: row.priority || "Medium",
+            status: row.status || "Open",
+            isAnonymous: row.is_anonymous ?? false,
+            createdAt: row.created_at || new Date().toISOString(),
+            resolvedBy: row.resolved_by || undefined,
+            resolvedByName: row.resolved_by_name ? capitalizeName(row.resolved_by_name) : undefined,
+            resolutionMessage: row.resolution_message || undefined,
+            resolvedAt: row.resolved_at || undefined,
+            messages: typeof row.messages === "string" ? JSON.parse(row.messages) : (row.messages || [])
+          };
+        });
         const grvMap = new Map();
         (db.grievanceTickets || []).forEach((t: any) => { if (t.id) grvMap.set(t.id, t); });
         sbGrievances.forEach((t: any) => { grvMap.set(t.id, t); });
@@ -771,32 +973,68 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         db.performanceRecords = Array.from(perfMap.values());
       }
 
-      // Load local tenant specific timing setting if available
-      if (companyId && db.companyTimingSettings?.[companyId]) {
-        db.timingSettings = db.companyTimingSettings[companyId];
-      }
-
       try {
-        let settingsData = null;
-        if (companyId) {
-          const { data } = await dbClient.from("timing_settings").select("*").eq("company_id", companyId).maybeSingle();
-          if (data) settingsData = data;
-        }
-        if (!settingsData) {
-          const { data } = await dbClient.from("timing_settings").select("*").eq("id", "default").maybeSingle();
-          if (data) settingsData = data;
-        }
-        if (settingsData) {
-          db.timingSettings = {
-            clockInTime: settingsData.clock_in_time || "09:00",
-            clockOutTime: settingsData.clock_out_time || "18:00",
-            lateThreshold: settingsData.late_threshold || "09:30",
-            breakStartTime: settingsData.break_start_time || "13:00",
-            breakEndTime: settingsData.break_end_time || "14:00"
-          };
+        if (timingSettingsRes && timingSettingsRes.data && Array.isArray(timingSettingsRes.data)) {
+          if (!db.branchTimingSettings) db.branchTimingSettings = {};
+          if (!db.companyTimingSettings) db.companyTimingSettings = {};
+
+          timingSettingsRes.data.forEach((row: any) => {
+            const tSettings = {
+              clockInTime: row.clock_in_time || "09:00",
+              clockOutTime: row.clock_out_time || "18:00",
+              lateThreshold: row.late_threshold || "09:30",
+              breakStartTime: row.break_start_time || "13:00",
+              breakEndTime: row.break_end_time || "14:00"
+            };
+            const branchRaw = row.branch || (typeof row.id === "string" && row.id.startsWith("branch-") ? row.id.replace("branch-", "") : "");
+            if (branchRaw) {
+              const bName = toBranchName(branchRaw);
+              const bId = toBranchId(branchRaw);
+              db.branchTimingSettings[branchRaw] = tSettings;
+              if (bName) db.branchTimingSettings[bName] = tSettings;
+              if (bId) db.branchTimingSettings[bId] = tSettings;
+            } else if (row.company_id) {
+              db.companyTimingSettings[row.company_id] = tSettings;
+            }
+            if (row.id === "default" || (!branchRaw && (!companyId || row.company_id === companyId))) {
+              db.timingSettings = tSettings;
+            }
+          });
         }
       } catch (err) {
         console.warn("Supabase timing_settings hydration error:", err);
+      }
+
+      // Load checklist_templates from Supabase
+      try {
+        let q = dbClient.from("checklist_templates").select("*");
+        if (companyId) q = q.eq("company_id", companyId);
+        const { data: tmplRows, error: tmplErr } = await q;
+        if (tmplRows && Array.isArray(tmplRows) && !tmplErr && tmplRows.length > 0) {
+          const parseTmpl = (r: any) => {
+            let title = r.title || "";
+            let branch = r.branch || null;
+            const tagMatch = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+            if (tagMatch) {
+              branch = branch || tagMatch[1];
+              title = tagMatch[2];
+            }
+            return {
+              id: r.id,
+              title,
+              description: r.description || "",
+              category: r.category || (r.type === "onboarding" ? "Identity Proof" : "Contract"),
+              required: r.required ?? true,
+              type: r.type as "onboarding" | "exit",
+              companyId: r.company_id || r.companyId || null,
+              branch: branch ? toBranchName(branch) : undefined
+            };
+          };
+          db.onboardingChecklistTemplates = tmplRows.filter((r: any) => r.type === "onboarding").map(parseTmpl);
+          db.exitChecklistTemplates = tmplRows.filter((r: any) => r.type === "exit").map(parseTmpl);
+        }
+      } catch (err) {
+        console.warn("Supabase checklist_templates hydration warning:", err);
       }
 
       // Load wifi_restriction_settings from Supabase
@@ -826,6 +1064,67 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         }
       } catch (err) {
         console.warn("Supabase wifi_restriction_settings hydration error:", err);
+      }
+
+      // Load company tax settings & branch prefixes from companies table
+      try {
+        let compQ = dbClient.from("companies").select("*");
+        if (companyId) {
+          compQ = compQ.eq("id", companyId);
+        }
+        const { data: companyData } = await compQ.maybeSingle();
+        if (companyData) {
+          if (companyData.branch_code_prefixes && typeof companyData.branch_code_prefixes === "object") {
+            if (!db.branchCodePrefixes) db.branchCodePrefixes = {};
+            Object.assign(db.branchCodePrefixes, companyData.branch_code_prefixes);
+          }
+          if (companyId) {
+            if (!db.companySettings) db.companySettings = {};
+            db.companySettings[companyId] = {
+              companyId,
+              name: companyData.name || "",
+              logoUrl: companyData.logo_url || "",
+              pan: companyData.pan || "",
+              tan: companyData.tan || "",
+              gstin: companyData.gstin || "",
+              address: companyData.address || "",
+              signatoryName: companyData.signatory_name || "",
+              signatoryDesignation: companyData.signatory_designation || "",
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase companies hydration error:", err);
+      }
+
+      // Load per-branch wifi settings from wifi_restriction_settings with branch column
+      try {
+        if (companyId) {
+          const { data: branchWifiRows } = await dbClient
+            .from("wifi_restriction_settings")
+            .select("*")
+            .eq("company_id", companyId)
+            .not("branch", "is", null);
+          if (branchWifiRows && branchWifiRows.length > 0) {
+            if (!db.branchWifiSettings) db.branchWifiSettings = {};
+            for (const row of branchWifiRows) {
+              const branchKey = toBranchName(row.branch);
+              const parsedIps = (row.allowed_ip || "").split(",").map((i: string) => i.trim()).filter(Boolean);
+              const setting = {
+                enabled: row.enabled ?? false,
+                allowedIp: row.allowed_ip || "",
+                allowedIps: parsedIps,
+                companyId: row.company_id || undefined
+              };
+              if (branchKey) {
+                db.branchWifiSettings[branchKey] = setting;
+                db.branchWifiSettings[toBranchId(branchKey)] = setting;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase per-branch wifi settings hydration error:", err);
       }
     } catch (err) {
       console.warn("Supabase hydration error in GET /api/data:", err);

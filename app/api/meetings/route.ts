@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
-import { syncMeetingToSupabase } from "@/src/lib/supabase";
+import { syncMeetingToSupabase, supabase } from "@/src/lib/supabase";
+import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { Meeting } from "@/src/types";
+import { toBranchName } from "@/src/lib/branchUtils";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
       organizerId: body.organizerId || "",
       participantIds: body.participantIds || [],
       department: body.department || undefined,
+      branch: body.branch ? toBranchName(body.branch) : undefined,
       priority: body.priority || "Medium",
       date: body.date || new Date().toISOString().split("T")[0],
       startTime: body.startTime || "10:00",

@@ -15,7 +15,7 @@ export interface ChecklistCardProps {
   currentUserId: string;
   onUploadDocument: (employeeId: string, itemId: string, file: File, category?: string) => Promise<void> | void;
   onReviewItem: (employeeId: string, itemId: string, action: "approve" | "reject", comments?: string) => Promise<void> | void;
-  onCreateTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => Promise<void> | void;
+  onCreateTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit"; branch?: string }) => Promise<void> | void;
   onDeleteTemplate?: (templateId: string) => Promise<void> | void;
   onGrantExitClearance?: (employeeId: string) => Promise<void> | void;
   onInitiateResignation?: (employeeId: string) => Promise<void> | void;
@@ -47,6 +47,7 @@ export default function ChecklistCard({
   const [newCategory, setNewCategory] = useState("ID Proof");
   const [newRequired, setNewRequired] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [localOverrides, setLocalOverrides] = useState<Record<string, Partial<EmployeeChecklistItem>>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeItemIdRef = useRef<string | null>(null);
 
@@ -74,13 +75,20 @@ export default function ChecklistCard({
         i.title === tmpl.id
       ))
     );
+    const override = localOverrides[tmpl.id]
+      || (existing ? localOverrides[existing.id] : undefined)
+      || (existing?.templateId ? localOverrides[existing.templateId] : undefined)
+      || localOverrides[tmpl.title]
+      || (existing?.title ? localOverrides[existing.title] : undefined);
+
     if (existing) {
       return {
         ...existing,
         templateId: tmpl.id,
         title: tmpl.title, // Always enforce human-readable requirement title from template
         description: tmpl.description || existing.description || "",
-        required: tmpl.required !== undefined ? tmpl.required : ((existing as any).required ?? true)
+        required: tmpl.required !== undefined ? tmpl.required : ((existing as any).required ?? true),
+        ...(override || {})
       };
     }
     return {
@@ -90,7 +98,8 @@ export default function ChecklistCard({
       description: tmpl.description || "",
       type,
       status: "Pending" as const,
-      required: tmpl.required
+      required: tmpl.required,
+      ...(override || {})
     };
   });
 
@@ -101,18 +110,33 @@ export default function ChecklistCard({
         m => m.id === item.id || m.templateId === item.id || (m.title && item.title && m.title.trim().toLowerCase() === item.title.trim().toLowerCase())
       );
       if (!exists) {
+        const override = localOverrides[item.id] || (item.templateId ? localOverrides[item.templateId] : undefined) || (item.title ? localOverrides[item.title] : undefined);
         mergedItems.push({
           ...item,
-          required: true
+          required: true,
+          ...(override || {})
         });
       }
     });
   }
 
-  const totalItems = mergedItems.length;
-  const approvedItems = mergedItems.filter(i => i.status === "Approved").length;
-  const uploadedItems = mergedItems.filter(i => i.status === "Uploaded" || i.status === "Approved").length;
-  const pendingReviewItems = mergedItems.filter(i => i.status === "Uploaded").length;
+  // Deduplicate by id — two templates may fuzzy-match the same employee item,
+  // producing duplicate ids and triggering the React duplicate-key warning.
+  const seenIds = new Set<string>();
+  const deduped: DisplayChecklistItem[] = [];
+  for (const item of mergedItems) {
+    const key = item.id || item.templateId || item.title || "";
+    if (!seenIds.has(key)) {
+      seenIds.add(key);
+      deduped.push(item);
+    }
+  }
+  const uniqueItems = deduped;
+
+  const totalItems = uniqueItems.length;
+  const approvedItems = uniqueItems.filter(i => i.status === "Approved").length;
+  const uploadedItems = uniqueItems.filter(i => i.status === "Uploaded" || i.status === "Approved").length;
+  const pendingReviewItems = uniqueItems.filter(i => i.status === "Uploaded").length;
 
   const isAllApproved = totalItems > 0 && approvedItems === totalItems;
   const approvedPercent = totalItems > 0 ? Math.round((approvedItems / totalItems) * 100) : 0;
@@ -130,7 +154,31 @@ export default function ChecklistCard({
     const itemId = activeItemIdRef.current;
     setUploadingItemId(itemId);
     try {
+      const overrideUrl = URL.createObjectURL(file);
       const tmpl = matchingTemplates.find(t => t.id === itemId);
+      setLocalOverrides(prev => ({
+        ...prev,
+        [itemId]: {
+          status: "Uploaded",
+          fileName: file.name,
+          fileUrl: overrideUrl,
+          uploadedAt: new Date().toISOString().split("T")[0]
+        },
+        ...(tmpl ? {
+          [tmpl.id]: {
+            status: "Uploaded",
+            fileName: file.name,
+            fileUrl: overrideUrl,
+            uploadedAt: new Date().toISOString().split("T")[0]
+          },
+          [tmpl.title]: {
+            status: "Uploaded",
+            fileName: file.name,
+            fileUrl: overrideUrl,
+            uploadedAt: new Date().toISOString().split("T")[0]
+          }
+        } : {})
+      }));
       await onUploadDocument(employee.id, itemId, file, tmpl?.category);
     } catch (err) {
       console.error("Failed to upload document for checklist item:", err);
@@ -145,6 +193,14 @@ export default function ChecklistCard({
     setReviewingItemId(itemId);
     setReviewAction("approve");
     try {
+      setLocalOverrides(prev => ({
+        ...prev,
+        [itemId]: {
+          status: "Approved",
+          reviewedBy: currentUserRole === "admin" ? "Admin" : "HR Manager",
+          reviewedAt: new Date().toISOString().split("T")[0]
+        }
+      }));
       await onReviewItem(employee.id, itemId, "approve");
     } catch (err) {
       console.error("Failed to approve item:", err);
@@ -160,6 +216,15 @@ export default function ChecklistCard({
     setReviewingItemId(itemId);
     setReviewAction("reject");
     try {
+      setLocalOverrides(prev => ({
+        ...prev,
+        [itemId]: {
+          status: "Rejected",
+          comments: rejectComment || "Document rejected. Please re-upload valid proof.",
+          reviewedBy: currentUserRole === "admin" ? "Admin" : "HR Manager",
+          reviewedAt: new Date().toISOString().split("T")[0]
+        }
+      }));
       await onReviewItem(employee.id, itemId, "reject", rejectComment);
     } catch (err) {
       console.error("Failed to reject item:", err);
@@ -182,7 +247,8 @@ export default function ChecklistCard({
           description: newDescription.trim(),
           category: newCategory,
           required: newRequired,
-          type
+          type,
+          branch: employee?.branch || undefined
         });
       }
       setShowAddModal(false);
@@ -337,7 +403,7 @@ export default function ChecklistCard({
 
       {/* Checklist Items List */}
       <div className="space-y-3.5 max-h-[480px] overflow-y-auto pr-1.5 custom-scrollbar">
-        {mergedItems.map((item, idx) => {
+        {uniqueItems.map((item, idx) => {
           const isUploaded = item.status === "Uploaded";
           const isApproved = item.status === "Approved";
           const isRejected = item.status === "Rejected";
@@ -346,7 +412,7 @@ export default function ChecklistCard({
 
           return (
             <div
-              key={item.id || idx}
+              key={`${item.id || item.templateId || item.title || "item"}-${idx}`}
               className={`p-4 rounded-2xl border transition-all duration-200 overflow-hidden ${
                 isApproved
                   ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900/50"
@@ -581,7 +647,7 @@ export default function ChecklistCard({
           );
         })}
 
-        {mergedItems.length === 0 && (
+        {uniqueItems.length === 0 && (
           <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6">
             No {type} checklist items configured yet by Admin/HR.
           </p>
@@ -611,10 +677,10 @@ export default function ChecklistCard({
           ) : (
             <button
               type="button"
-              disabled={!isAllApproved && mergedItems.some(i => i.required && i.status !== "Approved")}
+              disabled={!isAllApproved && uniqueItems.some(i => i.required && i.status !== "Approved")}
               onClick={() => onGrantExitClearance && onGrantExitClearance(employee.id)}
               className={`px-5 py-2.5 font-extrabold text-xs rounded-xl transition-all shadow-md flex items-center space-x-2 cursor-pointer shrink-0 whitespace-nowrap ${
-                isAllApproved || !mergedItems.some(i => i.required && i.status !== "Approved")
+                isAllApproved || !uniqueItems.some(i => i.required && i.status !== "Approved")
                   ? "bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-[1.02]"
                   : "bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed"
               }`}

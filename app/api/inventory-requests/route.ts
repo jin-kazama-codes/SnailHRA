@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { InventoryRequest } from "@/src/types";
 import { supabase, syncInventoryRequestToSupabase, syncInventoryToSupabase } from "@/src/lib/supabase";
+import { toBranchName, extractBranchPrefix } from "@/src/lib/branchUtils";
 
 export async function GET() {
   const db = loadDatabase();
@@ -9,16 +10,25 @@ export async function GET() {
     try {
       const { data, error } = await supabase.from("inventory_requests").select("*").order("created_at", { ascending: false });
       if (!error && data) {
-        const mappedRequests: InventoryRequest[] = data.map((row: any) => ({
-          id: row.id,
-          employeeId: row.employee_id || row.employeeId || "",
-          employeeName: row.employee_name || row.employeeName || "",
-          itemName: row.item_name || row.itemName || "",
-          category: row.category || "Laptop",
-          requestDate: row.request_date || row.requestDate || "",
-          reason: row.reason || "",
-          status: row.status || "Pending"
-        }));
+        const mappedRequests: InventoryRequest[] = data.map((row: any) => {
+          const extracted = extractBranchPrefix(row.item_name || row.itemName);
+          const emp = (db.employees || []).find((e: any) => e.id === (row.employee_id || row.employeeId));
+          const resolvedBranch = row.branch 
+            ? toBranchName(row.branch) 
+            : (extracted.branch || (emp?.branch ? toBranchName(emp.branch) : undefined));
+
+          return {
+            id: row.id,
+            employeeId: row.employee_id || row.employeeId || "",
+            employeeName: row.employee_name || row.employeeName || "",
+            itemName: extracted.cleanText || row.item_name || row.itemName || "",
+            category: row.category || "Laptop",
+            requestDate: row.request_date || row.requestDate || "",
+            reason: row.reason || "",
+            branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+            status: row.status || "Pending"
+          };
+        });
         const reqMap = new Map();
         (db.inventoryRequests || []).forEach((r: any) => { if (r.id) reqMap.set(r.id, r); });
         mappedRequests.forEach((r: any) => { reqMap.set(r.id, r); });
@@ -40,6 +50,7 @@ export async function POST(request: Request) {
     const emp = db.employees.find(e => e.id === body.employeeId);
     const empName = body.employeeName || emp?.fullName || "Employee " + (body.employeeId || "");
     const reqId = body.id || `invreq-${Date.now()}`;
+    const branchToAssign = body.branch ? toBranchName(body.branch) : (emp?.branch ? toBranchName(emp.branch) : undefined);
 
     const newReqItem: InventoryRequest = {
       id: reqId,
@@ -49,6 +60,7 @@ export async function POST(request: Request) {
       category: body.category || "Laptop",
       requestDate: body.requestDate || body.request_date || new Date().toISOString().split("T")[0],
       reason: body.reason || "",
+      branch: branchToAssign,
       status: body.status || "Pending"
     };
 

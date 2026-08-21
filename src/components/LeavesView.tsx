@@ -19,6 +19,7 @@ interface LeavesViewProps {
   onReviewLeave: (id: string, status: "Approved" | "Rejected") => Promise<void> | void;
   onAddHoliday?: (newHoliday: { name: string; date: string; type: "National" | "Regional" | "Restricted" }) => Promise<boolean>;
   onDeleteHoliday?: (id: string) => void;
+  selectedBranch?: string;
 }
 
 export default function LeavesView({
@@ -29,6 +30,7 @@ export default function LeavesView({
   currentEmployeeId,
   customLeaveTypes,
   showLeaveCount = true,
+  selectedBranch = "All Branches",
   onApplyLeave,
   onReviewLeave,
   onAddHoliday,
@@ -40,7 +42,26 @@ export default function LeavesView({
   };
 
   const [showApplyForm, setShowApplyForm] = useState(false);
-  const [leaveType, setLeaveType] = useState<any>("Casual Leave");
+  const [leaveType, setLeaveType] = useState<string>(() => {
+    if (customLeaveTypes && customLeaveTypes.length > 0) {
+      return customLeaveTypes[0].includes("|") ? customLeaveTypes[0].split("|")[0].trim() : customLeaveTypes[0].trim();
+    }
+    return "Casual Leave";
+  });
+
+  React.useEffect(() => {
+    if (customLeaveTypes && customLeaveTypes.length > 0) {
+      const firstType = customLeaveTypes[0].includes("|") ? customLeaveTypes[0].split("|")[0].trim() : customLeaveTypes[0].trim();
+      const currentExists = customLeaveTypes.some(lt => {
+        const n = lt.includes("|") ? lt.split("|")[0].trim() : lt.trim();
+        return n.toLowerCase() === String(leaveType || "").toLowerCase();
+      });
+      if (!currentExists) {
+        setLeaveType(firstType);
+      }
+    }
+  }, [customLeaveTypes]);
+
   const [startDate, setStartDate] = useState(() => getTodayStr());
   const [endDate, setEndDate] = useState(() => getTodayStr());
   const [reason, setReason] = useState("");

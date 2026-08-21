@@ -5,9 +5,10 @@ import {
   Play, Square, Pause, RotateCcw, Clock, Calendar as CalendarIcon, CheckCircle2, 
   AlertTriangle, Eye, Sparkles, Coffee, AlertCircle, RefreshCw, Sliders,
   Home, Briefcase, Plus, ChevronRight, ChevronLeft, UserCheck, Check, Edit2, Info,
-  Trash2, X, FileText, User, Loader2, Search
+  Trash2, X, FileText, User, Loader2, Search, Building2
 } from "lucide-react";
 import { AttendancePunch, Employee, UserRole, LeaveRequest, Holiday } from "../types";
+import { toBranchId, toBranchName } from "../lib/branchUtils";
 
 interface AttendanceViewProps {
   attendance: AttendancePunch[];
@@ -28,8 +29,11 @@ interface AttendanceViewProps {
     breakStartTime: string;
     breakEndTime: string;
   };
+  branchTimingSettings?: Record<string, any>;
   onSaveTimingSettings?: (settings: any) => void;
   companyName?: string;
+  selectedBranch?: string;
+  customBranches?: string[];
 }
 
 export default function AttendanceView({
@@ -45,8 +49,11 @@ export default function AttendanceView({
   onSaveDayPunch,
   onClearAllAttendance,
   timingSettings,
+  branchTimingSettings,
   onSaveTimingSettings,
-  companyName = "Your Company"
+  companyName = "Your Company",
+  selectedBranch = "All Branches",
+  customBranches = []
 }: AttendanceViewProps) {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<"personal" | "todays-punches" | "roster" | "monthly-view">(
@@ -134,7 +141,19 @@ export default function AttendanceView({
 
   // Find logged in user object
   const loggedInUser = employees.find(e => e.id === currentEmployeeId) || employees[0];
-  const userBranch = loggedInUser?.branch || "Mumbai Branch";
+  const userBranch = (loggedInUser?.branch ? toBranchName(loggedInUser.branch) : "") || (selectedBranch !== "All Branches" ? selectedBranch : "") || "Shashtri Nagar";
+
+  const getBranchTiming = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
+    return branchTimingSettings[branchNameOrId]
+      || branchTimingSettings[toBranchName(branchNameOrId)]
+      || branchTimingSettings[toBranchId(branchNameOrId)]
+      || null;
+  };
+
+  const activeTiming = getBranchTiming(loggedInUser?.branch)
+    || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+    || timingSettings;
 
   // Role & Branch Filtering logic for accessible employees list
   const accessibleEmployees = React.useMemo(() => {
@@ -143,7 +162,7 @@ export default function AttendanceView({
       return employees;
     } else if (role === "hr") {
       // HR sees only employees within their branch (cannot access HRs/Admins from other branches)
-      return employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin");
+      return employees.filter(e => (toBranchName(e.branch) || "Shashtri Nagar") === userBranch && e.role !== "admin");
     } else {
       // 1 Employee sees ONLY data related to himself
       return employees.filter(e => e.id === currentEmployeeId);
@@ -229,23 +248,23 @@ export default function AttendanceView({
 
   // Timing Settings Modal state
   const [showTimingSettingsModal, setShowTimingSettingsModal] = useState(false);
-  const [settingsClockIn, setSettingsClockIn] = useState(timingSettings?.clockInTime || "09:00");
-  const [settingsClockOut, setSettingsClockOut] = useState(timingSettings?.clockOutTime || "18:00");
-  const [settingsLateThreshold, setSettingsLateThreshold] = useState(timingSettings?.lateThreshold || "09:30");
-  const [settingsBreakStart, setSettingsBreakStart] = useState(timingSettings?.breakStartTime || "13:00");
-  const [settingsBreakEnd, setSettingsBreakEnd] = useState(timingSettings?.breakEndTime || "14:00");
+  const [settingsClockIn, setSettingsClockIn] = useState(activeTiming?.clockInTime || "09:00");
+  const [settingsClockOut, setSettingsClockOut] = useState(activeTiming?.clockOutTime || "18:00");
+  const [settingsLateThreshold, setSettingsLateThreshold] = useState(activeTiming?.lateThreshold || "09:30");
+  const [settingsBreakStart, setSettingsBreakStart] = useState(activeTiming?.breakStartTime || "13:00");
+  const [settingsBreakEnd, setSettingsBreakEnd] = useState(activeTiming?.breakEndTime || "14:00");
 
   useEffect(() => {
-    if (timingSettings) {
-      setManualClockIn(timingSettings.clockInTime || "09:00");
-      setManualClockOut(timingSettings.clockOutTime || "18:00");
-      setSettingsClockIn(timingSettings.clockInTime || "09:00");
-      setSettingsClockOut(timingSettings.clockOutTime || "18:00");
-      setSettingsLateThreshold(timingSettings.lateThreshold || "09:30");
-      setSettingsBreakStart(timingSettings.breakStartTime || "13:00");
-      setSettingsBreakEnd(timingSettings.breakEndTime || "14:00");
+    if (activeTiming) {
+      setManualClockIn(activeTiming.clockInTime || "09:00");
+      setManualClockOut(activeTiming.clockOutTime || "18:00");
+      setSettingsClockIn(activeTiming.clockInTime || "09:00");
+      setSettingsClockOut(activeTiming.clockOutTime || "18:00");
+      setSettingsLateThreshold(activeTiming.lateThreshold || "09:30");
+      setSettingsBreakStart(activeTiming.breakStartTime || "13:00");
+      setSettingsBreakEnd(activeTiming.breakEndTime || "14:00");
     }
-  }, [timingSettings]);
+  }, [activeTiming]);
 
   // Live timer tick
   useEffect(() => {
@@ -649,7 +668,7 @@ export default function AttendanceView({
     }
 
     setShowManualForm(false);
-  };
+  }
 
   return (
     <div className="space-y-6">
@@ -772,7 +791,7 @@ export default function AttendanceView({
           </div>
         </div>
 
-        {/* My Attendance Statistics Panel */}
+        {/* Attendance Summary & Metrics */}
         <div className="lg:col-span-2 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-6 shadow-xs dark:neon-glow flex flex-col justify-between">
           <div>
             <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
@@ -793,7 +812,7 @@ export default function AttendanceView({
                 <span className="text-2xl font-bold text-amber-600 font-mono mt-1 block">
                   {attendance.filter(a => a.employeeId === currentEmployeeId && a.status === "Late").length}
                 </span>
-                <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">After {formatTime12h(timingSettings?.lateThreshold || "09:30")}</span>
+                <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">After {formatTime12h(activeTiming?.lateThreshold || "09:30")}</span>
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
@@ -822,9 +841,9 @@ export default function AttendanceView({
                 {role === "employee" && "Employee clearance level: Confidential read-only attendance matrix. Self punch-in/out and break tracking enabled."}
               </p>
               <div className="mt-3 pt-3 border-t border-emerald-200/40 dark:border-emerald-800/40 text-[10px] font-mono grid grid-cols-1 sm:grid-cols-3 gap-2 text-emerald-800 dark:text-emerald-300">
-                <div>Shift Window: <b>{timingSettings?.clockInTime || "09:00"} - {timingSettings?.clockOutTime || "18:00"}</b></div>
-                <div>Late Buffer: <b>{timingSettings?.lateThreshold || "09:30"}</b></div>
-                <div>Standard Break: <b>{timingSettings?.breakStartTime || "13:00"} - {timingSettings?.breakEndTime || "14:00"}</b></div>
+                <div>Shift Window: <b>{activeTiming?.clockInTime || "09:00"} - {activeTiming?.clockOutTime || "18:00"}</b></div>
+                <div>Late Buffer: <b>{activeTiming?.lateThreshold || "09:30"}</b></div>
+                <div>Standard Break: <b>{activeTiming?.breakStartTime || "13:00"} - {activeTiming?.breakEndTime || "14:00"}</b></div>
               </div>
             </div>
           </div>
@@ -1113,8 +1132,19 @@ export default function AttendanceView({
                     return (
                       <React.Fragment key={punch.id}>
                         <tr className="hover:bg-slate-50/80 dark:hover:bg-[#1a1a1a]/60 transition-colors">
-                          <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300">
-                            {getEmployeeName(punch.employeeId)}
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-slate-700 dark:text-gray-300">
+                              {getEmployeeName(punch.employeeId)}
+                            </div>
+                            <div className="text-[10px] text-slate-400 dark:text-gray-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              {selectedBranch === "All Branches" && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40 font-bold inline-flex items-center gap-1">
+                                  <Building2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  {getEmployeeBranch(punch.employeeId)}
+                                </span>
+                              )}
+                              <span className="text-slate-400 font-mono text-[9px]">ID: {punch.employeeId}</span>
+                            </div>
                           </td>
                           <td className="py-3 px-3 text-slate-500 dark:text-gray-400 font-medium">
                             {getEmployeeBranch(punch.employeeId)} ({getEmployeeDept(punch.employeeId)})
@@ -1313,8 +1343,19 @@ export default function AttendanceView({
                       <React.Fragment key={punch.id}>
                         <tr className="hover:bg-slate-50/80 dark:hover:bg-[#1a1a1a]/60 transition-colors">
                           <td className="py-3 px-3 font-mono font-medium text-slate-400 dark:text-gray-500">{punch.employeeId}</td>
-                          <td className="py-3 px-3 font-semibold text-slate-700 dark:text-gray-300">
-                            {getEmployeeName(punch.employeeId)}
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-slate-700 dark:text-gray-300">
+                              {getEmployeeName(punch.employeeId)}
+                            </div>
+                            <div className="text-[10px] text-slate-400 dark:text-gray-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              {selectedBranch === "All Branches" && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40 font-bold inline-flex items-center gap-1">
+                                  <Building2 className="w-2.5 h-2.5 text-emerald-500" />
+                                  {getEmployeeBranch(punch.employeeId)}
+                                </span>
+                              )}
+                              <span className="text-slate-400 font-mono text-[9px]">ID: {punch.employeeId}</span>
+                            </div>
                           </td>
                           <td className="py-3 px-3 text-slate-500 dark:text-gray-400 font-medium">
                             {getEmployeeBranch(punch.employeeId)} ({getEmployeeDept(punch.employeeId)})
@@ -1420,7 +1461,7 @@ export default function AttendanceView({
             <div className="flex flex-wrap items-center gap-3">
               {/* Employee Selector (Hidden/Locked for regular Employees, filtered by branch for HR) */}
               {role !== "employee" ? (
-                <div className="flex flex-col gap-1 min-w-[220px]">
+                <div className="flex flex-col gap-1 min-w-[240px]">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Inspect Employee {role === "hr" && `(${userBranch})`}
                   </label>
@@ -1433,19 +1474,30 @@ export default function AttendanceView({
                       <optgroup key={group.branch} label={group.branch}>
                         {group.employees.map(emp => (
                           <option key={emp.id} value={emp.id}>
-                            {emp.fullName} ({emp.id}) - {emp.role.toUpperCase()}
+                            {emp.fullName} ({emp.id}) — {emp.branch || "Unassigned"}
                           </option>
                         ))}
                       </optgroup>
                     ))}
                   </select>
+                  {selectedEmployeeId && selectedBranch === "All Branches" && (
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40 text-[10px] font-bold inline-flex items-center gap-1">
+                        <Building2 className="w-2.5 h-2.5 text-emerald-500" />
+                        {getEmployeeBranch(selectedEmployeeId)}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">({getEmployeeDept(selectedEmployeeId)})</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#1a1a1a] px-3 py-2 rounded-xl border border-slate-100 dark:border-[#2a2a2a]">
-                  <User className="w-4 h-4 text-emerald-500" />
-                  <span className="text-xs font-bold text-slate-800 dark:text-white">
-                    {loggedInUser?.fullName} ({loggedInUser?.id})
-                  </span>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 bg-slate-50 dark:bg-[#1a1a1a] px-3 py-2 rounded-xl border border-slate-100 dark:border-[#2a2a2a]">
+                    <User className="w-4 h-4 text-emerald-500" />
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">
+                      {loggedInUser?.fullName} ({loggedInUser?.id})
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -1535,13 +1587,25 @@ export default function AttendanceView({
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-3 sm:p-5 shadow-xs dark:neon-glow space-y-3 sm:space-y-4">
             <div className="flex flex-col gap-2 pb-2 border-b border-slate-50 dark:border-[#1a1a1a] sm:flex-row sm:justify-between sm:items-center">
               <div>
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm sm:text-md">
-                  Weekly Attendance Matrix Calendar ({selectedMonth})
-                </h3>
-                <p className="text-xs text-slate-400">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm sm:text-md">
+                    Weekly Attendance Matrix Calendar ({selectedMonth})
+                  </h3>
+                  {selectedBranch === "All Branches" ? (
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40 text-[10px] font-bold inline-flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-emerald-500" />
+                      {getEmployeeName(selectedEmployeeId)} • {getEmployeeBranch(selectedEmployeeId)}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-300 border border-slate-200/50 dark:border-[#2a2a2a] text-[10px] font-bold">
+                      {getEmployeeName(selectedEmployeeId)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
                   {role === "employee" 
                     ? "Click any day cell to view your full punch details, break duration, and shift logs" 
-                    : "Click any day cell to inspect and edit employee attendance details"}
+                    : `Viewing attendance records for ${getEmployeeName(selectedEmployeeId)}${selectedBranch === "All Branches" ? ` (${getEmployeeBranch(selectedEmployeeId)})` : ""}`}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 sm:gap-4 text-[10px] sm:text-xs font-semibold">
@@ -2163,6 +2227,9 @@ export default function AttendanceView({
               <div className="flex items-center space-x-2">
                 <Sliders className="w-5 h-5 text-emerald-500" />
                 <h4 className="font-display font-semibold text-slate-800 dark:text-white">Configure Roster Timings</h4>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/40">
+                  {selectedBranch}
+                </span>
               </div>
               <button 
                 onClick={() => setShowTimingSettingsModal(false)}
@@ -2171,6 +2238,10 @@ export default function AttendanceView({
                 &times;
               </button>
             </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-gray-400">
+              Shift window and late buffer settings configured here will be saved for <span className="font-bold text-emerald-600 dark:text-emerald-400">{selectedBranch !== "All Branches" ? `${selectedBranch} Branch` : "All Branches (Global)"}</span> under {companyName}.
+            </p>
 
             <form 
               onSubmit={(e) => {
@@ -2181,7 +2252,8 @@ export default function AttendanceView({
                     clockOutTime: settingsClockOut,
                     lateThreshold: settingsLateThreshold,
                     breakStartTime: settingsBreakStart,
-                    breakEndTime: settingsBreakEnd
+                    breakEndTime: settingsBreakEnd,
+                    branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
                   });
                 }
                 setShowTimingSettingsModal(false);

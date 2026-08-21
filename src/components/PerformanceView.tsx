@@ -5,6 +5,7 @@ import {
   Clock, FileText, Inbox, ChevronDown, Calendar
 } from "lucide-react";
 import { PerformanceRecord, Fine, Employee } from "../types";
+import { toBranchName, toBranchId } from "../lib/branchUtils";
 
 interface PerformanceViewProps {
   role: "admin" | "hr" | "employee";
@@ -12,6 +13,7 @@ interface PerformanceViewProps {
   companyId: string;
   employees: Employee[];
   fines: Fine[]; // auto-surfaced from Fines module
+  selectedBranch?: string;
   showToast: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
@@ -47,7 +49,7 @@ function StarRating({ rating, max = 5, onChange }: { rating: number; max?: numbe
   );
 }
 
-export default function PerformanceView({ role, currentEmployee, companyId, employees, fines, showToast }: PerformanceViewProps) {
+export default function PerformanceView({ role, currentEmployee, companyId, employees, fines, selectedBranch = "All Branches", showToast }: PerformanceViewProps) {
   const [records, setRecords] = useState<PerformanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("board");
@@ -152,9 +154,26 @@ export default function PerformanceView({ role, currentEmployee, companyId, empl
     } catch (e) { showToast("Failed to delete", "error"); }
   };
 
+  // Branch filtered records
+  const branchFilteredRecords = records.filter(r => {
+    if (selectedBranch && selectedBranch !== "All Branches") {
+      const emp = employees.find(e => e.id === r.employeeId);
+      const itemBranch = r.branch || emp?.branch;
+      if (itemBranch) {
+        const cleanItem = toBranchName(itemBranch).trim().toLowerCase();
+        const cleanTarget = toBranchName(selectedBranch).trim().toLowerCase();
+        const idItem = toBranchId(itemBranch);
+        const idTarget = toBranchId(selectedBranch);
+        return cleanItem === cleanTarget || (idItem && idTarget && idItem === idTarget);
+      }
+      return false;
+    }
+    return true;
+  });
+
   // Merge stored records + virtual fine records for display
   const allDisplayRecords = [
-    ...records,
+    ...branchFilteredRecords,
     ...fineRecords,
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 

@@ -172,7 +172,7 @@ export function computeTDS(params: TaxComputationInput): TaxComputationResult {
     ? calcHRAExemption(annualBasic, annualHRA, monthlyRentPaid, cityType)
     : 0;
   const ltaExemption = regime === "old" ? annualLTA : 0;
-  const professionalTaxDeduction = Math.min(professionalTax, 2500);
+  const professionalTaxDeduction = regime === "old" ? Math.min(professionalTax, 2500) : 0;
   const maxEmployerNPS = Math.round(annualBasic * 0.10);
   const employerNPSDeduction = Math.min(employerNPS, maxEmployerNPS);
 

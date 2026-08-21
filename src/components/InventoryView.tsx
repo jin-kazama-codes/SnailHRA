@@ -12,6 +12,7 @@ interface InventoryViewProps {
   role: UserRole;
   currentEmployeeId: string;
   customBranches?: string[];
+  selectedBranch?: string;
   onAddAsset: (assetData: any) => void | Promise<void>;
   onDeleteAsset: (id: string) => void | Promise<void>;
   onApplyAssetRequest: (reqData: any) => void | Promise<void>;
@@ -25,6 +26,7 @@ export default function InventoryView({
   role,
   currentEmployeeId,
   customBranches,
+  selectedBranch: globalSelectedBranch = "All Branches",
   onAddAsset,
   onDeleteAsset,
   onApplyAssetRequest,
@@ -40,46 +42,51 @@ export default function InventoryView({
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Approved" | "Rejected">("All");
 
+  // Active branch selection
+  const activeBranch = globalSelectedBranch !== "All Branches"
+    ? globalSelectedBranch
+    : (employees.find(e => e.id === currentEmployeeId)?.branch || (customBranches && customBranches[0]) || "Shashtri Nagar");
+
   // Add asset fields
   const [assetName, setAssetName] = useState("");
-  const [selectedBranch, setSelectedBranch] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(activeBranch);
   const [serialNumber, setSerialNumber] = useState("");
   const [assetCategory, setAssetCategory] = useState<any>("Laptop");
 
+  useEffect(() => {
+    if (globalSelectedBranch !== "All Branches") {
+      setSelectedBranch(globalSelectedBranch);
+    } else {
+      const empBranch = employees.find(e => e.id === currentEmployeeId)?.branch || (customBranches && customBranches[0]) || "Shashtri Nagar";
+      setSelectedBranch(empBranch);
+    }
+  }, [globalSelectedBranch, currentEmployeeId, employees, customBranches]);
+
   const getBranchCode = (branchName: string) => {
-    if (!branchName) return "";
-    const codeMap: Record<string, string> = {
-      "Noida HQ": "NOIDA-HQ",
-      "Mumbai Branch": "MUM-BR",
-      "Pune Digital Office": "PUNE-DO",
-      "Hyderabad Hub": "HYD-HUB"
-    };
-    if (codeMap[branchName]) return codeMap[branchName];
-    return branchName.toUpperCase().replace(/[^A-Z0-9]+/g, "-").slice(0, 10);
+    if (!branchName || branchName === "All Branches") return "AST";
+    const cleaned = branchName.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+    if (cleaned.startsWith("SHASHTRI")) return "SHASHTRI-N";
+    return cleaned;
   };
 
-  // Automatically pre-select the logged-in employee's branch and generate initial serial code
+  // Automatically pre-select the active branch and generate initial serial code
   useEffect(() => {
-    const currentEmp = employees.find(e => e.id === currentEmployeeId);
-    const empBranch = currentEmp?.branch || "Mumbai Branch";
-    setSelectedBranch(empBranch);
-    const code = getBranchCode(empBranch);
+    const branchToUse = selectedBranch || activeBranch;
+    const code = getBranchCode(branchToUse);
     const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
     if (!serialNumber || showAddAssetForm) {
       const randNum = Math.floor(1000 + Math.random() * 9000);
       setSerialNumber(`${code}-${catCode}-${randNum}`);
     }
-  }, [currentEmployeeId, employees, showAddAssetForm]);
+  }, [selectedBranch, activeBranch, showAddAssetForm, assetCategory]);
 
   const handleCategorySelect = (category: string) => {
     setAssetCategory(category as any);
-    const branchToUse = selectedBranch || (employees.find(e => e.id === currentEmployeeId)?.branch) || "Mumbai Branch";
-    if (branchToUse) {
-      const code = getBranchCode(branchToUse);
-      const catCode = category === "Laptop" ? "LP" : category === "Mobile Tablet" ? "TB" : category === "WiFi Dongle" ? "WF" : "AST";
-      const randNum = Math.floor(1000 + Math.random() * 9000);
-      setSerialNumber(`${code}-${catCode}-${randNum}`);
-    }
+    const branchToUse = selectedBranch || activeBranch;
+    const code = getBranchCode(branchToUse);
+    const catCode = category === "Laptop" ? "LP" : category === "Mobile Tablet" ? "TB" : category === "WiFi Dongle" ? "WF" : "AST";
+    const randNum = Math.floor(1000 + Math.random() * 9000);
+    setSerialNumber(`${code}-${catCode}-${randNum}`);
   };
 
   // Request asset fields
@@ -108,15 +115,11 @@ export default function InventoryView({
       setShowAddAssetForm(false);
 
       // Reset serial number for next asset
-      const currentEmp = employees.find(e => e.id === currentEmployeeId);
-      const empBranch = currentEmp?.branch || "Mumbai Branch";
-      if (empBranch) {
-        setSelectedBranch(empBranch);
-        const code = getBranchCode(empBranch);
-        const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
-        const randNum = Math.floor(1000 + Math.random() * 9000);
-        setSerialNumber(`${code}-${catCode}-${randNum}`);
-      }
+      const branchToUse = selectedBranch || activeBranch;
+      const code = getBranchCode(branchToUse);
+      const catCode = assetCategory === "Laptop" ? "LP" : assetCategory === "Mobile Tablet" ? "TB" : assetCategory === "WiFi Dongle" ? "WF" : "AST";
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+      setSerialNumber(`${code}-${catCode}-${randNum}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -319,7 +322,14 @@ export default function InventoryView({
                     </div>
                     <div>
                       <h4 className="font-semibold text-slate-800 dark:text-white text-xs">{item.name}</h4>
-                      <p className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5">Serial: <span className="font-mono font-medium">{item.serialNumber}</span></p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <p className="text-[10px] text-slate-400 dark:text-gray-500">Serial: <span className="font-mono font-medium">{item.serialNumber}</span></p>
+                        {item.branch && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-400 border border-slate-200/60 dark:border-slate-800">
+                            {item.branch}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 

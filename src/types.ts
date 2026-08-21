@@ -26,6 +26,7 @@ export interface Designation {
   title: string;
   department: string;
   companyId?: string;
+  branch?: string;
 }
 
 export interface CorporateAllowanceFaq {
@@ -33,6 +34,7 @@ export interface CorporateAllowanceFaq {
   title: string;
   description: string;
   companyId?: string;
+  branch?: string;
   createdAt?: string;
 }
 
@@ -130,6 +132,8 @@ export interface Employee {
   branch?: string;
   password?: string;
   employmentType?: "contract" | "permanent" | "consultant" | "";
+  pan?: string;
+  uan?: string;
   customFields?: Record<string, string | number | boolean>;
 }
 
@@ -141,6 +145,7 @@ export interface ChecklistItemTemplate {
   required: boolean;
   type: "onboarding" | "exit";
   companyId?: string;
+  branch?: string;
 }
 
 export interface EmployeeChecklistItem {
@@ -199,6 +204,7 @@ export interface Holiday {
   name: string;
   type: "National" | "Regional" | "Restricted";
   companyId?: string;
+  branch?: string; // Optional: if set, holiday is branch-specific
 }
 
 export interface Policy {
@@ -208,12 +214,14 @@ export interface Policy {
   content: string;
   lastUpdated: string;
   companyId?: string;
+  branch?: string; // Optional: if set, policy is branch-specific
 }
 
 export interface ExpenseCategory {
   id: string;
   name: string;
   companyId?: string; // or company_id
+  branch?: string;
   description?: string;
   createdAt?: string;
 }
@@ -251,6 +259,8 @@ export interface InventoryRequest {
   requestDate: string;
   reason: string;
   status: "Pending" | "Approved" | "Rejected";
+  branch?: string;
+  companyId?: string;
 }
 
 export interface InfractionType {
@@ -259,6 +269,7 @@ export interface InfractionType {
   description?: string;
   defaultAmount?: number;
   companyId?: string;
+  branch?: string;
 }
 
 export interface Fine {
@@ -391,6 +402,7 @@ export interface Meeting {
   organizerId: string;
   participantIds: string[];
   department?: string;
+  branch?: string;
   priority?: "Low" | "Medium" | "High" | "Urgent";
   date: string;
   startTime: string;
@@ -425,6 +437,7 @@ export interface SeatLayout {
   id: string;
   companyId: string;
   name: string; // e.g. "Floor 1 – Main Office"
+  branch?: string;
   sections: SeatSection[];
   seats: Seat[];
   updatedAt: string;
@@ -484,6 +497,7 @@ export interface GrievanceTicket {
   title: string;
   description: string;
   category: string; // "HR Policy" | "Workplace" | "Payroll" | "IT" | "Other"
+  branch?: string;
   priority: "Low" | "Medium" | "High" | "Urgent";
   status: "Open" | "In Progress" | "Resolved" | "Rejected" | "Closed";
   isAnonymous?: boolean;
@@ -505,6 +519,7 @@ export interface PerformanceRecord {
   employeeName: string;
   reviewerId: string;
   reviewerName: string;
+  branch?: string;
   /** "Fine" = auto-surfaced from FinesView, not stored separately */
   type: "Appraisal" | "Incident" | "Commendation" | "Disciplinary" | "Fine";
   period?: string;        // e.g. "Q3 2025", "Annual 2025" — free text

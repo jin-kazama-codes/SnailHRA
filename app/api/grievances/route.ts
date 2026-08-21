@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { GrievanceTicket } from "@/src/types";
+import { toBranchName, encodeBranchPrefix, extractBranchPrefix } from "@/src/lib/branchUtils";
 
 export async function GET(request: Request) {
   try {
@@ -19,29 +20,45 @@ export async function GET(request: Request) {
       try {
         let query = dbClient.from("grievance_tickets").select("*");
         if (companyId) {
-          query = query.or(`company_id.eq.${companyId},company_id.eq.,company_id.is.null`);
+          query = query.or(`company_id.eq.${companyId},company_id.is.null`);
         }
         const { data, error } = await query.order("created_at", { ascending: false });
 
         if (!error && data && Array.isArray(data)) {
-          const sbTickets: GrievanceTicket[] = data.map((row: any) => ({
-            id: row.id,
-            companyId: row.company_id || "",
-            employeeId: row.employee_id || "",
-            employeeName: row.employee_name || row.employeeName || "",
-            title: row.title || "",
-            description: row.description || "",
-            category: row.category || "Other",
-            priority: row.priority || "Medium",
-            status: row.status || "Open",
-            isAnonymous: row.is_anonymous ?? false,
-            createdAt: row.created_at || new Date().toISOString(),
-            resolvedBy: row.resolved_by || undefined,
-            resolvedByName: row.resolved_by_name || undefined,
-            resolutionMessage: row.resolution_message || undefined,
-            resolvedAt: row.resolved_at || undefined,
-            messages: typeof row.messages === "string" ? JSON.parse(row.messages) : (row.messages || [])
-          }));
+          const sbTickets: GrievanceTicket[] = data.map((row: any) => {
+            const extracted = extractBranchPrefix(row.description);
+            const emp = (db.employees || []).find((e: any) => e.id === (row.employee_id || row.employeeId));
+            const resolvedBranch = row.branch 
+              ? toBranchName(row.branch) 
+              : (extracted.branch || (emp?.branch ? toBranchName(emp.branch) : undefined));
+
+            let parsedMessages: any[] = [];
+            if (Array.isArray(row.messages)) {
+              parsedMessages = row.messages;
+            } else if (typeof row.messages === "string") {
+              try { parsedMessages = JSON.parse(row.messages); } catch { parsedMessages = []; }
+            }
+
+            return {
+              id: row.id,
+              companyId: row.company_id || "",
+              employeeId: row.employee_id || "",
+              employeeName: row.employee_name || row.employeeName || "",
+              title: row.title || "",
+              description: extracted.cleanText || row.description || "",
+              category: row.category || "Other",
+              branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
+              priority: row.priority || "Medium",
+              status: row.status || "Open",
+              isAnonymous: row.is_anonymous ?? false,
+              createdAt: row.created_at || new Date().toISOString(),
+              resolvedBy: row.resolved_by || undefined,
+              resolvedByName: row.resolved_by_name || undefined,
+              resolutionMessage: row.resolution_message || undefined,
+              resolvedAt: row.resolved_at || undefined,
+              messages: parsedMessages
+            };
+          });
 
           const ticketMap = new Map<string, GrievanceTicket>();
           (tickets || []).forEach(t => { if (t && t.id) ticketMap.set(t.id, t); });
@@ -83,6 +100,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "title, description, and employeeId are required" }, { status: 400 });
     }
 
+    const db = loadDatabase();
+    const emp = (db.employees || []).find(e => e.id === employeeId);
+    const resolvedBranch = body.branch || emp?.branch || undefined;
+
     const ticket: GrievanceTicket = {
       id: `grv-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       companyId: companyId || "",
@@ -91,13 +112,13 @@ export async function POST(request: Request) {
       title,
       description,
       category: category || "Other",
+      branch: resolvedBranch ? toBranchName(resolvedBranch) : undefined,
       priority: priority || "Medium",
       status: "Open",
       isAnonymous: !!isAnonymous,
       createdAt: new Date().toISOString(),
     };
 
-    const db = loadDatabase();
     if (!db.grievanceTickets) db.grievanceTickets = [];
     db.grievanceTickets.unshift(ticket);
     saveDatabase(db);
@@ -105,31 +126,61 @@ export async function POST(request: Request) {
     // Sync to Supabase
     const dbClient = supabaseAdmin || supabase;
     if (dbClient) {
-      try {
-        const { error } = await dbClient.from("grievance_tickets").upsert({
-          id: ticket.id,
-          company_id: ticket.companyId || "",
-          employee_id: ticket.employeeId || "",
-          employee_name: ticket.employeeName || "",
-          title: ticket.title || "",
-          description: ticket.description || "",
-          category: ticket.category || "Other",
-          priority: ticket.priority || "Medium",
-          status: ticket.status || "Open",
-          is_anonymous: ticket.isAnonymous ?? false,
-          created_at: ticket.createdAt,
-          resolution_message: null,
-          resolved_by: null,
-          resolved_by_name: null,
-          resolved_at: null,
-          messages: ticket.messages || [],
-        }, { onConflict: "id" });
-        if (error) {
-          console.error("Grievance insert Supabase error:", error.message, error.details);
-        } else {
-          console.log("Successfully created grievance ticket in Supabase:", ticket.id);
-        }
-      } catch (e) { console.warn("Grievance Supabase sync exception:", e); }
+      const bName = ticket.branch && ticket.branch !== "All Branches" ? toBranchName(ticket.branch) : null;
+      let synced = false;
+      if (bName) {
+        try {
+          const { error } = await dbClient.from("grievance_tickets").upsert({
+            id: ticket.id,
+            company_id: ticket.companyId || "",
+            employee_id: ticket.employeeId || "",
+            employee_name: ticket.employeeName || "",
+            title: ticket.title || "",
+            description: ticket.description || "",
+            category: ticket.category || "Other",
+            branch: bName,
+            priority: ticket.priority || "Medium",
+            status: ticket.status || "Open",
+            is_anonymous: ticket.isAnonymous ?? false,
+            created_at: ticket.createdAt,
+            resolution_message: null,
+            resolved_by: null,
+            resolved_by_name: null,
+            resolved_at: null,
+            messages: ticket.messages || [],
+          }, { onConflict: "id" });
+          if (!error) synced = true;
+        } catch {}
+      }
+
+      if (!synced) {
+        try {
+          const encodedDescription = bName ? encodeBranchPrefix(ticket.description, bName) : ticket.description;
+          const { error } = await dbClient.from("grievance_tickets").upsert({
+            id: ticket.id,
+            company_id: ticket.companyId || "",
+            employee_id: ticket.employeeId || "",
+            employee_name: ticket.employeeName || "",
+            title: ticket.title || "",
+            description: encodedDescription || "",
+            category: ticket.category || "Other",
+            priority: ticket.priority || "Medium",
+            status: ticket.status || "Open",
+            is_anonymous: ticket.isAnonymous ?? false,
+            created_at: ticket.createdAt,
+            resolution_message: null,
+            resolved_by: null,
+            resolved_by_name: null,
+            resolved_at: null,
+            messages: ticket.messages || [],
+          }, { onConflict: "id" });
+          if (error) {
+            console.error("Grievance insert Supabase error:", error.message, error.details);
+          } else {
+            console.log("Successfully created grievance ticket in Supabase:", ticket.id);
+          }
+        } catch (e) { console.warn("Grievance Supabase sync exception:", e); }
+      }
     }
 
     return NextResponse.json({ success: true, ticket });

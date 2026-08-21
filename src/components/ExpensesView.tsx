@@ -14,6 +14,7 @@ interface ExpensesViewProps {
   employees: Employee[];
   role: UserRole;
   currentEmployeeId: string;
+  selectedBranch?: string;
   onSubmitExpense: (expenseData: any) => void;
   onReviewExpense: (id: string, status: "Approved" | "Rejected") => void;
 }
@@ -25,6 +26,7 @@ export default function ExpensesView({
   employees,
   role,
   currentEmployeeId,
+  selectedBranch = "All Branches",
   onSubmitExpense,
   onReviewExpense
 }: ExpensesViewProps) {
@@ -33,6 +35,19 @@ export default function ExpensesView({
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Claim fields
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
+    return currentEmployeeId || (employees && employees.length > 0 ? employees[0].id : "");
+  });
+  const [expenseStatus, setExpenseStatus] = useState<"Approved" | "Pending">(role === "employee" ? "Pending" : "Approved");
+
+  React.useEffect(() => {
+    if (currentEmployeeId && !selectedEmployeeId) {
+      setSelectedEmployeeId(currentEmployeeId);
+    } else if (!selectedEmployeeId && employees && employees.length > 0) {
+      setSelectedEmployeeId(employees[0].id);
+    }
+  }, [currentEmployeeId, employees, selectedEmployeeId]);
+
   const [category, setCategory] = useState(() => {
     return expenseCategories && expenseCategories.length > 0
       ? expenseCategories[0].name
@@ -54,13 +69,20 @@ export default function ExpensesView({
   const handleClaimSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description || !date) return;
-    const targetEmpId = currentEmployeeId || (employees.find(emp => emp.role === role)?.id || employees[0]?.id || "");
+    const targetEmpId = (role === "admin" || role === "hr")
+      ? (selectedEmployeeId || currentEmployeeId || (employees.find(emp => emp.role === role)?.id || employees[0]?.id || ""))
+      : (currentEmployeeId || (employees.find(emp => emp.role === role)?.id || employees[0]?.id || ""));
+    const targetEmp = employees.find(e => e.id === targetEmpId);
+    const targetEmpName = targetEmp?.fullName || `Employee ${targetEmpId}`;
+
     onSubmitExpense({
       employeeId: targetEmpId,
+      employeeName: targetEmpName,
       category,
       amount,
       date,
-      description
+      description,
+      status: (role === "admin" || role === "hr") ? expenseStatus : "Pending"
     });
     setDescription("");
     setAmount("");
@@ -81,24 +103,32 @@ export default function ExpensesView({
     return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
   };
 
+  const isHRAdmin = role === "admin" || role === "hr";
+
   return (
     <div className="space-y-6">
       {/* Page header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-gray-900 border border-slate-100 dark:border-gray-800 rounded-2xl p-3.5 sm:p-4 shadow-xs dark:neon-glow">
         <div>
           <h2 className="font-display font-bold text-slate-800 dark:text-white text-sm">Expense Claims Tracker</h2>
-          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">Submit and review business expense claims</p>
+          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">
+            {isHRAdmin ? "Record and audit corporate business expense claims" : "Submit and review business expense claims"}
+          </p>
         </div>
 
-        {role === "employee" && (
-          <button
-            onClick={() => setShowClaimForm(!showClaimForm)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1 transition-all cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{showClaimForm ? "Hide Form" : "Claim Business Expense"}</span>
-          </button>
-        )}
+        <button
+          onClick={() => setShowClaimForm(!showClaimForm)}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center space-x-1.5 transition-all cursor-pointer shrink-0 shadow-xs"
+        >
+          <Plus className="w-4 h-4" />
+          <span>
+            {showClaimForm
+              ? "Hide Form"
+              : isHRAdmin
+              ? "Record Business Expense"
+              : "Claim Business Expense"}
+          </span>
+        </button>
       </div>
 
       {/* Claims Logs & Review panel */}
@@ -107,19 +137,81 @@ export default function ExpensesView({
           {/* Main Action Area */}
           <div className="lg:col-span-2 space-y-6">
             
-            {/* Submit Claim Form */}
-            {showClaimForm && role === "employee" && (
+            {/* Submit Claim Form (Available to all roles: Admin, HR, Employee) */}
+            {showClaimForm && (
               <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow animate-in fade-in duration-200">
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">Claim New Business Expense</h3>
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">
+                    {isHRAdmin ? "Record / File Business Expense" : "Claim New Business Expense"}
+                  </h3>
+                  {isHRAdmin && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                      Admin / HR Entry
+                    </span>
+                  )}
+                </div>
 
                 <form onSubmit={handleClaimSubmit} className="space-y-4 text-xs">
+                  {/* Admin/HR Employee Selector and Status Mode */}
+                  {isHRAdmin && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/70 dark:bg-[#0a0a0a]/60 p-3.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
+                      <div>
+                        <label className="block font-semibold text-slate-600 dark:text-gray-300 mb-1">
+                          Select Employee / Beneficiary *
+                        </label>
+                        <select
+                          value={selectedEmployeeId}
+                          onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                          className="w-full bg-white dark:bg-[#141414] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-200 dark:border-[#262626] font-medium cursor-pointer"
+                          required
+                        >
+                          {employees.map((emp) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.fullName} ({emp.id}) {emp.department ? `• ${emp.department}` : ""} {emp.branch ? `[${emp.branch}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-slate-600 dark:text-gray-300 mb-1">
+                          Approval Status Mode
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setExpenseStatus("Approved")}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              expenseStatus === "Approved"
+                                ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                : "bg-white dark:bg-[#141414] text-slate-600 dark:text-gray-400 border-slate-200 dark:border-[#262626]"
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" /> Instant Approved
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExpenseStatus("Pending")}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              expenseStatus === "Pending"
+                                ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                : "bg-white dark:bg-[#141414] text-slate-600 dark:text-gray-400 border-slate-200 dark:border-[#262626]"
+                            }`}
+                          >
+                            <AlertCircle className="w-3.5 h-3.5" /> Submit as Pending
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Expense Category</label>
                       <select
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium cursor-pointer"
                       >
                         {expenseCategories.map((cat) => (
                           <option key={cat.id} value={cat.name}>
@@ -141,6 +233,7 @@ export default function ExpensesView({
                         placeholder="e.g. 1500"
                         className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
                         required
+                        min="1"
                       />
                     </div>
 
@@ -150,14 +243,14 @@ export default function ExpensesView({
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono"
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-medium font-mono cursor-pointer"
                         required
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Description / Client Details</label>
+                    <label className="block font-semibold text-slate-500 dark:text-gray-400 mb-1">Description / Purpose / Client Details *</label>
                     <textarea 
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
@@ -168,12 +261,20 @@ export default function ExpensesView({
                     />
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowClaimForm(false)}
+                      className="px-4 py-2 rounded-xl border border-slate-200 dark:border-[#262626] text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#141414] font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </button>
                     <button
                       type="submit"
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-xl cursor-pointer"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2 rounded-xl cursor-pointer shadow-xs flex items-center gap-1.5"
                     >
-                      File Expense Claim
+                      <Check className="w-4 h-4" />
+                      <span>{isHRAdmin ? "Save Expense Record" : "File Expense Claim"}</span>
                     </button>
                   </div>
                 </form>

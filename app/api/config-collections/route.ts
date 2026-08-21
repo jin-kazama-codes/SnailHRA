@@ -7,10 +7,11 @@ import {
   syncLeaveTypeToSupabase, deleteLeaveTypeFromSupabase,
   syncAmenityToSupabase, deleteAmenityFromSupabase
 } from "@/src/lib/supabase";
+import { toBranchId, toBranchName } from "@/src/lib/branchUtils";
 
 export async function POST(request: Request) {
   try {
-    const { type, updatedList, addedItem, removedItem, companyId } = await request.json();
+    const { type, updatedList, addedItem, removedItem, companyId, branch } = await request.json();
     if (!type || !Array.isArray(updatedList)) {
       return NextResponse.json({ error: "Type and updatedList array are required." }, { status: 400 });
     }
@@ -26,10 +27,18 @@ export async function POST(request: Request) {
     const capitalizedAdded = addedItem ? safeCapitalize(addedItem) : undefined;
 
     const db = loadDatabase();
+    const rawBranch = (branch && branch !== "All Branches") ? branch : "";
+    const bName = rawBranch ? toBranchName(rawBranch) : "";
+    const bId = rawBranch ? toBranchId(rawBranch) : "";
 
     let previousList: string[] = [];
     if (type === "leaveTypes") {
-      previousList = db.customLeaveTypes || [];
+      if (rawBranch) {
+        if (!db.branchLeaveTypes) db.branchLeaveTypes = {};
+        previousList = db.branchLeaveTypes[rawBranch] || db.branchLeaveTypes[bName] || db.branchLeaveTypes[bId] || [];
+      } else {
+        previousList = db.customLeaveTypes || [];
+      }
       const map = new Map<string, string>();
       capitalizedList.forEach((item: string) => {
         const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
@@ -39,19 +48,51 @@ export async function POST(request: Request) {
         const addedName = (capitalizedAdded.includes("|") ? capitalizedAdded.split("|")[0] : capitalizedAdded).trim().toLowerCase();
         map.set(addedName, capitalizedAdded);
       }
-      db.customLeaveTypes = Array.from(map.values());
+      const processedList = Array.from(map.values());
+      if (rawBranch) {
+        if (!db.branchLeaveTypes) db.branchLeaveTypes = {};
+        db.branchLeaveTypes[rawBranch] = processedList;
+        if (bName) db.branchLeaveTypes[bName] = processedList;
+        if (bId) db.branchLeaveTypes[bId] = processedList;
+      } else {
+        db.customLeaveTypes = processedList;
+      }
     } else if (type === "departments") {
-      previousList = db.customDepartments || [];
+      if (rawBranch) {
+        if (!db.branchDepartments) db.branchDepartments = {};
+        previousList = db.branchDepartments[rawBranch] || db.branchDepartments[bName] || db.branchDepartments[bId] || [];
+      } else {
+        previousList = db.customDepartments || [];
+      }
       if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
-      db.customDepartments = capitalizedList;
+      if (rawBranch) {
+        if (!db.branchDepartments) db.branchDepartments = {};
+        db.branchDepartments[rawBranch] = capitalizedList;
+        if (bName) db.branchDepartments[bName] = capitalizedList;
+        if (bId) db.branchDepartments[bId] = capitalizedList;
+      } else {
+        db.customDepartments = capitalizedList;
+      }
     } else if (type === "branches") {
       previousList = db.customBranches || [];
       if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
       db.customBranches = capitalizedList;
     } else if (type === "amenities") {
-      previousList = db.customAmenities || [];
+      if (rawBranch) {
+        if (!db.branchAmenities) db.branchAmenities = {};
+        previousList = db.branchAmenities[rawBranch] || db.branchAmenities[bName] || db.branchAmenities[bId] || [];
+      } else {
+        previousList = db.customAmenities || [];
+      }
       if (capitalizedAdded && !capitalizedList.includes(capitalizedAdded)) capitalizedList.push(capitalizedAdded);
-      db.customAmenities = capitalizedList;
+      if (rawBranch) {
+        if (!db.branchAmenities) db.branchAmenities = {};
+        db.branchAmenities[rawBranch] = capitalizedList;
+        if (bName) db.branchAmenities[bName] = capitalizedList;
+        if (bId) db.branchAmenities[bId] = capitalizedList;
+      } else {
+        db.customAmenities = capitalizedList;
+      }
     } else {
       return NextResponse.json({ error: "Invalid collection type." }, { status: 400 });
     }
@@ -66,17 +107,30 @@ export async function POST(request: Request) {
 
     // Sync changes to Supabase database tables asynchronously
     if (type === "departments") {
-      if (added) await syncDepartmentToSupabase(added, companyId);
-      if (removed) await deleteDepartmentFromSupabase(removed, companyId);
+      if (added) await syncDepartmentToSupabase(added, companyId, bName || undefined);
+      if (removed) await deleteDepartmentFromSupabase(removed, companyId, bName || undefined);
     } else if (type === "branches") {
       if (added) await syncBranchToSupabase(added, companyId);
       if (removed) await deleteBranchFromSupabase(removed, companyId);
     } else if (type === "leaveTypes") {
-      if (added) await syncLeaveTypeToSupabase(added, companyId);
-      if (removed) await deleteLeaveTypeFromSupabase(removed, companyId);
+      if (added) {
+        await syncLeaveTypeToSupabase(added, companyId, bName);
+      } else {
+        // Sync all items in list
+        for (const item of capitalizedList) {
+          await syncLeaveTypeToSupabase(item, companyId, bName);
+        }
+      }
+      if (removed) await deleteLeaveTypeFromSupabase(removed, companyId, bName);
     } else if (type === "amenities") {
-      if (added) await syncAmenityToSupabase(added, companyId);
-      if (removed) await deleteAmenityFromSupabase(removed, companyId);
+      if (added) {
+        await syncAmenityToSupabase(added, companyId, bName);
+      } else {
+        for (const item of capitalizedList) {
+          await syncAmenityToSupabase(item, companyId, bName);
+        }
+      }
+      if (removed) await deleteAmenityFromSupabase(removed, companyId, bName);
     }
 
     return NextResponse.json({ 

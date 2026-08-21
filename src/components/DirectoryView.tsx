@@ -10,6 +10,7 @@ import {
   ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut, Maximize2, Minimize2
 } from "lucide-react";
 import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig, ChecklistItemTemplate } from "../types";
+import { toBranchName, toBranchId } from "../lib/branchUtils";
 import ChecklistCard from "./ChecklistCard";
 import { computeIncomeTax } from "./PayrollView";
 
@@ -68,6 +69,9 @@ interface DirectoryViewProps {
     action?: "add" | "remove",
     item?: string
   ) => Promise<void> | void;
+  selectedBranch?: string;
+  empCodePrefix?: string;
+  branchCodePrefixes?: Record<string, string>;
 }
 
 export default function DirectoryView({
@@ -80,6 +84,9 @@ export default function DirectoryView({
   companyId = "",
   companyName = "SnailHRA Tenant",
   subscriptionModel = 1,
+  selectedBranch: globalSelectedBranch = "All Branches",
+  empCodePrefix = "EMP",
+  branchCodePrefixes = {},
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
   onOnboardEmployee,
@@ -98,7 +105,15 @@ export default function DirectoryView({
 }: DirectoryViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
-  const [selectedBranch, setSelectedBranch] = useState("All");
+  const [selectedBranch, setSelectedBranch] = useState(globalSelectedBranch !== "All Branches" ? globalSelectedBranch : "All");
+
+  useEffect(() => {
+    if (globalSelectedBranch !== "All Branches") {
+      setSelectedBranch(globalSelectedBranch);
+    } else {
+      setSelectedBranch("All");
+    }
+  }, [globalSelectedBranch]);
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended" | "Resigned">("All");
   const [activeEmpId, setActiveEmpId] = useState<string | null>(() => currentUserId || employees[0]?.id || null);
   const [activeChecklistTab, setActiveChecklistTab] = useState<"onboarding" | "exit">("onboarding");
@@ -508,7 +523,36 @@ export default function DirectoryView({
   const [selectedDesgId, setSelectedDesgId] = useState(designations[0]?.id || "");
   const [department, setDepartment] = useState("Information Technology");
   const [employmentType, setEmploymentType] = useState<"contract" | "permanent" | "consultant" | "">("");
-  const [onboardBranch, setOnboardBranch] = useState("");
+
+  const getEffectiveOnboardBranch = () => {
+    if (role === "hr" && userBranch && userBranch.trim().length > 0) {
+      const match = (customBranches || []).find(b => 
+        b.toLowerCase() === userBranch.toLowerCase() ||
+        toBranchName(b).toLowerCase() === toBranchName(userBranch).toLowerCase() ||
+        toBranchId(b) === toBranchId(userBranch)
+      );
+      return match || userBranch;
+    }
+    if (selectedBranch && selectedBranch !== "All" && selectedBranch !== "All Branches") {
+      const match = (customBranches || []).find(b => 
+        b.toLowerCase() === selectedBranch.toLowerCase() ||
+        toBranchName(b).toLowerCase() === toBranchName(selectedBranch).toLowerCase() ||
+        toBranchId(b) === toBranchId(selectedBranch)
+      );
+      return match || selectedBranch;
+    }
+    if (globalSelectedBranch && globalSelectedBranch !== "All Branches") {
+      const match = (customBranches || []).find(b => 
+        b.toLowerCase() === globalSelectedBranch.toLowerCase() ||
+        toBranchName(b).toLowerCase() === toBranchName(globalSelectedBranch).toLowerCase() ||
+        toBranchId(b) === toBranchId(globalSelectedBranch)
+      );
+      return match || globalSelectedBranch;
+    }
+    return customBranches && customBranches.length > 0 ? customBranches[0] : "";
+  };
+
+  const [onboardBranch, setOnboardBranch] = useState(() => getEffectiveOnboardBranch());
   const [joiningDate, setJoiningDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -567,6 +611,10 @@ export default function DirectoryView({
       }
     }
   }, [customDepartments]);
+
+  useEffect(() => {
+    setOnboardBranch(getEffectiveOnboardBranch());
+  }, [selectedBranch, globalSelectedBranch, customBranches]);
 
   // Helper to recompute HRA, Allowances, PF, Tax, ESI dynamically when Basic salary or exemption toggles change
   const recomputeOnboardSalaryComponentsWithConfig = (basicStr: string, pfExemptFlag: boolean, esiExemptFlag: boolean, cfg: PayrollConfig | null) => {
@@ -657,7 +705,17 @@ export default function DirectoryView({
         emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = selectedDept === "All" || emp.department === selectedDept;
-      const matchesBranch = selectedBranch === "All" || (emp.branch || "Mumbai Branch") === selectedBranch;
+      const isBranchEqual = (b1?: string, b2?: string) => {
+        if (!b1 || !b2) return false;
+        if (b1 === b2) return true;
+        const n1 = toBranchName(b1).trim().toLowerCase();
+        const n2 = toBranchName(b2).trim().toLowerCase();
+        if (n1 === n2) return true;
+        const id1 = toBranchId(b1);
+        const id2 = toBranchId(b2);
+        return Boolean(id1 && id2 && id1 === id2);
+      };
+      const matchesBranch = selectedBranch === "All" || selectedBranch === "All Branches" || isBranchEqual(emp.branch, selectedBranch);
       const matchesStatus = selectedStatusFilter === "All" || (emp.status || "Active") === selectedStatusFilter;
       return matchesSearch && matchesDept && matchesBranch && matchesStatus;
     })
@@ -724,11 +782,19 @@ export default function DirectoryView({
         avatarUrl = await uploadProfileImage();
       }
 
-      const activePrefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") : null) || "EMP";
+      const branchForEmp = onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : "");
+      const branchNameKey = branchForEmp ? toBranchName(branchForEmp) : "";
+      const branchIdKey = branchForEmp ? toBranchId(branchForEmp) : "";
+      const branchPrefix = (branchCodePrefixes && (branchCodePrefixes[branchForEmp] || branchCodePrefixes[branchNameKey] || branchCodePrefixes[branchIdKey]))
+        || (branchNameKey && typeof window !== "undefined" ? localStorage.getItem(`snailhr_empCodePrefix_${branchNameKey}`) : null)
+        || empCodePrefix
+        || (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") : null)
+        || "EMP";
+
       const data = {
-        empCodePrefix: activePrefix,
+        empCodePrefix: branchPrefix,
         prefix, fullName, gender, email, phone, role: empRole, designationId: selectedDesgId, department, employmentType,
-        branch: onboardBranch || (customBranches && customBranches.length > 0 ? customBranches[0] : ""),
+        branch: branchForEmp,
         joiningDate, dateOfBirth, salaryBasic, salaryHra,
         salaryTelephone, salaryFuel, salaryProfDev, salaryLta,
         salaryAllowances, salaryPf, salaryTds, salaryEsi,
@@ -1378,6 +1444,19 @@ export default function DirectoryView({
     );
   }
 
+  const getBranchFilteredTemplates = (tmpls: ChecklistItemTemplate[] = []) => {
+    const targetBranch = activeEmployee?.branch || (selectedBranch !== "All" && selectedBranch !== "All Branches" ? selectedBranch : (globalSelectedBranch !== "All Branches" ? globalSelectedBranch : ""));
+    if (!targetBranch || targetBranch === "All Branches" || targetBranch === "All") return tmpls;
+    const bName = toBranchName(targetBranch).toLowerCase();
+    const bId = toBranchId(targetBranch);
+    return tmpls.filter(t => {
+      if (!t.branch || t.branch === "All Branches") return true;
+      const tName = toBranchName(t.branch).toLowerCase();
+      const tId = toBranchId(t.branch);
+      return tName === bName || tId === bId || t.branch.toLowerCase() === targetBranch.toLowerCase();
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Filter and Action Header */}
@@ -1439,7 +1518,7 @@ export default function DirectoryView({
             <button
               onClick={() => {
                 setShowOnboardForm(true);
-                setOnboardBranch(role === "hr" ? userBranch : (customBranches && customBranches.length > 0 ? customBranches[0] : ""));
+                setOnboardBranch(getEffectiveOnboardBranch());
               }}
               className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2 rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-xs"
             >
@@ -1877,7 +1956,7 @@ export default function DirectoryView({
                       <ChecklistCard
                         type="onboarding"
                         employee={activeEmployee}
-                        templates={onboardingChecklistTemplates}
+                        templates={getBranchFilteredTemplates(onboardingChecklistTemplates)}
                         currentUserRole={role}
                         currentUserId={currentUserId}
                         onCreateTemplate={onCreateChecklistTemplate}
@@ -2011,7 +2090,7 @@ export default function DirectoryView({
                       <ChecklistCard
                         type="exit"
                         employee={activeEmployee}
-                        templates={exitChecklistTemplates}
+                        templates={getBranchFilteredTemplates(exitChecklistTemplates)}
                         currentUserRole={role}
                         currentUserId={currentUserId}
                         onCreateTemplate={onCreateChecklistTemplate}

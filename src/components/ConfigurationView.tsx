@@ -5,9 +5,10 @@ import {
   Briefcase, Landmark, Calendar, MapPin, Plus, Trash2, HelpCircle, Edit3, Save, X, Star, Scale, Loader2,
   Monitor, Presentation, Wifi, Coffee, Zap, Tv, Cable, Cpu, Volume2, Shield,
   Snowflake, Phone, Lightbulb, Mic, Router, ToggleLeft, ToggleRight, Globe, Locate, CheckCircle2, ChevronDown,
-  ShieldCheck, LogOut, CheckSquare, FileCheck
+  ShieldCheck, LogOut, CheckSquare, FileCheck, Building2, Clock
 } from "lucide-react";
 import { Designation, ExpenseCategory, CorporateAllowanceFaq, InfractionType, ChecklistItemTemplate } from "../types";
+import { toBranchName, toBranchId } from "../lib/branchUtils";
 
 const AMENITY_ICONS: Record<string, React.ReactNode> = {
   "Monitor": <Monitor className="w-3.5 h-3.5 text-slate-400" />,
@@ -88,6 +89,25 @@ interface ConfigurationViewProps {
   exitChecklistTemplates?: ChecklistItemTemplate[];
   onAddChecklistTemplate?: (template: Omit<ChecklistItemTemplate, "id">) => void | Promise<void>;
   onRemoveChecklistTemplate?: (id: string) => void | Promise<void>;
+  selectedBranch?: string;
+  timingSettings?: {
+    clockInTime: string;
+    clockOutTime: string;
+    lateThreshold: string;
+    breakStartTime: string;
+    breakEndTime: string;
+  };
+  branchTimingSettings?: Record<string, {
+    clockInTime: string;
+    clockOutTime: string;
+    lateThreshold: string;
+    breakStartTime: string;
+    breakEndTime: string;
+  }>;
+  onSaveTimingSettings?: (settings: any) => void;
+  empCodePrefix?: string;
+  branchCodePrefixes?: Record<string, string>;
+  onSaveEmpCodePrefix?: (prefix: string, branch?: string) => void | Promise<void>;
 }
 
 export default function ConfigurationView({
@@ -118,7 +138,14 @@ export default function ConfigurationView({
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
   onAddChecklistTemplate,
-  onRemoveChecklistTemplate
+  onRemoveChecklistTemplate,
+  selectedBranch = "All Branches",
+  timingSettings,
+  branchTimingSettings = {},
+  onSaveTimingSettings,
+  empCodePrefix: empCodePrefixProp,
+  branchCodePrefixes = {},
+  onSaveEmpCodePrefix
 }: ConfigurationViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "infractions" | "allowancesFaq" | "checklists">(() => {
     if (typeof window !== "undefined") {
@@ -279,30 +306,96 @@ export default function ConfigurationView({
   const [leaveExpanded, setLeaveExpanded] = useState(false);
   const [amenityExpanded, setAmenityExpanded] = useState(false);
 
-  // Employee Code Prefix State
-  const [empCodePrefix, setEmpCodePrefix] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("snailhr_empCodePrefix") || "EMP";
-    }
-    return "EMP";
-  });
-  const [empCodePrefixInput, setEmpCodePrefixInput] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("snailhr_empCodePrefix") || "EMP";
-    }
-    return "EMP";
-  });
-  const [empCodeSaved, setEmpCodeSaved] = useState(false);
+  // Branch Shift & Roster Timing Settings State
+  const [timingExpanded, setTimingExpanded] = useState(false);
+  const [clockInInput, setClockInInput] = useState(timingSettings?.clockInTime || "09:00");
+  const [clockOutInput, setClockOutInput] = useState(timingSettings?.clockOutTime || "18:00");
+  const [lateThresholdInput, setLateThresholdInput] = useState(timingSettings?.lateThreshold || "09:30");
+  const [breakStartInput, setBreakStartInput] = useState(timingSettings?.breakStartTime || "13:00");
+  const [breakEndInput, setBreakEndInput] = useState(timingSettings?.breakEndTime || "14:00");
+  const [timingSaving, setTimingSaving] = useState(false);
+  const [timingSavedNotice, setTimingSavedNotice] = useState(false);
 
-  const handleSaveEmpCodePrefix = () => {
+  useEffect(() => {
+    if (timingSettings) {
+      setClockInInput(timingSettings.clockInTime || "09:00");
+      setClockOutInput(timingSettings.clockOutTime || "18:00");
+      setLateThresholdInput(timingSettings.lateThreshold || "09:30");
+      setBreakStartInput(timingSettings.breakStartTime || "13:00");
+      setBreakEndInput(timingSettings.breakEndTime || "14:00");
+    }
+  }, [timingSettings, selectedBranch]);
+
+  const handleSaveTiming = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!onSaveTimingSettings) return;
+    setTimingSaving(true);
+    try {
+      await onSaveTimingSettings({
+        clockInTime: clockInInput,
+        clockOutTime: clockOutInput,
+        lateThreshold: lateThresholdInput,
+        breakStartTime: breakStartInput,
+        breakEndTime: breakEndInput,
+        branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
+      });
+      setTimingSavedNotice(true);
+      setTimeout(() => setTimingSavedNotice(false), 3500);
+    } finally {
+      setTimingSaving(false);
+    }
+  };
+
+  // Branch Code Prefix State
+  const currentBranchPrefix = (selectedBranch !== "All Branches" && branchCodePrefixes && (
+      branchCodePrefixes[selectedBranch] ||
+      branchCodePrefixes[toBranchName(selectedBranch)] ||
+      branchCodePrefixes[toBranchId(selectedBranch)]
+    ))
+    || (selectedBranch !== "All Branches" && typeof window !== "undefined" ? (
+      localStorage.getItem(`snailhr_empCodePrefix_${toBranchName(selectedBranch)}`) ||
+      localStorage.getItem(`snailhr_empCodePrefix_${toBranchId(selectedBranch)}`) ||
+      localStorage.getItem(`snailhr_empCodePrefix_${selectedBranch}`)
+    ) : null)
+    || (selectedBranch === "All Branches" ? (empCodePrefixProp || (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") : null) || "CODE") : null)
+    || empCodePrefixProp
+    || (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") : null)
+    || "CODE";
+
+  const [empCodePrefix, setEmpCodePrefix] = useState<string>(currentBranchPrefix);
+  const [empCodePrefixInput, setEmpCodePrefixInput] = useState<string>(currentBranchPrefix);
+  const [empCodeSaved, setEmpCodeSaved] = useState(false);
+  const [empCodeSaving, setEmpCodeSaving] = useState(false);
+
+  React.useEffect(() => {
+    setEmpCodePrefix(currentBranchPrefix);
+    setEmpCodePrefixInput(currentBranchPrefix);
+  }, [currentBranchPrefix, selectedBranch, branchCodePrefixes]);
+
+  const handleSaveEmpCodePrefix = async () => {
     const clean = empCodePrefixInput.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!clean) return;
+    setEmpCodeSaving(true);
     setEmpCodePrefix(clean);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("snailhr_empCodePrefix", clean);
+    try {
+      if (onSaveEmpCodePrefix) {
+        await onSaveEmpCodePrefix(clean, selectedBranch !== "All Branches" ? selectedBranch : undefined);
+      } else if (typeof window !== "undefined") {
+        if (selectedBranch !== "All Branches") {
+          const bName = toBranchName(selectedBranch);
+          const bId = toBranchId(selectedBranch);
+          localStorage.setItem(`snailhr_empCodePrefix_${bName}`, clean);
+          localStorage.setItem(`snailhr_empCodePrefix_${bId}`, clean);
+          localStorage.setItem(`snailhr_empCodePrefix_${selectedBranch}`, clean);
+        } else {
+          localStorage.setItem("snailhr_empCodePrefix", clean);
+        }
+      }
+      setEmpCodeSaved(true);
+      setTimeout(() => setEmpCodeSaved(false), 3000);
+    } finally {
+      setEmpCodeSaving(false);
     }
-    setEmpCodeSaved(true);
-    setTimeout(() => setEmpCodeSaved(false), 3000);
   };
 
   // IP Fetching State
@@ -578,7 +671,7 @@ export default function ConfigurationView({
       {/* Header and Sub Tabs */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
         <div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
             <h2 className="text-base sm:text-lg font-bold font-display text-slate-800 dark:text-white">System Configuration</h2>
             <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border ${subscriptionModel === 4 ? "bg-violet-50 text-violet-600 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-900/50" :
               subscriptionModel === 3 ? "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-900/50" :
@@ -590,8 +683,22 @@ export default function ConfigurationView({
                   subscriptionModel === 2 ? "WhatsApp Only Plan" :
                     "Basic Plan"}
             </span>
+
+            {/* Active Branch Scope Badge */}
+            <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${
+              selectedBranch !== "All Branches"
+                ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300"
+                : "bg-slate-100 dark:bg-[#1f1f1f] border-slate-200 dark:border-[#2a2a2a] text-slate-600 dark:text-gray-300"
+            }`}>
+              <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Scope: <strong className="font-extrabold">{selectedBranch}</strong></span>
+            </div>
           </div>
-          <p className="text-xs text-slate-400 dark:text-gray-400">Configure corporate offices, custom designations, departments, and leave policies</p>
+          <p className="text-xs text-slate-400 dark:text-gray-400 mt-1">
+            {selectedBranch !== "All Branches"
+              ? `Configuring shift timings, leave policies, quotas, departments & WiFi specifically for ${selectedBranch}`
+              : "Configure global corporate offices, designations, departments, and leave policies"}
+          </p>
         </div>
 
         <div className="flex items-center bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
@@ -634,11 +741,172 @@ export default function ConfigurationView({
         </div>
       </div>
 
-      {/* Sub Tab 1: General (Departments, Branches, Leave Types) */}
+      {/* Sub Tab 1: General (Departments, Branches, Leave Types, Timings) */}
       {activeSubTab === "general" && (
         <div className="space-y-6">
 
-          {/* ── Employee Code Prefix Card — Collapsible ── */}
+          {/* ── Branch Shift & Roster Timing Settings Card ── */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTimingExpanded(prev => !prev)}
+              className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors cursor-pointer"
+            >
+              <div className="p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl shrink-0">
+                <Clock className="w-4.5 h-4.5 text-emerald-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                    Shift &amp; Roster Timing Matrix {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                    {selectedBranch}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
+                  Shift: {clockInInput} - {clockOutInput} · Grace: {lateThresholdInput} · Lunch: {breakStartInput} - {breakEndInput}
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0">
+                {timingSavedNotice && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                    Saved for {selectedBranch}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${timingExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
+            </button>
+
+            {timingExpanded && (
+              <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
+                <form onSubmit={handleSaveTiming} className="space-y-4">
+                  {/* Presets Row */}
+                  <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-[#1a1a1a]">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Shift Presets</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClockInInput("09:00");
+                          setClockOutInput("18:00");
+                          setLateThresholdInput("09:30");
+                          setBreakStartInput("13:00");
+                          setBreakEndInput("14:00");
+                        }}
+                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1a1a1a] hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-gray-300 border border-slate-200/60 dark:border-[#2a2a2a] cursor-pointer transition-all"
+                      >
+                        Standard (9 AM - 6 PM)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClockInInput("08:00");
+                          setClockOutInput("17:00");
+                          setLateThresholdInput("08:30");
+                          setBreakStartInput("12:30");
+                          setBreakEndInput("13:30");
+                        }}
+                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1a1a1a] hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-gray-300 border border-slate-200/60 dark:border-[#2a2a2a] cursor-pointer transition-all"
+                      >
+                        Morning (8 AM - 5 PM)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClockInInput("10:00");
+                          setClockOutInput("19:00");
+                          setLateThresholdInput("10:30");
+                          setBreakStartInput("14:00");
+                          setBreakEndInput("15:00");
+                        }}
+                        className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1a1a1a] hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-gray-300 border border-slate-200/60 dark:border-[#2a2a2a] cursor-pointer transition-all"
+                      >
+                        Late Shift (10 AM - 7 PM)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 5 Time Inputs Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock In Time</label>
+                      <input
+                        type="time"
+                        value={clockInInput}
+                        onChange={e => setClockInInput(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 dark:text-white focus:outline-hidden focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Clock Out Time</label>
+                      <input
+                        type="time"
+                        value={clockOutInput}
+                        onChange={e => setClockOutInput(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 dark:text-white focus:outline-hidden focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-amber-500 uppercase tracking-wider">Late Grace Threshold</label>
+                      <input
+                        type="time"
+                        value={lateThresholdInput}
+                        onChange={e => setLateThresholdInput(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-amber-200 dark:border-amber-900/50 rounded-xl px-3 py-2 text-xs font-mono font-bold text-amber-600 dark:text-amber-400 focus:outline-hidden focus:border-amber-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Break Start</label>
+                      <input
+                        type="time"
+                        value={breakStartInput}
+                        onChange={e => setBreakStartInput(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 dark:text-white focus:outline-hidden focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Break End</label>
+                      <input
+                        type="time"
+                        value={breakEndInput}
+                        onChange={e => setBreakEndInput(e.target.value)}
+                        className="w-full bg-slate-50 dark:bg-[#0a0a0a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 dark:text-white focus:outline-hidden focus:border-emerald-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 pt-2">
+                    <p className="text-[11px] text-slate-400 dark:text-gray-500 font-medium">
+                      Saving here configures the roster timings exclusively for <strong className="text-slate-700 dark:text-gray-300 font-bold">{selectedBranch}</strong>.
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={timingSaving || !onSaveTimingSettings}
+                      className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
+                    >
+                      {timingSaving ? (
+                        <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5" />
+                      )}
+                      <span>{timingSaving ? "Saving..." : `Save Timings for ${selectedBranch}`}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </div>
+
+          {/* ── Branch Code Prefix Card — Collapsible ── */}
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
             <button
               type="button"
@@ -649,9 +917,16 @@ export default function ConfigurationView({
                 <Shield className="w-4.5 h-4.5 text-amber-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Employee Code Format</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                    Branch Code Format {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                    {selectedBranch}
+                  </span>
+                </div>
                 <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
-                  {empCodePrefix ? `Current prefix: ${empCodePrefix} (e.g. ${empCodePrefix}0001)` : "Set the prefix used in all employee ID codes and payslips"}
+                  {empCodePrefix ? `Current prefix: ${empCodePrefix} (e.g. ${empCodePrefix}0001) for ${selectedBranch}` : `Set the prefix used in employee ID codes and payslips for ${selectedBranch}`}
                 </p>
               </div>
               <div className="flex items-center gap-2.5 shrink-0">
@@ -670,29 +945,42 @@ export default function ConfigurationView({
               <div className="px-5 pb-5 pt-4 border-t border-slate-50 dark:border-[#1a1a1a]">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Employee ID Prefix</label>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Branch Code Prefix</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={empCodePrefixInput}
                         onChange={e => setEmpCodePrefixInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
                         maxLength={10}
-                        placeholder="e.g. MGMDIR"
+                        placeholder={selectedBranch !== "All Branches" ? `e.g. ${selectedBranch.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4)}` : "e.g. CODE"}
                         className="flex-1 bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs font-mono text-slate-800 dark:text-white focus:outline-none focus:border-amber-400 uppercase tracking-widest"
                       />
                       <button
                         type="button"
                         onClick={handleSaveEmpCodePrefix}
-                        className="bg-amber-500 hover:bg-amber-400 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
+                        disabled={empCodeSaving}
+                        className="bg-amber-500 hover:bg-amber-400 disabled:opacity-70 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0"
                       >
-                        <Save className="w-3.5 h-3.5" />
-                        Save
+                        {empCodeSaving ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                            </svg>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5" />
+                            Save
+                          </>
+                        )}
                       </button>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5">Only letters and numbers. Max 10 characters. Changes apply immediately to all payslips.</p>
+                    <p className="text-[10px] text-slate-400 mt-1.5">Only letters and numbers. Max 10 characters. Applies to new employees and ID codes in {selectedBranch}.</p>
                   </div>
                   <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Preview</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Live Preview ({selectedBranch})</p>
                     <div className="space-y-1">
                       {[1, 2, 3].map(n => (
                         <div key={n} className="flex items-center gap-2">
@@ -721,11 +1009,18 @@ export default function ConfigurationView({
                 <Router className="w-4.5 h-4.5 text-violet-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">WiFi Attendance Restriction</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                    WiFi Attendance Restriction {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
+                    {selectedBranch}
+                  </span>
+                </div>
                 <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
                   {wifiEnabled && wifiIpList.filter(ip => ip.trim()).length > 0
-                    ? `${wifiIpList.filter(ip => ip.trim()).length} network(s) allowed: ${wifiIpList.filter(ip => ip.trim()).slice(0, 2).join(", ")}${wifiIpList.filter(ip => ip.trim()).length > 2 ? " …" : ""}`
-                    : "Restrict punch-in/out to employees on designated office WiFi only"
+                    ? `${wifiIpList.filter(ip => ip.trim()).length} network(s) allowed for ${selectedBranch}: ${wifiIpList.filter(ip => ip.trim()).slice(0, 2).join(", ")}${wifiIpList.filter(ip => ip.trim()).length > 2 ? " …" : ""}`
+                    : `Restrict punch-in/out for ${selectedBranch} to employees on designated office WiFi only`
                   }
                 </p>
               </div>
@@ -966,11 +1261,18 @@ export default function ConfigurationView({
                   <Landmark className="w-4.5 h-4.5 text-emerald-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Company Departments</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                      Company Departments {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                      {selectedBranch}
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
                     {customDepartments.length > 0
-                      ? `${customDepartments.length} department(s): ${customDepartments.slice(0, 3).join(", ")}${customDepartments.length > 3 ? " …" : ""}`
-                      : "Add your company departments"}
+                      ? `${customDepartments.length} department(s) active for ${selectedBranch}: ${customDepartments.slice(0, 3).join(", ")}${customDepartments.length > 3 ? " …" : ""}`
+                      : `Add departments for ${selectedBranch}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -1100,11 +1402,18 @@ export default function ConfigurationView({
                   <Calendar className="w-4.5 h-4.5 text-indigo-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Leave Policies</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                      Leave Policies {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                      {selectedBranch}
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
                     {customLeaveTypes.length > 0
-                      ? `${customLeaveTypes.length} policy(ies) configured — ${showLeaveCount ? "Count Visible" : "Count Hidden"}`
-                      : "Configure leave types and annual quota days"}
+                      ? `${customLeaveTypes.length} policy(ies) configured for ${selectedBranch} — ${showLeaveCount ? "Count Visible" : "Count Hidden"}`
+                      : `Configure leave types and annual quota days for ${selectedBranch}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -1237,11 +1546,18 @@ export default function ConfigurationView({
                   <Star className="w-4.5 h-4.5 text-amber-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">Room Amenities</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                      Room Amenities {selectedBranch !== "All Branches" && `(${selectedBranch})`}
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                      {selectedBranch}
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
                     {customAmenities.length > 0
-                      ? `${customAmenities.length} amenity(ies): ${customAmenities.slice(0, 3).map(a => a.split("|")[0]).join(", ")}${customAmenities.length > 3 ? " …" : ""}`
-                      : "Add amenities for meeting rooms"}
+                      ? `${customAmenities.length} amenity(ies) for ${selectedBranch}: ${customAmenities.slice(0, 3).map(a => a.split("|")[0]).join(", ")}${customAmenities.length > 3 ? " …" : ""}`
+                      : `Add room amenities for ${selectedBranch}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -1807,7 +2123,8 @@ export default function ConfigurationView({
                       description: newChecklistDesc.trim(),
                       category: newChecklistCategory,
                       type: newChecklistType,
-                      required: newChecklistRequired
+                      required: newChecklistRequired,
+                      branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
                     });
                     setNewChecklistTitle("");
                     setNewChecklistDesc("");

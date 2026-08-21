@@ -4,10 +4,11 @@ import React, { useState, useEffect } from "react";
 import {
   Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
   CheckCircle2, Users, FileText, AlertCircle, IndianRupee, Package, Briefcase, Home,
-  Award, ChevronRight, Activity, TrendingUp, Cake, LogOut, ShieldCheck
+  Award, ChevronRight, Activity, TrendingUp, Cake, LogOut, ShieldCheck, Eye, EyeOff
 } from "lucide-react";
 import { Employee, Designation, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine, ChecklistItemTemplate } from "../types";
 import ChecklistCard from "./ChecklistCard";
+import { toBranchName, toBranchId } from "../lib/branchUtils";
 
 interface DashboardViewProps {
   currentEmployee: Employee;
@@ -22,6 +23,9 @@ interface DashboardViewProps {
   fines?: Fine[];
   role: "admin" | "hr" | "employee";
   companyName?: string;
+  selectedBranch?: string;
+  customLeaveTypes?: string[];
+  showLeaveCount?: boolean;
   onboardingChecklistTemplates?: ChecklistItemTemplate[];
   exitChecklistTemplates?: ChecklistItemTemplate[];
   onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
@@ -47,6 +51,9 @@ export default function DashboardView({
   fines = [],
   role,
   companyName = "Your Company",
+  selectedBranch = "All Branches",
+  customLeaveTypes,
+  showLeaveCount = true,
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
   onPunchAction,
@@ -58,16 +65,25 @@ export default function DashboardView({
   onInitiateResignation,
   setCurrentView
 }: DashboardViewProps) {
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
   const [dashboardChecklistTab, setDashboardChecklistTab] = useState<"onboarding" | "exit">("onboarding");
+  const [showNetPay, setShowNetPay] = useState<boolean>(false);
 
-  // Keep digital clock ticking
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    setTime(new Date());
+    const interval = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  const formattedTime = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  if (!time) {
+    return null;
+  }
+
+  const formatClock = (d: Date) => {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+  };
   const formattedDate = time.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
 
   const formatTimeStr = (dateStr?: string | null) => {
@@ -81,10 +97,15 @@ export default function DashboardView({
   const todayStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}-${String(time.getDate()).padStart(2, '0')}`;
   const currentMonthStr = `${time.getFullYear()}-${String(time.getMonth() + 1).padStart(2, '0')}`;
 
-  const userBranch = currentEmployee?.branch || "Mumbai Branch";
+  const userBranch = currentEmployee?.branch || "Main Branch";
+  const activeBranchLabel = (selectedBranch && selectedBranch !== "All Branches")
+    ? selectedBranch
+    : (role === "hr" ? userBranch : "All Branches");
 
-  // Filter employees according to role
-  const branchEmployees = employees.filter(e => (e.branch || "Mumbai Branch") === userBranch);
+  // Filter employees according to role and branch selection
+  const branchEmployees = (selectedBranch && selectedBranch !== "All Branches")
+    ? employees.filter(e => (e.branch || "Main Branch") === selectedBranch)
+    : (role === "hr" ? employees.filter(e => (e.branch || userBranch) === userBranch) : employees);
 
   // Dynamic calculations based on role
   // 1. Admin Metrics
@@ -97,7 +118,7 @@ export default function DashboardView({
   const adminPendingExpenses = expenses.filter(e => e.status === "Pending").length;
   const adminTotalAssetsAssigned = inventory.filter(i => i.status === "Assigned").length;
 
-  // 2. HR Metrics (Branch specific)
+  // 2. HR Metrics (Branch specific or Global filter)
   const hrBranchUsers = branchEmployees.length;
   const hrBranchPresentToday = attendance.filter(a => a.date === todayStr && (a.status === "Present" || a.status === "Late") && branchEmployees.some(e => e.id === a.employeeId)).length;
   const hrBranchWfhToday = attendance.filter(a => a.date === todayStr && a.workFromHome && branchEmployees.some(e => e.id === a.employeeId)).length;
@@ -110,22 +131,47 @@ export default function DashboardView({
   const myPresentDays = myPunchesThisMonth.filter(p => p.status === "Present" || p.status === "Late").length;
   const myWfhDays = myPunchesThisMonth.filter(p => p.workFromHome).length;
   const myLateLogins = myPunchesThisMonth.filter(p => p.status === "Late").length;
-  const myLeaves = currentEmployee ? leaves.filter(l => l.employeeId === currentEmployee.id) : [];
+  const myLeaves = currentEmployee ? leaves.filter(l => {
+    return l.employeeId?.toLowerCase() === currentEmployee.id?.toLowerCase() ||
+           (currentEmployee.code && l.employeeId?.toLowerCase() === currentEmployee.code.toLowerCase());
+  }) : [];
   const myPendingLeaves = myLeaves.filter(l => l.status === "Pending").length;
-  const myPayslip = (currentEmployee && payslips && payslips.length > 0)
-    ? payslips.find(p => p.employeeId === currentEmployee.id)
-    : undefined;
-  const calculatedNetSalary = currentEmployee?.salary
-    ? Math.max(0, (currentEmployee.salary.basic || 0) +
-      (currentEmployee.salary.hra || 0) +
-      (currentEmployee.salary.allowances || 0) -
-      (currentEmployee.salary.pfDeduction || 0) -
-      (currentEmployee.salary.tdsDeduction || 0))
-    : 0;
-  const displaySalary = myPayslip ? myPayslip.netPay : calculatedNetSalary;
+  const myApprovedLeaves = myLeaves.filter(l => l.status === "Approved").length;
+
+  // Dynamic leave balance computation matching company/branch policy
+  const availableTypes = (customLeaveTypes && customLeaveTypes.length > 0)
+    ? customLeaveTypes
+    : ["Casual Leave|18", "Medical Leave|12", "Earned Leave|15", "Maternity/Paternity|30", "Loss of Pay|0"];
+
+  const getConsumedLeaveDays = (typeStr: string) => {
+    const cleanType = typeStr.toLowerCase().replace(/s$/, "");
+    return myLeaves.filter(l => {
+      if (l.status !== "Approved") return false;
+      const lType = (l.leaveType || "").toLowerCase().replace(/s$/, "");
+      return lType === cleanType || lType.includes(cleanType) || cleanType.includes(lType);
+    }).length;
+  };
+
+  const totalAvailableLeaves = availableTypes.reduce((acc, typeStr) => {
+    const name = typeStr.includes("|") ? typeStr.split("|")[0].trim() : typeStr.trim();
+    let allocated = 12;
+    if (typeStr.includes("|")) {
+      const parsed = parseInt(typeStr.split("|")[1], 10);
+      allocated = !isNaN(parsed) ? parsed : 12;
+    }
+    if (allocated <= 0) return acc;
+    const consumed = getConsumedLeaveDays(name);
+    return acc + Math.max(0, allocated - consumed);
+  }, 0);
+
+  const myPayslips = (currentEmployee && payslips && payslips.length > 0)
+    ? payslips.filter(p => p.employeeId === currentEmployee.id || (currentEmployee.code && p.employeeId === currentEmployee.code))
+    : [];
+  const myPayslip = myPayslips.length > 0 ? myPayslips[myPayslips.length - 1] : undefined;
+  const displaySalary = myPayslip ? myPayslip.netPay : null;
   const displaySalarySubtitle = myPayslip
     ? `${myPayslip.month} Payslip Issued`
-    : "Monthly Base Structure";
+    : "No payslip issued yet";
   const myAssets = currentEmployee ? inventory.filter(i => i.assignedToEmployeeId === currentEmployee.id) : [];
 
   // Helper to calculate days until the next occurrence of a month and day
@@ -225,6 +271,19 @@ export default function DashboardView({
     if (years >= 5) return "🥇";
     if (years >= 3) return "🏆";
     return "⭐";
+  };
+
+  const getBranchFilteredTemplates = (tmpls: ChecklistItemTemplate[] = []) => {
+    const targetBranch = currentEmployee?.branch || selectedBranch;
+    if (!targetBranch || targetBranch === "All Branches" || targetBranch === "All") return tmpls;
+    const bName = toBranchName(targetBranch).toLowerCase();
+    const bId = toBranchId(targetBranch);
+    return tmpls.filter(t => {
+      if (!t.branch || t.branch === "All Branches") return true;
+      const tName = toBranchName(t.branch).toLowerCase();
+      const tId = toBranchId(t.branch);
+      return tName === bName || tId === bId || t.branch.toLowerCase() === targetBranch.toLowerCase();
+    });
   };
 
   return (
@@ -488,25 +547,92 @@ export default function DashboardView({
               className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-indigo-500 hover:shadow-md transition-all group"
             >
               <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">Leave Balance</span>
+                <span className="font-bold uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  {showLeaveCount ? "Leave Balance" : "Pending Leaves"}
+                </span>
                 <Calendar className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
               </div>
-              <p className="text-3xl font-extrabold text-indigo-500 font-mono">14 Days</p>
-              <p className="text-xs text-slate-400 mt-1">{myPendingLeaves} leave request pending</p>
+              <p className="text-3xl font-extrabold text-indigo-500 font-mono">
+                {showLeaveCount ? `${totalAvailableLeaves} Days` : `${myPendingLeaves} Req`}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{myApprovedLeaves} approved</span>
+                <span className="mx-1.5 text-slate-300 dark:text-slate-600">•</span>
+                <span>{myPendingLeaves} pending</span>
+              </p>
             </div>
 
             <div
-              onClick={() => setCurrentView?.("payroll")}
-              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow cursor-pointer hover:border-teal-500 hover:shadow-md transition-all group"
+              className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow hover:border-teal-500 hover:shadow-md transition-all group select-none flex flex-col justify-between"
             >
-              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span className="font-bold uppercase tracking-wider group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Net Monthly Pay</span>
-                <IndianRupee className="w-4 h-4 text-teal-500 group-hover:scale-110 transition-transform" />
+              <div>
+                <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                  <span className="font-bold uppercase tracking-wider group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">Net Monthly Pay</span>
+                  <div className="flex items-center space-x-1.5">
+                    {displaySalary !== null && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowNetPay(!showNetPay);
+                        }}
+                        className="p-1 rounded-md text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                        title={showNetPay ? "Hide Amount" : "Click to view Amount"}
+                      >
+                        {showNetPay ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-teal-500" />}
+                      </button>
+                    )}
+                    <IndianRupee className="w-4 h-4 text-teal-500 group-hover:scale-110 transition-transform" />
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => {
+                    if (displaySalary !== null) {
+                      setShowNetPay(!showNetPay);
+                    }
+                  }}
+                  className="cursor-pointer flex items-center justify-between py-0.5"
+                  title={displaySalary !== null ? (showNetPay ? "Click to mask amount" : "Click to reveal amount") : undefined}
+                >
+                  <p className="text-2xl font-extrabold text-slate-800 dark:text-white font-mono tracking-tight flex items-center gap-1">
+                    {displaySalary !== null ? (
+                      showNetPay ? (
+                        `₹ ${displaySalary.toLocaleString('en-IN')}`
+                      ) : (
+                        <span className="font-mono tracking-widest text-slate-400 dark:text-gray-400 flex items-center text-xl">
+                          ₹ <span className="tracking-widest ml-1 font-bold">••••••</span>
+                        </span>
+                      )
+                    ) : (
+                      "—"
+                    )}
+                  </p>
+                  {displaySalary !== null && (
+                    <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold bg-teal-50 dark:bg-teal-950/40 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800/40">
+                      {showNetPay ? "Visible" : "Click to reveal"}
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="text-2xl font-extrabold text-slate-800 dark:text-white font-mono">
-                ₹ {displaySalary.toLocaleString('en-IN')}
-              </p>
-              <p className="text-xs text-emerald-600 mt-1 font-semibold">{displaySalarySubtitle}</p>
+
+              <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-50 dark:border-[#161616]">
+                <p className={`text-xs font-semibold ${displaySalary !== null ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-gray-500"}`}>
+                  {displaySalarySubtitle}
+                </p>
+                {displaySalary !== null && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentView?.("payroll");
+                    }}
+                    className="text-[11px] text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 font-medium underline underline-offset-2 cursor-pointer"
+                  >
+                    View Slip
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -887,7 +1013,7 @@ export default function DashboardView({
                   <ChecklistCard
                     type="onboarding"
                     employee={currentEmployee}
-                    templates={onboardingChecklistTemplates}
+                    templates={getBranchFilteredTemplates(onboardingChecklistTemplates)}
                     currentUserRole={role}
                     currentUserId={currentEmployee.id}
                     onCreateTemplate={onCreateChecklistTemplate}
@@ -978,7 +1104,7 @@ export default function DashboardView({
                   <ChecklistCard
                     type="exit"
                     employee={currentEmployee}
-                    templates={exitChecklistTemplates}
+                    templates={getBranchFilteredTemplates(exitChecklistTemplates)}
                     currentUserRole={role}
                     currentUserId={currentEmployee.id}
                     onCreateTemplate={onCreateChecklistTemplate}

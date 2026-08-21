@@ -4,6 +4,7 @@ import { Employee, capitalizeName } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { generateGuaranteedUniqueEmployeeId } from "@/src/lib/idGenerator";
+import { toBranchId, toBranchName } from "@/src/lib/branchUtils";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -12,32 +13,40 @@ export async function POST(request: Request) {
     const db = loadDatabase();
     const dbClient = supabaseAdmin || supabase;
 
-    const codePrefix = (body.empCodePrefix || body.emp_code_prefix || "EMP").trim().toUpperCase();
+    const resolvedCompanyId = body.companyId || body.company_id || "a1b2c3d4-0001-0001-0001-000000000001";
+    let resolvedCompanyName = "Company";
+
+    // Resolve company name and branch code prefixes dynamically
+    if (dbClient && resolvedCompanyId) {
+      try {
+        const { data: compData } = await dbClient
+          .from("companies")
+          .select("name, branch_code_prefixes")
+          .eq("id", resolvedCompanyId)
+          .maybeSingle();
+        if (compData) {
+          if (compData.name) resolvedCompanyName = compData.name;
+          if (compData.branch_code_prefixes && typeof compData.branch_code_prefixes === "object") {
+            if (!db.branchCodePrefixes) db.branchCodePrefixes = {};
+            Object.assign(db.branchCodePrefixes, compData.branch_code_prefixes);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch company info for onboard task:", err);
+      }
+    }
+
+    const empBranch = body.branch || "";
+    const bName = empBranch ? toBranchName(empBranch) : "";
+    const bId = empBranch ? toBranchId(empBranch) : "";
+    const branchPrefix = (db.branchCodePrefixes && (db.branchCodePrefixes[empBranch] || db.branchCodePrefixes[bName] || db.branchCodePrefixes[bId])) || db.empCodePrefix;
+    const codePrefix = (body.empCodePrefix || branchPrefix || body.emp_code_prefix || "EMP").trim().toUpperCase();
     const generatedId = await generateGuaranteedUniqueEmployeeId(db.employees || [], dbClient, codePrefix);
     const empId = body.id || generatedId;
 
     const rawPassword = body.password || "Nawaz123#";
     const salt = bcrypt.genSaltSync(10);
     const hashedPassword = bcrypt.hashSync(rawPassword, salt);
-
-    const resolvedCompanyId = body.companyId || body.company_id || "a1b2c3d4-0001-0001-0001-000000000001";
-    let resolvedCompanyName = "Company";
-
-    // Resolve company name dynamically for onboarding task details
-    if (dbClient && resolvedCompanyId) {
-      try {
-        const { data: compData } = await dbClient
-          .from("companies")
-          .select("name")
-          .eq("id", resolvedCompanyId)
-          .maybeSingle();
-        if (compData && compData.name) {
-          resolvedCompanyName = compData.name;
-        }
-      } catch (err) {
-        console.warn("Failed to fetch company name for onboard task:", err);
-      }
-    }
 
     const isPfExemptOnboard = Boolean(body.onboardIsPfExempt || body.isPfExempt || body.salaryPfMode === "exempt" || body.pfMode === "exempt");
     const isEsiExemptOnboard = Boolean(body.onboardIsEsiExempt || body.isEsiExempt || body.salaryEsiOptIn === false || body.esiOptIn === false);
@@ -101,7 +110,7 @@ export async function POST(request: Request) {
       ],
       avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
       bio: (body.bio || "").trim() ? ((body.bio || "").trim().charAt(0).toUpperCase() + (body.bio || "").trim().slice(1)) : "",
-      branch: body.branch || "Mumbai Branch",
+      branch: bName || (body.branch ? toBranchName(body.branch) : "Shashtri Nagar"),
       employmentType: body.employmentType || body.employment_type || "",
       password: hashedPassword
     };
@@ -161,7 +170,7 @@ export async function POST(request: Request) {
           role: newEmp.role,
           designation_id: newEmp.designationId,
           department: newEmp.department,
-          branch: newEmp.branch,
+          branch: toBranchName(newEmp.branch),
           employment_type: newEmp.employmentType || null,
           joining_date: newEmp.joiningDate,
           date_of_birth: newEmp.dateOfBirth || null,
@@ -254,7 +263,7 @@ export async function PUT(request: Request) {
           role: updatedEmp.role,
           designation_id: updatedEmp.designationId,
           department: updatedEmp.department,
-          branch: updatedEmp.branch,
+          branch: toBranchName(updatedEmp.branch),
           employment_type: updatedEmp.employmentType || null,
           joining_date: updatedEmp.joiningDate,
           date_of_birth: updatedEmp.dateOfBirth || null,

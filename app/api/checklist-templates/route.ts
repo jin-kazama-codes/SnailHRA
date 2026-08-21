@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { ChecklistItemTemplate } from "@/src/types";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
+import { toBranchName, toBranchId } from "@/src/lib/branchUtils";
 
 export async function GET() {
   const db = loadDatabase();
@@ -11,28 +12,32 @@ export async function GET() {
     try {
       const { data: rows, error } = await client.from("checklist_templates").select("*");
       if (rows && Array.isArray(rows) && !error && rows.length > 0) {
+        const parseRow = (r: any) => {
+          let title = r.title || "";
+          let branch = r.branch || null;
+          const tagMatch = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+          if (tagMatch) {
+            branch = branch || tagMatch[1];
+            title = tagMatch[2];
+          }
+          return {
+            id: r.id,
+            title,
+            description: r.description || "",
+            category: r.category || (r.type === "onboarding" ? "Identity Proof" : "Contract"),
+            required: r.required ?? true,
+            type: r.type as "onboarding" | "exit",
+            companyId: r.company_id || r.companyId || null,
+            branch: branch ? toBranchName(branch) : undefined
+          };
+        };
+
         db.onboardingChecklistTemplates = rows
           .filter((r: any) => r.type === "onboarding")
-          .map((r: any) => ({
-            id: r.id,
-            title: r.title || "",
-            description: r.description || "",
-            category: r.category || "Identity Proof",
-            required: r.required ?? true,
-            type: "onboarding" as const,
-            companyId: r.company_id || r.companyId || null
-          }));
+          .map(parseRow);
         db.exitChecklistTemplates = rows
           .filter((r: any) => r.type === "exit")
-          .map((r: any) => ({
-            id: r.id,
-            title: r.title || "",
-            description: r.description || "",
-            category: r.category || "Contract",
-            required: r.required ?? true,
-            type: "exit" as const,
-            companyId: r.company_id || r.companyId || null
-          }));
+          .map(parseRow);
       }
     } catch (e) {
       console.warn("Failed to fetch checklist_templates in GET route:", e);
@@ -46,13 +51,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { title, description, category, required, type, companyId } = await request.json();
+    const { title, description, category, required, type, companyId, branch } = await request.json();
 
     if (!title || !type) {
       return NextResponse.json({ error: "Title and type ('onboarding' or 'exit') are required" }, { status: 400 });
     }
 
     const db = loadDatabase();
+    const rawBranch = (branch && branch !== "All Branches") ? branch : "";
+    const bName = rawBranch ? toBranchName(rawBranch) : "";
 
     const newTemplate: ChecklistItemTemplate = {
       id: `${type === "onboarding" ? "onb" : "exit"}-tmpl-${Date.now()}`,
@@ -61,7 +68,8 @@ export async function POST(request: Request) {
       category: category || (type === "onboarding" ? "Identity Proof" : "Contract"),
       required: required !== undefined ? Boolean(required) : true,
       type: type as "onboarding" | "exit",
-      companyId: companyId || undefined
+      companyId: companyId || undefined,
+      branch: bName || undefined
     };
 
     if (type === "onboarding") {
@@ -77,15 +85,34 @@ export async function POST(request: Request) {
     const client = supabaseAdmin || supabase;
     if (client) {
       try {
-        await client.from("checklist_templates").upsert({
-          id: newTemplate.id,
-          title: newTemplate.title,
-          description: newTemplate.description,
-          category: newTemplate.category,
-          required: newTemplate.required,
-          type: newTemplate.type,
-          company_id: newTemplate.companyId || null
-        }, { onConflict: "id" });
+        // Try inserting with branch column
+        let branchSaved = false;
+        if (bName) {
+          const { error: bErr } = await client.from("checklist_templates").upsert({
+            id: newTemplate.id,
+            title: newTemplate.title,
+            description: newTemplate.description,
+            category: newTemplate.category,
+            required: newTemplate.required,
+            type: newTemplate.type,
+            company_id: newTemplate.companyId || null,
+            branch: bName
+          }, { onConflict: "id" });
+          if (!bErr) branchSaved = true;
+        }
+
+        if (!branchSaved) {
+          const encodedTitle = bName ? `[${bName}] ${newTemplate.title}` : newTemplate.title;
+          await client.from("checklist_templates").upsert({
+            id: newTemplate.id,
+            title: encodedTitle,
+            description: newTemplate.description,
+            category: newTemplate.category,
+            required: newTemplate.required,
+            type: newTemplate.type,
+            company_id: newTemplate.companyId || null
+          }, { onConflict: "id" });
+        }
       } catch (sbErr) {
         console.warn("Failed to sync checklist template to Supabase:", sbErr);
       }

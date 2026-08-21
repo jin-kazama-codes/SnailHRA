@@ -14,10 +14,12 @@ interface MeetingsViewProps {
   role: UserRole;
   currentEmployeeId: string;
   customDepartments: string[];
+  selectedBranch?: string;
   onAddMeeting: (meetingData: any) => Promise<boolean>;
   onCancelMeeting: (id: string) => Promise<boolean>;
   onEditMeeting?: (id: string, updateData: any) => Promise<boolean>;
   companyName?: string;
+  companyId?: string;
 }
 
 const getLocalDateString = (d: Date = new Date()): string => {
@@ -42,10 +44,12 @@ export default function MeetingsView({
   role,
   currentEmployeeId,
   customDepartments = [],
+  selectedBranch = "All Branches",
   onAddMeeting,
   onCancelMeeting,
   onEditMeeting,
-  companyName = "SnailHR"
+  companyName = "SnailHR",
+  companyId
 }: MeetingsViewProps) {
   // Live clock tick — updates every second for countdown timers
   const [now, setNow] = useState(() => new Date());
@@ -296,7 +300,8 @@ export default function MeetingsView({
         timezone,
         location: meetingType !== "Online" ? location : undefined,
         link: meetingType !== "Offline" ? meetingLink : undefined,
-        companyId: currentEmployee?.companyId || "a1b2c3d4-0001-0001-0001-000000000001"
+        companyId: companyId || currentEmployee?.companyId || "bf46db43-ad37-41fe-8004-971e049f016e",
+        branch: selectedBranch !== "All Branches" ? selectedBranch : (currentEmployee?.branch || undefined)
       };
 
       const success = await onAddMeeting(payload);

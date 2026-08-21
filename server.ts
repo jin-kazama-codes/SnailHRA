@@ -25,8 +25,9 @@ import {
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting,
-  GrievanceTicket, PerformanceRecord, PayrollConfig
+  GrievanceTicket, PerformanceRecord, PayrollConfig, InfractionType, CorporateAllowanceFaq, ChecklistItemTemplate
 } from "./src/types";
+import { toBranchId, toBranchName } from "./src/lib/branchUtils.js";
 import { computeMonthlyTDSFromEmployee } from "./src/lib/taxEngine.js";
 
 // Default MGM Financiers company ID (matches migration script)
@@ -62,10 +63,22 @@ interface AppState {
   customDepartments: string[];
   customBranches: string[];
   customAmenities?: string[];
+  branchLeaveTypes?: Record<string, string[]>; // keyed by branch name
+  branchDepartments?: Record<string, string[]>; // keyed by branch name
+  branchAmenities?: Record<string, string[]>; // keyed by branch name
+  branchLeaveCountVisibility?: Record<string, boolean>; // keyed by branch name
+  showLeaveCount?: boolean;
   timingSettings: TimingSettings;
   companyTimingSettings?: Record<string, TimingSettings>;
+  branchTimingSettings?: Record<string, TimingSettings>; // keyed by branch name
+  wifiRestrictionSettings?: { enabled: boolean; allowedIps: string[]; allowedIp?: string };
+  branchWifiSettings?: Record<string, { enabled: boolean; allowedIps: string[]; allowedIp?: string }>;
   excelUploads?: ExcelUploadRecord[];
 
+  infractionTypes?: InfractionType[];
+  corporateAllowancesFaqs?: CorporateAllowanceFaq[];
+  onboardingChecklistTemplates?: ChecklistItemTemplate[];
+  exitChecklistTemplates?: ChecklistItemTemplate[];
   meetings?: Meeting[];
   companies: Company[];
   grievanceTickets?: GrievanceTicket[];
@@ -163,12 +176,126 @@ function readDatabaseLocal(): AppState {
       // Ensure fallbacks for dynamic fields if they were missing in the saved JSON
       if (!state.customLeaveTypes) state.customLeaveTypes = initialData.customLeaveTypes;
       if (!state.customDepartments) state.customDepartments = initialData.customDepartments;
-      if (!state.customBranches) state.customBranches = initialData.customBranches;
+      if (!state.customBranches) state.customBranches = ["Shashtri Nagar", "Noida"];
       if (!state.customAmenities) state.customAmenities = initialData.customAmenities;
       if (!state.employees) state.employees = [];
       if (!state.timingSettings) state.timingSettings = initialData.timingSettings;
       if (!state.companies) state.companies = initialData.companies;
       if (!state.payrollConfigs) state.payrollConfigs = {};
+      
+      // Initialize separate, distinct collections per branch
+      if (!state.branchLeaveTypes) state.branchLeaveTypes = {};
+      if (!state.branchLeaveTypes["Shashtri Nagar"] || state.branchLeaveTypes["Shashtri Nagar"].length === 0) {
+        state.branchLeaveTypes["Shashtri Nagar"] = [
+          "Medical Leaves|10",
+          "Casual Leave|10",
+          "Earned Leave|5",
+          "Unpaid Leave|20",
+          "Work From Home|10",
+          "Half Day Leave|10"
+        ];
+      }
+      if (!state.branchLeaveTypes["Noida"] || state.branchLeaveTypes["Noida"].length === 0) {
+        state.branchLeaveTypes["Noida"] = [
+          "Casual Leave|12",
+          "Sick Leave|8",
+          "Earned Leave|15",
+          "Unpaid Leave|30",
+          "Work From Home|5",
+          "Compensatory Off|3"
+        ];
+      }
+
+      if (!state.branchDepartments) state.branchDepartments = {};
+      if (!state.branchDepartments["Shashtri Nagar"] || state.branchDepartments["Shashtri Nagar"].length === 0) {
+        state.branchDepartments["Shashtri Nagar"] = ["Engineering", "Operations", "Product", "Support"];
+      }
+      if (!state.branchDepartments["Noida"] || state.branchDepartments["Noida"].length === 0) {
+        state.branchDepartments["Noida"] = ["Engineering", "Quality Assurance", "Human Resources", "Finance", "Sales"];
+      }
+
+      if (!state.branchAmenities) state.branchAmenities = {};
+      if (!state.branchAmenities["Shashtri Nagar"] || state.branchAmenities["Shashtri Nagar"].length === 0) {
+        state.branchAmenities["Shashtri Nagar"] = ["Ac|Snowflake", "Wifi|Wifi", "Coffee Machine|Coffee"];
+      }
+      if (!state.branchAmenities["Noida"] || state.branchAmenities["Noida"].length === 0) {
+        state.branchAmenities["Noida"] = ["Conference Monitor|Monitor", "Presentation Projector|Presentation", "High-Speed WiFi|Wifi", "Video Conferencing Bar|Tv"];
+      }
+
+      if (!state.branchTimingSettings) state.branchTimingSettings = {};
+      if (!state.branchTimingSettings["Shashtri Nagar"]) {
+        state.branchTimingSettings["Shashtri Nagar"] = {
+          clockInTime: "09:00",
+          clockOutTime: "18:00",
+          lateThreshold: "09:30",
+          breakStartTime: "13:00",
+          breakEndTime: "14:00"
+        };
+      }
+      if (!state.branchTimingSettings["Noida"]) {
+        state.branchTimingSettings["Noida"] = {
+          clockInTime: "09:30",
+          clockOutTime: "18:30",
+          lateThreshold: "10:00",
+          breakStartTime: "13:30",
+          breakEndTime: "14:30"
+        };
+      }
+
+      // Ensure policies exist for both Shashtri Nagar and Noida
+      if (!state.policies || state.policies.length === 0) {
+        state.policies = [
+          {
+            id: "pol-sn-1",
+            title: "Shashtri Nagar Workplace Health & Safety Code",
+            category: "Compliance & Security",
+            content: "All personnel at Shashtri Nagar campus must adhere to fire egress safety, ergonomic workstation setups, and visitor badge protocols.",
+            lastUpdated: new Date().toISOString().split("T")[0],
+            branch: "Shashtri Nagar"
+          },
+          {
+            id: "pol-sn-2",
+            title: "Shashtri Nagar Core Operations & Attendance",
+            category: "Conduct & Ethics",
+            content: "Core working hours for Shashtri Nagar are 09:00 AM to 06:00 PM with mandatory check-ins through the biometric / WiFi attendance portal.",
+            lastUpdated: new Date().toISOString().split("T")[0],
+            branch: "Shashtri Nagar"
+          },
+          {
+            id: "pol-nd-1",
+            title: "Noida Tech Campus Code of Conduct",
+            category: "Conduct & Ethics",
+            content: "Employees operating from Noida tech campus are required to maintain strict adherence to non-disclosure agreements, clean desk policy, and high performance standards.",
+            lastUpdated: new Date().toISOString().split("T")[0],
+            branch: "Noida"
+          },
+          {
+            id: "pol-nd-2",
+            title: "Noida Cloud & Data Security Protocols",
+            category: "Compliance & Security",
+            content: "Mandatory multi-factor authentication and strict prohibition of unapproved USB flash drives across all Noida engineering workstations.",
+            lastUpdated: new Date().toISOString().split("T")[0],
+            branch: "Noida"
+          },
+          {
+            id: "pol-nd-3",
+            title: "Noida Hybrid Working & Reimbursement Policy",
+            category: "Employee Benefits",
+            content: "Noida staff are eligible for monthly broadband allowances and 2 days per month flexible Work From Home upon manager approval.",
+            lastUpdated: new Date().toISOString().split("T")[0],
+            branch: "Noida"
+          }
+        ];
+      } else {
+        // Tag untagged policies
+        state.policies = state.policies.map((p, idx) => {
+          if (!p.branch) {
+            return { ...p, branch: idx % 2 === 0 ? "Shashtri Nagar" : "Noida" };
+          }
+          return p;
+        });
+      }
+
       return state;
     }
   } catch (err) {
@@ -486,7 +613,7 @@ async function syncAllEmployeesToSupabase(employees: Employee[]) {
         role: emp.role,
         designation_id: emp.designationId,
         department: emp.department,
-        branch: emp.branch || "Mumbai Branch",
+        branch: toBranchId(emp.branch) || "br-shashtri-nagar",
         joining_date: emp.joiningDate,
         status: emp.status || "Active",
         salary: emp.salary,
@@ -602,7 +729,7 @@ async function syncEmployeeToSupabase(emp: Employee) {
         role: emp.role,
         designation_id: emp.designationId,
         department: emp.department,
-        branch: emp.branch || "Mumbai Branch",
+        branch: toBranchId(emp.branch) || "br-shashtri-nagar",
         joining_date: emp.joiningDate,
         status: emp.status || "Active",
         address: emp.address,
@@ -658,6 +785,13 @@ async function startServer() {
         payslips: (currentData.payslips || []).filter(p => employeeIds.has(p.employeeId)),
         inventory: (currentData.inventory || []).filter(i => !i.assignedToEmployeeId || employeeIds.has(i.assignedToEmployeeId)),
         inventoryRequests: (currentData.inventoryRequests || []).filter(ir => employeeIds.has(ir.employeeId)),
+        branchTimingSettings: db.branchTimingSettings || {},
+        branchLeaveTypes: db.branchLeaveTypes || {},
+        branchDepartments: db.branchDepartments || {},
+        branchAmenities: db.branchAmenities || {},
+        branchLeaveCountVisibility: db.branchLeaveCountVisibility || {},
+        branchWifiSettings: db.branchWifiSettings || {},
+        showLeaveCount: db.showLeaveCount ?? true,
       };
 
       res.json(filteredData);
@@ -1670,7 +1804,7 @@ async function startServer() {
     }
   });
 
-  // 10e. Save Attendance Timing Settings
+  // 10e. Save Attendance Timing Settings (supports per-branch)
   app.post("/api/attendance/settings", async (req, res) => {
     const settings = req.body;
     const timingSettings = {
@@ -1681,9 +1815,14 @@ async function startServer() {
       breakEndTime: settings.breakEndTime || "14:00"
     };
     const companyId = settings.companyId || "";
-    const recordId = companyId || "default";
+    const branchName = settings.branch || "";
+    const recordId = branchName ? `branch-${branchName}` : (companyId || "default");
 
-    if (companyId) {
+    if (branchName) {
+      // Per-branch timing settings
+      if (!db.branchTimingSettings) db.branchTimingSettings = {};
+      db.branchTimingSettings[branchName] = timingSettings;
+    } else if (companyId) {
       if (!db.companyTimingSettings) {
         db.companyTimingSettings = {};
       }
@@ -1697,6 +1836,7 @@ async function startServer() {
         await supabase.from("timing_settings").upsert({
           id: recordId,
           company_id: companyId || null,
+          branch: branchName || null,
           clock_in_time: timingSettings.clockInTime,
           clock_out_time: timingSettings.clockOutTime,
           late_threshold: timingSettings.lateThreshold,
@@ -1710,6 +1850,136 @@ async function startServer() {
     }
     res.json({ success: true, timingSettings });
   });
+
+  // 10f. GET Timing Settings (supports per-branch)
+  app.get("/api/attendance/settings", async (req, res) => {
+    const { branch, companyId } = req.query as Record<string, string>;
+    const branchName = branch || "";
+    if (branchName && db.branchTimingSettings?.[branchName]) {
+      return res.json({ success: true, timingSettings: db.branchTimingSettings[branchName], branch: branchName });
+    }
+    const cid = companyId || "";
+    if (cid && db.companyTimingSettings?.[cid]) {
+      return res.json({ success: true, timingSettings: db.companyTimingSettings[cid] });
+    }
+    return res.json({ success: true, timingSettings: db.timingSettings });
+  });
+
+  // 10g. GET all branch timing settings map
+  app.get("/api/attendance/branch-settings", (req, res) => {
+    res.json({ success: true, branchTimingSettings: db.branchTimingSettings || {} });
+  });
+
+  // 10h. Holidays — GET (supports branch filter)
+  app.get("/api/holidays", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.holidays || [];
+    if (companyId) list = list.filter(h => !h.companyId || h.companyId === companyId);
+    // return all holidays that are either unscoped OR match the requested branch
+    if (branch && branch !== "All Branches") {
+      list = list.filter(h => !h.branch || h.branch === branch);
+    }
+    res.json(list);
+  });
+
+  // 10i. Holidays — POST (stores branch)
+  app.post("/api/holidays", (req, res) => {
+    const { name, date, type, companyId, branch } = req.body;
+    if (!name || !date || !type) return res.status(400).json({ error: "name, date, and type are required" });
+    const newHoliday: Holiday = {
+      id: "hol-" + Date.now(),
+      name,
+      date,
+      type,
+      companyId: companyId || undefined,
+      branch: branch || undefined
+    };
+    if (!db.holidays) db.holidays = [];
+    db.holidays.push(newHoliday);
+    writeDatabase(db);
+    res.status(201).json({ holiday: newHoliday });
+  });
+
+  // 10j. Holidays — DELETE
+  app.delete("/api/holidays", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.holidays = (db.holidays || []).filter(h => h.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
+  });
+
+  // 10k. Policies — GET (supports branch filter)
+  app.get("/api/policies", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.policies || [];
+    if (companyId) list = list.filter(p => !p.companyId || p.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      list = list.filter(p => !p.branch || p.branch === branch);
+    }
+    res.json(list);
+  });
+
+  // 10l. Policies — POST (stores branch)
+  app.post("/api/policies", (req, res) => {
+    const { title, category, content, companyId, branch } = req.body;
+    if (!title || !category || !content) return res.status(400).json({ error: "title, category, content are required" });
+    const newPolicy: Policy = {
+      id: "pol-" + Date.now(),
+      title,
+      category,
+      content,
+      lastUpdated: new Date().toISOString().split("T")[0],
+      companyId: companyId || undefined,
+      branch: branch || undefined
+    };
+    if (!db.policies) db.policies = [];
+    db.policies.push(newPolicy);
+    writeDatabase(db);
+    res.json({ policy: newPolicy, success: true });
+  });
+
+  // 10m. Policies — DELETE
+  app.delete("/api/policies", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.policies = (db.policies || []).filter(p => p.id !== id);
+    writeDatabase(db);
+    res.json({ success: true, message: "Policy deleted successfully" });
+  });
+
+  // 10n. WiFi Restriction Settings — GET & POST (supports branch)
+  app.get("/api/attendance/wifi-settings", (req, res) => {
+    const { branch } = req.query as Record<string, string>;
+    if (branch && branch !== "All Branches" && db.branchWifiSettings?.[branch]) {
+      return res.json({ success: true, wifiRestrictionSettings: db.branchWifiSettings[branch], branch });
+    }
+    res.json({
+      success: true,
+      wifiRestrictionSettings: db.wifiRestrictionSettings || { enabled: false, allowedIps: [], allowedIp: "" },
+      branchWifiSettings: db.branchWifiSettings || {}
+    });
+  });
+
+  app.post("/api/attendance/wifi-settings", (req, res) => {
+    const { enabled, allowedIps, allowedIp, branch } = req.body;
+    const wifiData = {
+      enabled: Boolean(enabled),
+      allowedIps: Array.isArray(allowedIps) ? allowedIps : (allowedIp ? [allowedIp] : []),
+      allowedIp: allowedIp || (Array.isArray(allowedIps) ? allowedIps[0] : "") || ""
+    };
+
+    if (branch && branch !== "All Branches") {
+      if (!db.branchWifiSettings) db.branchWifiSettings = {};
+      db.branchWifiSettings[branch] = wifiData;
+    } else {
+      db.wifiRestrictionSettings = wifiData;
+    }
+
+    writeDatabase(db);
+    res.json({ success: true, wifiRestrictionSettings: wifiData, branch: branch || "global" });
+  });
+
 
   // 11. Create Leave Request
   app.post("/api/leaves", async (req, res) => {
@@ -2258,12 +2528,14 @@ async function startServer() {
     }
   });
 
-  // 25. Update dynamic configurations collections
+  // 25. Update dynamic configurations collections (supports per-branch)
   app.post("/api/config-collections", (req, res) => {
-    const { type, updatedList } = req.body;
+    const { type, updatedList, branch } = req.body;
     if (!type || !Array.isArray(updatedList)) {
       return res.status(400).json({ error: "Type and updatedList array are required." });
     }
+
+    const branchName = (branch && branch !== "All Branches") ? branch : "";
 
     if (type === "leaveTypes") {
       const map = new Map<string, string>();
@@ -2271,17 +2543,255 @@ async function startServer() {
         const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
         map.set(name, item);
       });
-      db.customLeaveTypes = Array.from(map.values());
+      const list = Array.from(map.values());
+      if (branchName) {
+        if (!db.branchLeaveTypes) db.branchLeaveTypes = {};
+        db.branchLeaveTypes[branchName] = list;
+      }
+      db.customLeaveTypes = list;
     } else if (type === "departments") {
+      if (branchName) {
+        if (!db.branchDepartments) db.branchDepartments = {};
+        db.branchDepartments[branchName] = updatedList;
+      }
       db.customDepartments = updatedList;
     } else if (type === "branches") {
       db.customBranches = updatedList;
+    } else if (type === "amenities") {
+      if (branchName) {
+        if (!db.branchAmenities) db.branchAmenities = {};
+        db.branchAmenities[branchName] = updatedList;
+      }
+      db.customAmenities = updatedList;
     } else {
       return res.status(400).json({ error: "Invalid collection type." });
     }
 
     writeDatabase(db);
-    res.json({ success: true, message: `Configuration for ${type} updated successfully.` });
+    res.json({ success: true, message: `Configuration for ${type} updated successfully${branchName ? ` for ${branchName}` : ""}.` });
+  });
+
+  // 25b. Toggle Leave Count Visibility (supports per-branch)
+  app.post("/api/config/leave-count-visibility", (req, res) => {
+    const { showLeaveCount, branch } = req.body;
+    const branchName = (branch && branch !== "All Branches") ? branch : "";
+    if (branchName) {
+      if (!db.branchLeaveCountVisibility) db.branchLeaveCountVisibility = {};
+      db.branchLeaveCountVisibility[branchName] = Boolean(showLeaveCount);
+    }
+    db.showLeaveCount = Boolean(showLeaveCount);
+    writeDatabase(db);
+    res.json({ success: true, showLeaveCount: Boolean(showLeaveCount), branch: branchName || "global" });
+  });
+
+  // 25c. Designations Master CRUD (supports companyId and branch)
+  app.get("/api/designations", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.designations || [];
+    if (companyId) list = list.filter(d => !d.companyId || d.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      list = list.filter(d => !d.branch || d.branch === branch);
+    }
+    res.json(list);
+  });
+
+  app.post("/api/designations", (req, res) => {
+    const { title, department, companyId, branch } = req.body;
+    if (!title || !department) return res.status(400).json({ error: "title and department are required" });
+    const newDes: Designation = {
+      id: `des-${Date.now()}`,
+      title,
+      department,
+      companyId: companyId || undefined,
+      branch: branch || undefined
+    };
+    if (!db.designations) db.designations = [];
+    db.designations.push(newDes);
+    writeDatabase(db);
+    res.status(201).json({ designation: newDes, success: true });
+  });
+
+  app.delete("/api/designations", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.designations = (db.designations || []).filter(d => d.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
+  });
+
+  // 25d. Expense Categories CRUD (supports companyId and branch)
+  app.get("/api/expense-categories", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.expenseCategories || [];
+    if (companyId) list = list.filter(c => !c.companyId || c.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      list = list.filter(c => !c.branch || c.branch === branch);
+    }
+    res.json(list);
+  });
+
+  app.post("/api/expense-categories", (req, res) => {
+    const { name, description, companyId, branch, id } = req.body;
+    if (!name) return res.status(400).json({ error: "name is required" });
+    const newCat: ExpenseCategory = {
+      id: id || `expcat-${Date.now()}`,
+      name,
+      description: description || "",
+      companyId: companyId || undefined,
+      branch: branch || undefined,
+      createdAt: new Date().toISOString()
+    };
+    if (!db.expenseCategories) db.expenseCategories = [];
+    db.expenseCategories = [newCat, ...db.expenseCategories.filter(c => c.id !== newCat.id)];
+    writeDatabase(db);
+    res.status(201).json({ category: newCat, success: true });
+  });
+
+  app.delete("/api/expense-categories", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.expenseCategories = (db.expenseCategories || []).filter(c => c.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
+  });
+
+  // 25e. Infraction Types CRUD (supports companyId and branch)
+  app.get("/api/infraction-types", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.infractionTypes || [];
+    if (companyId) list = list.filter(i => !i.companyId || i.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      list = list.filter(i => !i.branch || i.branch === branch);
+    }
+    res.json(list);
+  });
+
+  app.post("/api/infraction-types", (req, res) => {
+    const { name, description, defaultAmount, companyId, branch, id } = req.body;
+    if (!name) return res.status(400).json({ error: "name is required" });
+    const newInfr: InfractionType = {
+      id: id || `infr-${Date.now()}`,
+      name,
+      description: description || "",
+      defaultAmount: Number(defaultAmount) || 0,
+      companyId: companyId || undefined,
+      branch: branch || undefined
+    };
+    if (!db.infractionTypes) db.infractionTypes = [];
+    db.infractionTypes = [newInfr, ...db.infractionTypes.filter(i => i.id !== newInfr.id)];
+    writeDatabase(db);
+    res.status(201).json({ infractionType: newInfr, success: true });
+  });
+
+  app.put("/api/infraction-types", (req, res) => {
+    const { id, name, description, defaultAmount, companyId, branch } = req.body;
+    if (!id || !name) return res.status(400).json({ error: "id and name are required" });
+    if (!db.infractionTypes) db.infractionTypes = [];
+    const idx = db.infractionTypes.findIndex(i => i.id === id);
+    if (idx !== -1) {
+      db.infractionTypes[idx] = {
+        ...db.infractionTypes[idx],
+        name,
+        description: description ?? db.infractionTypes[idx].description,
+        defaultAmount: defaultAmount !== undefined ? Number(defaultAmount) : db.infractionTypes[idx].defaultAmount,
+        companyId: companyId ?? db.infractionTypes[idx].companyId,
+        branch: branch ?? db.infractionTypes[idx].branch
+      };
+    }
+    writeDatabase(db);
+    res.json({ success: true, infractionType: db.infractionTypes[idx] });
+  });
+
+  app.delete("/api/infraction-types", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.infractionTypes = (db.infractionTypes || []).filter(i => i.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
+  });
+
+  // 25f. Corporate Allowances FAQ CRUD (supports companyId and branch)
+  app.get("/api/corporate-allowances-faq", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    let list = db.corporateAllowancesFaqs || [];
+    if (companyId) list = list.filter(f => !f.companyId || f.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      list = list.filter(f => !f.branch || f.branch === branch);
+    }
+    res.json(list);
+  });
+
+  app.post("/api/corporate-allowances-faq", (req, res) => {
+    const { title, description, companyId, branch, id } = req.body;
+    if (!title || !description) return res.status(400).json({ error: "title and description are required" });
+    const newFaq: CorporateAllowanceFaq = {
+      id: id || `faq-${Date.now()}`,
+      title,
+      description,
+      companyId: companyId || undefined,
+      branch: branch || undefined,
+      createdAt: new Date().toISOString()
+    };
+    if (!db.corporateAllowancesFaqs) db.corporateAllowancesFaqs = [];
+    db.corporateAllowancesFaqs = [newFaq, ...db.corporateAllowancesFaqs.filter(f => f.id !== newFaq.id)];
+    writeDatabase(db);
+    res.status(201).json({ faq: newFaq, success: true });
+  });
+
+  app.delete("/api/corporate-allowances-faq", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.corporateAllowancesFaqs = (db.corporateAllowancesFaqs || []).filter(f => f.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
+  });
+
+  // 25g. Checklist Templates CRUD (supports companyId and branch)
+  app.get("/api/checklist-templates", (req, res) => {
+    const { companyId, branch } = req.query as Record<string, string>;
+    const list = [
+      ...(db.onboardingChecklistTemplates || []),
+      ...(db.exitChecklistTemplates || [])
+    ];
+    let filtered = list;
+    if (companyId) filtered = filtered.filter(t => !t.companyId || t.companyId === companyId);
+    if (branch && branch !== "All Branches") {
+      filtered = filtered.filter(t => !t.branch || t.branch === branch);
+    }
+    res.json(filtered);
+  });
+
+  app.post("/api/checklist-templates", (req, res) => {
+    const { title, description, category, required, type, companyId, branch, id } = req.body;
+    if (!title || !type) return res.status(400).json({ error: "title and type are required" });
+    const template: ChecklistItemTemplate = {
+      id: id || `tmpl-${Date.now()}`,
+      title,
+      description: description || "",
+      category: category || "General",
+      required: required !== false,
+      type: type === "exit" ? "exit" : "onboarding",
+      companyId: companyId || undefined,
+      branch: branch || undefined
+    };
+    if (template.type === "onboarding") {
+      if (!db.onboardingChecklistTemplates) db.onboardingChecklistTemplates = [];
+      db.onboardingChecklistTemplates = [template, ...db.onboardingChecklistTemplates.filter(t => t.id !== template.id)];
+    } else {
+      if (!db.exitChecklistTemplates) db.exitChecklistTemplates = [];
+      db.exitChecklistTemplates = [template, ...db.exitChecklistTemplates.filter(t => t.id !== template.id)];
+    }
+    writeDatabase(db);
+    res.status(201).json({ template, success: true });
+  });
+
+  app.delete("/api/checklist-templates", (req, res) => {
+    const id = (req.query.id as string) || req.body?.id;
+    if (!id) return res.status(400).json({ error: "id is required" });
+    db.onboardingChecklistTemplates = (db.onboardingChecklistTemplates || []).filter(t => t.id !== id);
+    db.exitChecklistTemplates = (db.exitChecklistTemplates || []).filter(t => t.id !== id);
+    writeDatabase(db);
+    res.json({ success: true });
   });
 
   // ─── 26. Support & Grievance ──────────────────────────────────────────────

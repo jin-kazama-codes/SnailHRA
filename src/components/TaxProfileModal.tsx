@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { X, Shield, Calculator, Lock, Unlock, ChevronDown, ChevronUp, CheckCircle, AlertTriangle, TrendingDown, TrendingUp, FileText, Info } from "lucide-react";
-import { Employee, EmployeeTaxProfile } from "../types";
+import { Employee, EmployeeTaxProfile, PayrollConfig } from "../types";
 import { computeTDS, TaxComputationInput, TaxComputationResult } from "../lib/taxEngine";
 
 interface TaxProfileModalProps {
@@ -10,6 +10,7 @@ interface TaxProfileModalProps {
   onClose: () => void;
   onSave: (employeeId: string, taxProfile: EmployeeTaxProfile) => Promise<void> | void;
   defaultRegime?: "new" | "old";
+  config?: PayrollConfig;
 }
 
 const SECTION_LABELS: Record<string, string> = {
@@ -38,7 +39,7 @@ function pct(val: number): string {
   return val.toFixed(0) + "%";
 }
 
-export default function TaxProfileModal({ employee, onClose, onSave, defaultRegime = "new" }: TaxProfileModalProps) {
+export default function TaxProfileModal({ employee, onClose, onSave, defaultRegime = "new", config }: TaxProfileModalProps) {
   const existing = employee.salary?.taxProfile;
 
   // ── Form State ────────────────────────────────────────────────────────────
@@ -59,17 +60,45 @@ export default function TaxProfileModal({ employee, onClose, onSave, defaultRegi
   const [saving, setSaving] = useState(false);
 
   const salary = employee.salary;
+  const basic = salary?.basic || 0;
+
+  const configHra = config?.hraType === "percentage"
+    ? Math.round(basic * ((config.hraValue ?? 20) / 100))
+    : (config?.hraValue ?? (salary?.hra || 0));
+  const configTel = config?.telephoneType === "percentage"
+    ? Math.round(basic * ((config.telephoneValue || 0) / 100))
+    : (config?.telephoneValue || 0);
+  const configFuel = config?.fuelType === "percentage"
+    ? Math.round(basic * ((config.fuelValue || 0) / 100))
+    : (config?.fuelValue || 0);
+  const configProfDev = config?.professionalDevType === "percentage"
+    ? Math.round(basic * ((config.professionalDevValue || 0) / 100))
+    : (config?.professionalDevValue || 0);
+  const configLta = config?.ltaType === "percentage"
+    ? Math.round(basic * ((config.ltaValue || 0) / 100))
+    : (config?.ltaValue || 0);
+  const configSpAllow = config?.allowancesType === "percentage"
+    ? Math.round(basic * ((config.allowancesValue || 0) / 100))
+    : (config?.allowancesValue || (salary?.allowances || 0));
+
+  const hra = configHra;
+  const telephone = salary?.telephone !== undefined ? salary.telephone : configTel;
+  const fuel = salary?.fuel !== undefined ? salary.fuel : configFuel;
+  const professionalDev = salary?.professionalDev !== undefined ? salary.professionalDev : configProfDev;
+  const lta = salary?.lta !== undefined ? salary.lta : configLta;
+  const allowances = salary?.allowances !== undefined ? salary.allowances : configSpAllow;
+  const pfDeduction = salary?.pfDeduction !== undefined ? salary.pfDeduction : Math.round(basic * 0.12);
 
   // ── Build TaxComputationInput ─────────────────────────────────────────────
   const taxInput: TaxComputationInput = useMemo(() => ({
-    annualBasic: salary.basic * 12,
-    annualHRA: salary.hra * 12,
-    annualLTA: (salary.lta ?? 0) * 12,
-    annualSpecialAllowance: salary.allowances * 12,
-    annualTelephone: (salary.telephone ?? 0) * 12,
-    annualFuel: (salary.fuel ?? 0) * 12,
-    annualProfDev: (salary.professionalDev ?? 0) * 12,
-    annualPFEmployee: salary.pfDeduction * 12,
+    annualBasic: basic * 12,
+    annualHRA: hra * 12,
+    annualLTA: lta * 12,
+    annualSpecialAllowance: allowances * 12,
+    annualTelephone: telephone * 12,
+    annualFuel: fuel * 12,
+    annualProfDev: professionalDev * 12,
+    annualPFEmployee: pfDeduction * 12,
     regime,
     monthlyRentPaid: Number(rentPaid) || 0,
     cityType,
@@ -83,7 +112,7 @@ export default function TaxProfileModal({ employee, onClose, onSave, defaultRegi
     professionalTax: Number(profTax) || 0,
     manualMonthlyTDS: tdsLocked ? (Number(manualTDS) || 0) : undefined,
     tdsLocked,
-  }), [regime, rentPaid, cityType, s80C, s80CCD1B, s80D, s80E, s80G, s80EEA, employerNPS, profTax, manualTDS, tdsLocked, salary]);
+  }), [regime, rentPaid, cityType, s80C, s80CCD1B, s80D, s80E, s80G, s80EEA, employerNPS, profTax, manualTDS, tdsLocked, basic, hra, lta, allowances, telephone, fuel, professionalDev, pfDeduction]);
 
   const result: TaxComputationResult = useMemo(() => computeTDS(taxInput), [taxInput]);
 

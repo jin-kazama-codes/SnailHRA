@@ -9,13 +9,15 @@ import { Policy, UserRole } from "../types";
 interface PoliciesViewProps {
   policies: Policy[];
   role: UserRole;
-  onAddPolicy?: (newPolicy: { title: string; category: Policy["category"]; content: string }) => Promise<boolean>;
+  selectedBranch?: string;
+  onAddPolicy?: (newPolicy: { title: string; category: Policy["category"]; content: string; branch?: string }) => Promise<boolean>;
   onDeletePolicy?: (id: string) => Promise<void>;
 }
 
 export default function PoliciesView({
   policies,
   role,
+  selectedBranch = "All Branches",
   onAddPolicy,
   onDeletePolicy
 }: PoliciesViewProps) {
@@ -41,7 +43,8 @@ export default function PoliciesView({
       const success = await onAddPolicy({
         title: title.trim(),
         category,
-        content: content.trim()
+        content: content.trim(),
+        branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
       });
       setLoading(false);
       if (success) {
@@ -61,6 +64,11 @@ export default function PoliciesView({
           <h2 className="text-lg font-bold font-display text-slate-800 dark:text-white flex items-center gap-2">
             <ShieldAlert className="w-5.5 h-5.5 text-emerald-500" />
             <span>Corporate Policies Handbook</span>
+            {selectedBranch !== "All Branches" && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/40">
+                {selectedBranch} Branch
+              </span>
+            )}
           </h2>
           <p className="text-xs text-slate-400 dark:text-gray-400">Compliance protocols, sales guidelines, and operational standards</p>
         </div>
@@ -110,7 +118,14 @@ export default function PoliciesView({
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
                       <BookOpen className="w-4.5 h-4.5 text-emerald-500 shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold truncate">{policy.title}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold truncate">{policy.title}</p>
+                          {policy.branch && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100/80 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 shrink-0">
+                              {policy.branch}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">{policy.category}</p>
                       </div>
                     </div>
@@ -140,9 +155,16 @@ export default function PoliciesView({
             <div className="space-y-4">
               <div className="border-b border-slate-100 dark:border-[#1a1a1a] pb-3 flex justify-between items-start flex-wrap gap-2">
                 <div>
-                  <span className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">
-                    {selectedPolicy.category}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase">
+                      {selectedPolicy.category}
+                    </span>
+                    {selectedPolicy.branch && (
+                      <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                        {selectedPolicy.branch}
+                      </span>
+                    )}
+                  </div>
                   <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white mt-2">{selectedPolicy.title}</h2>
                 </div>
                 <div className="flex items-center gap-3">

@@ -3,6 +3,8 @@ import { loadDatabase, saveDatabase, initialCorporateAllowanceFaqs } from "@/src
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { MGM_COMPANY_ID } from "@/src/lib/supabase";
+import { CorporateAllowanceFaq } from "@/src/types";
+import { toBranchName } from "@/src/lib/branchUtils";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -23,6 +25,7 @@ export async function GET(request: Request) {
           title: row.title || "",
           description: row.description || "",
           companyId: row.company_id || row.companyId || null,
+          branch: row.branch || undefined,
           createdAt: row.created_at || row.createdAt || new Date().toISOString()
         })));
       }
@@ -34,7 +37,7 @@ export async function GET(request: Request) {
   const db = loadDatabase();
   let faqs = db.corporateAllowancesFaqs || [];
   if (companyId) {
-    return NextResponse.json(faqs.filter(f => f.companyId === companyId));
+    return NextResponse.json(faqs.filter(f => !f.companyId || f.companyId === companyId));
   }
   
   return NextResponse.json(faqs);
@@ -42,17 +45,20 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { id, title, description, companyId } = await request.json();
+    const { id, title, description, companyId, branch } = await request.json();
     if (!title || !description) {
       return NextResponse.json({ error: "Title and Description are required." }, { status: 400 });
     }
     
     const targetCompanyId = companyId || MGM_COMPANY_ID;
-    const newFaq = {
-      id: id || "faq-" + Date.now(),
+    const resolvedBranch = (branch && branch !== "All Branches") ? toBranchName(branch) : undefined;
+
+    const newFaq: CorporateAllowanceFaq = {
+      id: id || ("faq-" + Date.now()),
       title: title.trim(),
       description: description.trim(),
       companyId: targetCompanyId,
+      branch: resolvedBranch,
       createdAt: new Date().toISOString()
     };
     
@@ -63,17 +69,16 @@ export async function POST(request: Request) {
         title: newFaq.title,
         description: newFaq.description,
         company_id: newFaq.companyId,
+        branch: resolvedBranch || null,
         created_at: newFaq.createdAt
       }, { onConflict: "id" });
 
-      if (!error) {
-        return NextResponse.json({ success: true, faq: newFaq });
-      } else {
+      if (error) {
         console.warn("Supabase corporate_allowances_faq upsert warning:", error);
       }
     }
 
-    // Local fallback only if Supabase is unavailable or errored out
+    // Local DB update
     const db = loadDatabase();
     if (!db.corporateAllowancesFaqs) db.corporateAllowancesFaqs = [];
     db.corporateAllowancesFaqs = [newFaq, ...db.corporateAllowancesFaqs.filter(f => f.id !== newFaq.id)];
@@ -96,9 +101,7 @@ export async function DELETE(request: Request) {
     const dbClient = supabaseAdmin || supabase;
     if (dbClient) {
       const { error } = await dbClient.from("corporate_allowances_faq").delete().eq("id", id);
-      if (!error) {
-        return NextResponse.json({ success: true });
-      } else {
+      if (error) {
         console.warn("Supabase corporate_allowances_faq delete warning:", error);
       }
     }

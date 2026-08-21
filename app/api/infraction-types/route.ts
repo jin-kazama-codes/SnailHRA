@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { InfractionType } from "@/src/types";
+import { toBranchName } from "@/src/lib/branchUtils";
 
 // Always prefer the admin client (bypasses RLS) for server-side writes
 const dbClient = supabaseAdmin || supabase;
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
             description: row.description || "",
             defaultAmount: Number(row.default_amount ?? row.defaultAmount ?? 0),
             companyId: row.company_id || row.companyId || null,
+            branch: row.branch || undefined
           }))
         );
       }
@@ -44,18 +46,21 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { id, name, description, defaultAmount, companyId } = await request.json();
+    const { id, name, description, defaultAmount, companyId, branch } = await request.json();
     if (!name) {
       return NextResponse.json({ error: "Name is required." }, { status: 400 });
     }
 
     const db = loadDatabase();
+    const resolvedBranch = (branch && branch !== "All Branches") ? toBranchName(branch) : undefined;
+
     const newType: InfractionType = {
-      id: id || "infr-" + Date.now(),
+      id: id || ("infr-" + Date.now()),
       name: name.trim(),
       description: description || "",
       defaultAmount: Number(defaultAmount) || 0,
       companyId: companyId || "",
+      branch: resolvedBranch
     };
 
     if (!db.infractionTypes) db.infractionTypes = [];
@@ -71,6 +76,7 @@ export async function POST(request: Request) {
             description: newType.description,
             default_amount: newType.defaultAmount ?? 0,
             company_id: newType.companyId || null,
+            branch: resolvedBranch || null
           },
           { onConflict: "id" }
         );
@@ -90,13 +96,14 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { id, name, description, defaultAmount, companyId } = await request.json();
+    const { id, name, description, defaultAmount, companyId, branch } = await request.json();
     if (!id || !name) {
       return NextResponse.json({ error: "Id and Name are required." }, { status: 400 });
     }
 
     const db = loadDatabase();
     if (!db.infractionTypes) db.infractionTypes = [];
+    const resolvedBranch = (branch && branch !== "All Branches") ? toBranchName(branch) : undefined;
 
     const updated: InfractionType = {
       id,
@@ -104,6 +111,7 @@ export async function PUT(request: Request) {
       description: description || "",
       defaultAmount: Number(defaultAmount) || 0,
       companyId: companyId || "",
+      branch: resolvedBranch
     };
 
     db.infractionTypes = db.infractionTypes.map(t => t.id === id ? updated : t);
@@ -116,6 +124,7 @@ export async function PUT(request: Request) {
           description: updated.description,
           default_amount: updated.defaultAmount,
           company_id: updated.companyId || null,
+          branch: resolvedBranch || null
         }).eq("id", id);
         if (error) console.warn("Supabase infraction_types update error:", error.message);
       } catch (e) {

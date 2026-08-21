@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, Clock, Calendar, IndianRupee,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
   Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid, Lock,
-  MessageSquareWarning, TrendingUp
+  MessageSquareWarning, TrendingUp, Building2, ChevronDown
 } from "lucide-react";
 
 import {
@@ -15,6 +15,7 @@ import {
   SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate,
   GrievanceTicket, PerformanceRecord
 } from "./types";
+import { toBranchId, toBranchName } from "./lib/branchUtils";
 
 // Import Modular Views
 import DashboardView from "./components/DashboardView";
@@ -37,6 +38,7 @@ import PasswordUpdateView from "./components/PasswordUpdateView";
 import EditEmployeeModal from "./components/EditEmployeeModal";
 import GrievanceView from "./components/GrievanceView";
 import PerformanceView from "./components/PerformanceView";
+import CompanySettingsView from "./components/CompanySettingsView";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -59,14 +61,19 @@ export default function App() {
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [showMyProfileModal, setShowMyProfileModal] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const branchMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close profile dropdown on click outside
+  // Close dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setProfileMenuOpen(false);
+      }
+      if (branchMenuRef.current && !branchMenuRef.current.contains(event.target as Node)) {
+        setBranchDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -128,6 +135,47 @@ export default function App() {
     }
     return "";
   });
+
+  const [companyPan, setCompanyPan] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const activeCId = localStorage.getItem("snailhr_companyId") || "";
+      return (activeCId ? localStorage.getItem(`snailhr_companyPan_${activeCId}`) : null) || localStorage.getItem("snailhr_companyPan") || "";
+    }
+    return "";
+  });
+
+  const [companyTan, setCompanyTan] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const activeCId = localStorage.getItem("snailhr_companyId") || "";
+      return (activeCId ? localStorage.getItem(`snailhr_companyTan_${activeCId}`) : null) || localStorage.getItem("snailhr_companyTan") || "";
+    }
+    return "";
+  });
+
+  // Global Branch Selector State — admin/hr only; drives branch-scoped filtering across all views
+  const [selectedBranch, setSelectedBranch] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("snailhr_selectedBranch") || "All Branches";
+    }
+    return "All Branches";
+  });
+
+  // Per-branch timing settings map (branchName -> TimingSettings)
+  const [branchTimingSettings, setBranchTimingSettings] = useState<Record<string, {
+    clockInTime: string;
+    clockOutTime: string;
+    lateThreshold: string;
+    breakStartTime: string;
+    breakEndTime: string;
+  }>>({}); 
+
+  // Per-branch configurations collections
+  const [branchLeaveTypes, setBranchLeaveTypes] = useState<Record<string, string[]>>({});
+  const [branchDepartments, setBranchDepartments] = useState<Record<string, string[]>>({});
+  const [branchAmenities, setBranchAmenities] = useState<Record<string, string[]>>({});
+  const [branchLeaveCountVisibility, setBranchLeaveCountVisibility] = useState<Record<string, boolean>>({});
+  const [branchWifiSettings, setBranchWifiSettings] = useState<Record<string, any>>({}); 
+  const [branchCodePrefixes, setBranchCodePrefixes] = useState<Record<string, string>>({}); 
 
   // Employee Code Prefix — configured by admin in System Settings, stored in localStorage
   const [empCodePrefix, setEmpCodePrefix] = useState<string>(() => {
@@ -276,6 +324,13 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Persist selectedBranch
+  useEffect(() => {
+    if (typeof window !== "undefined" && isLoggedIn) {
+      localStorage.setItem("snailhr_selectedBranch", selectedBranch);
+    }
+  }, [selectedBranch, isLoggedIn]);
+
   // Persist view, role, and selected user in localStorage
   useEffect(() => {
     if (typeof window !== "undefined" && isLoggedIn) {
@@ -340,12 +395,78 @@ export default function App() {
         const numB = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
         return numA - numB;
       });
-      setEmployees(fetchedEmployees);
+
+      setEmployees(prev => {
+        const empMap = new Map<string, any>();
+        const mergeChecklists = (fetchedList: any[] = [], prevList: any[] = []) => {
+          const listMap = new Map<string, any>();
+          fetchedList.forEach((item: any) => {
+            const key = item.templateId || item.id || (item.title || "").trim().toLowerCase();
+            listMap.set(key, item);
+          });
+          prevList.forEach((item: any) => {
+            const key = item.templateId || item.id || (item.title || "").trim().toLowerCase();
+            const existing = listMap.get(key);
+            if (!existing) {
+              listMap.set(key, item);
+            } else {
+              if (item.fileUrl && (!existing.fileUrl || existing.status === "Pending")) {
+                listMap.set(key, { ...existing, ...item });
+              } else if (item.status === "Approved" && existing.status !== "Approved") {
+                listMap.set(key, { ...existing, ...item });
+              } else if (item.status === "Uploaded" && existing.status === "Pending") {
+                listMap.set(key, { ...existing, ...item });
+              }
+            }
+          });
+          return Array.from(listMap.values());
+        };
+
+        const prevMap = new Map<string, any>();
+        (prev || []).forEach((p: any) => {
+          if (p && p.id) prevMap.set(p.id, p);
+        });
+
+        fetchedEmployees.forEach((emp: any) => {
+          const prevEmp = prevMap.get(emp.id);
+          if (prevEmp) {
+            empMap.set(emp.id, {
+              ...emp,
+              onboardingChecklist: mergeChecklists(emp.onboardingChecklist, prevEmp.onboardingChecklist),
+              exitChecklist: mergeChecklists(emp.exitChecklist, prevEmp.exitChecklist),
+              documents: (() => {
+                const docMap = new Map<string, any>();
+                (emp.documents || []).forEach((d: any) => { if (d.id || d.name) docMap.set(d.id || d.name, d); });
+                (prevEmp.documents || []).forEach((d: any) => { if (d.id || (d.name && !docMap.has(d.id || d.name))) docMap.set(d.id || d.name, d); });
+                return Array.from(docMap.values());
+              })()
+            });
+          } else {
+            empMap.set(emp.id, emp);
+          }
+        });
+
+        (prev || []).forEach((p: any) => {
+          if (p && p.id && !empMap.has(p.id)) {
+            empMap.set(p.id, p);
+          }
+        });
+
+        return Array.from(empMap.values()).sort((a: any, b: any) => {
+          const numA = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
+          const numB = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
+          return numA - numB;
+        });
+      });
       setDesignations(data.designations || []);
       setOnboardingChecklistTemplates(data.onboardingChecklistTemplates || []);
       setExitChecklistTemplates(data.exitChecklistTemplates || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
+      }
+      // Load per-branch timing settings
+      if (data.branchTimingSettings) {
+        setBranchTimingSettings(data.branchTimingSettings);
       }
       setAttendance(prev => {
         const attMap = new Map<string, any>();
@@ -470,6 +591,13 @@ export default function App() {
       setCustomDepartments(data.customDepartments || []);
       setCustomBranches(data.customBranches || []);
       setCustomAmenities(data.customAmenities || []);
+      if (data.branchLeaveTypes) setBranchLeaveTypes(data.branchLeaveTypes);
+      if (data.branchDepartments) setBranchDepartments(data.branchDepartments);
+      if (data.branchAmenities) setBranchAmenities(data.branchAmenities);
+      if (data.branchLeaveCountVisibility) setBranchLeaveCountVisibility(data.branchLeaveCountVisibility);
+      if (data.branchWifiSettings) setBranchWifiSettings(data.branchWifiSettings);
+      if (data.branchCodePrefixes) setBranchCodePrefixes(data.branchCodePrefixes);
+      if (data.empCodePrefix) setEmpCodePrefix(data.empCodePrefix);
       setExpenseCategories(data.expenseCategories || []);
       setInfractionTypes(data.infractionTypes || []);
       setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
@@ -490,6 +618,18 @@ export default function App() {
         }
       } catch (subErr) {
         console.warn("Could not check Supabase sync status:", subErr);
+      }
+
+      // Load Company Tax Settings (Employer PAN & TAN)
+      if (activeCompanyId) {
+        try {
+          const compRes = await fetch(`/api/company-settings?companyId=${activeCompanyId}`);
+          const compData = await compRes.json();
+          if (compData.success && compData.companySettings) {
+            if (compData.companySettings.pan) setCompanyPan(compData.companySettings.pan);
+            if (compData.companySettings.tan) setCompanyTan(compData.companySettings.tan);
+          }
+        } catch (e) {}
       }
 
       setError(null);
@@ -736,10 +876,11 @@ export default function App() {
   // 4b. Add Holiday (Admin / HR)
   const handleAddHoliday = async (newHoliday: { name: string; date: string; type: "National" | "Regional" | "Restricted" }) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const res = await fetch("/api/holidays", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...newHoliday, companyId })
+        body: JSON.stringify({ ...newHoliday, companyId, branch: branchToAssign })
       });
       const data = await res.json();
       if (res.ok && data.holiday) {
@@ -773,17 +914,20 @@ export default function App() {
   // 4d. Add Policy (Admin / HR)
   const handleAddPolicy = async (newPolicy: { title: string; category: Policy["category"]; content: string }) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const policyObj: Policy = {
         id: `pol-${Date.now()}`,
         title: newPolicy.title,
         category: newPolicy.category,
         content: newPolicy.content,
-        lastUpdated: new Date().toISOString().split("T")[0]
+        lastUpdated: new Date().toISOString().split("T")[0],
+        branch: branchToAssign,
+        companyId
       };
       const res = await fetch("/api/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...policyObj, companyId })
+        body: JSON.stringify({ ...policyObj, companyId, branch: branchToAssign })
       });
       const data = await res.json();
       if (res.ok && data.policy) {
@@ -996,6 +1140,7 @@ export default function App() {
       const empId = expenseData.employeeId || currentEmployeeId || (employees.find(e => e.role === activeRole)?.id || employees[0]?.id || "EMP-1003");
       const emp = employees.find(e => e.id === empId);
       const empName = expenseData.employeeName || emp?.fullName || `Employee ${empId}`;
+      const claimStatus: "Approved" | "Pending" = expenseData.status || "Pending";
 
       const tempId = `exp-${Date.now()}`;
       const newClaim: ExpenseClaim = {
@@ -1007,11 +1152,27 @@ export default function App() {
         amount: Number(expenseData.amount) || 0,
         date: expenseData.date || new Date().toISOString().split("T")[0],
         description: expenseData.description || "",
-        status: "Pending"
+        status: claimStatus
       };
 
       // 1. INSTANT OPTIMISTIC UPDATE: Visible immediately without page reload!
       setExpenses(prev => [newClaim, ...(prev || []).filter(e => e.id !== tempId)]);
+
+      if (claimStatus === "Approved") {
+        setReimbursements(prev => {
+          const newReim: Reimbursement = {
+            id: `reim-${Date.now()}`,
+            employeeId: newClaim.employeeId,
+            employeeName: newClaim.employeeName,
+            category: newClaim.category,
+            amount: newClaim.amount,
+            claimId: newClaim.id,
+            status: "Pending",
+            processedDate: null
+          };
+          return [newReim, ...(prev || [])];
+        });
+      }
 
       // 2. Dispatch to API & Supabase in background
       const res = await fetch("/api/expenses", {
@@ -1021,7 +1182,12 @@ export default function App() {
       });
 
       if (res.ok) {
-        showToast("Expense claim logged. Supervisor review pending.", "success");
+        showToast(
+          claimStatus === "Approved" 
+            ? "Business expense recorded and approved." 
+            : "Expense claim logged. Supervisor review pending.", 
+          "success"
+        );
         const resData = await res.json();
         if (resData.claim) {
           setExpenses(prev => [resData.claim, ...(prev || []).filter(e => e.id !== resData.claim.id && e.id !== tempId)]);
@@ -1097,6 +1263,8 @@ export default function App() {
   // 11. Create hardware asset
   const handleAddAsset = async (assetData: any) => {
     try {
+      const resolvedCompanyId = companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
+      const branchToAssign = assetData.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const newAsset: InventoryItem = {
         id: assetData.id || `inv-${Date.now()}`,
         name: assetData.name,
@@ -1105,8 +1273,8 @@ export default function App() {
         status: assetData.status || "Available",
         assignedToEmployeeId: assetData.assignedToEmployeeId || null,
         assignedDate: assetData.assignedDate || null,
-        branch: assetData.branch,
-        companyId: companyId
+        branch: branchToAssign,
+        companyId: resolvedCompanyId
       };
 
       // Optimistically add to state instantly so it appears on screen without refresh!
@@ -1157,6 +1325,7 @@ export default function App() {
       const empName = reqData.employeeName || emp?.fullName || `Employee ${empId}`;
 
       const tempId = `invreq-${Date.now()}`;
+      const branchToAssign = reqData.branch || (emp?.branch ? toBranchName(emp.branch) : (selectedBranch !== "All Branches" ? selectedBranch : undefined));
       const newReq: InventoryRequest = {
         id: reqData.id || tempId,
         employeeId: empId,
@@ -1165,6 +1334,7 @@ export default function App() {
         category: reqData.category || "Laptop",
         requestDate: reqData.requestDate || new Date().toISOString().split("T")[0],
         reason: reqData.reason || "",
+        branch: branchToAssign,
         status: "Pending"
       };
 
@@ -1303,44 +1473,15 @@ export default function App() {
     }
   };
 
-  // 16. Admin create designation
-  const handleAddDesignation = async (title: string, department: string) => {
-    try {
-      const res = await fetch("/api/designations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, department, companyId })
-      });
-      if (res.ok) {
-        await refreshDatabase();
-        showToast("Registered new designation for recruitment onboarding!", "success");
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // 17. Delete designation
-  const handleRemoveDesignation = async (id: string) => {
-    try {
-      const res = await fetch(`/api/designations/${id}`, {
-        method: "DELETE"
-      });
-      if (res.ok) {
-        await refreshDatabase();
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   // 17b. Checklist Template Management & Document Submission Handlers
   const handleAddChecklistTemplate = async (template: Omit<ChecklistItemTemplate, "id">) => {
     try {
+      const branchToAssign = template.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/checklist-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...template, companyId })
+        body: JSON.stringify({ ...template, companyId, branch: branchToAssign })
       });
       const data = await res.json();
       if (res.ok && data.template) {
@@ -1404,35 +1545,44 @@ export default function App() {
 
       if (res.ok) {
         const json = await res.json();
-        if (json.item || json.checklist) {
-          const itemToPut = json.item;
-          setEmployees(prev => prev.map(emp => {
-            const matchesEmp = emp.id === employeeId || emp.id.toLowerCase().replace(/[-_]/g, "") === employeeId.toLowerCase().replace(/[-_]/g, "");
-            if (matchesEmp) {
-              const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
-              const currentList = emp[listKey] || [];
-              let updatedList = json.checklist;
-              if (!updatedList && itemToPut) {
-                const idx = currentList.findIndex(i =>
-                  i.id === itemToPut.id ||
-                  (i.templateId && itemToPut.templateId && i.templateId === itemToPut.templateId) ||
-                  (i.title && itemToPut.title && i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase())
-                );
-                if (idx >= 0) {
-                  updatedList = [...currentList];
-                  updatedList[idx] = { ...updatedList[idx], ...itemToPut };
-                } else {
-                  updatedList = [...currentList, itemToPut];
-                }
+        const itemToPut = json.item || {
+          id: `chk-${Date.now()}`,
+          templateId: itemId,
+          title: file.name,
+          type,
+          status: "Uploaded",
+          fileUrl: uploadData.url,
+          fileName: file.name,
+          uploadedAt: new Date().toISOString().split("T")[0]
+        };
+
+        setEmployees(prev => prev.map(emp => {
+          const matchesEmp = emp.id === employeeId || emp.id.toLowerCase().replace(/[-_]/g, "") === employeeId.toLowerCase().replace(/[-_]/g, "");
+          if (matchesEmp) {
+            const listKey = type === "onboarding" ? "onboardingChecklist" : "exitChecklist";
+            const currentList = emp[listKey] || [];
+            let updatedList = json.checklist;
+            if (!updatedList || updatedList.length === 0) {
+              const idx = currentList.findIndex(i =>
+                i.id === itemToPut.id ||
+                (i.templateId && itemToPut.templateId && i.templateId === itemToPut.templateId) ||
+                (i.title && itemToPut.title && (i.title.trim().toLowerCase() === itemToPut.title.trim().toLowerCase() || i.title.trim().toLowerCase().includes(itemToPut.title.trim().toLowerCase()) || itemToPut.title.trim().toLowerCase().includes(i.title.trim().toLowerCase())))
+              );
+              if (idx >= 0) {
+                updatedList = [...currentList];
+                updatedList[idx] = { ...updatedList[idx], ...itemToPut };
+              } else {
+                updatedList = [...currentList, itemToPut];
               }
-              return {
-                ...emp,
-                [listKey]: updatedList || currentList
-              };
             }
-            return emp;
-          }));
-        }
+            return {
+              ...emp,
+              [listKey]: updatedList || currentList
+            };
+          }
+          return emp;
+        }));
+
         showToast("Checklist document uploaded successfully!", "success");
         await refreshDatabase();
       } else {
@@ -1545,10 +1695,11 @@ export default function App() {
 
   const handleCreateChecklistTemplate = async (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const res = await fetch("/api/checklist-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...template, companyId })
+        body: JSON.stringify({ ...template, companyId, branch: branchToAssign })
       });
       const data = await res.json();
       if (res.ok) {
@@ -1663,13 +1814,15 @@ export default function App() {
     }
   };
 
-  // 20. Update custom collections (Departments, Branches, Leave Policies)
+  // 20. Update custom collections (Departments, Branches, Leave Policies, Amenities — supports per-branch)
   const handleUpdateCollection = async (
     type: "leaveTypes" | "departments" | "branches" | "amenities",
     updatedList: string[],
     action?: "add" | "remove",
     item?: string
   ) => {
+    const branchToSave = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+
     // 1. INSTANT OPTIMISTIC UI UPDATE: Immediate display updates in state
     if (type === "leaveTypes") {
       const map = new Map<string, string>();
@@ -1677,11 +1830,49 @@ export default function App() {
         const name = (item.includes("|") ? item.split("|")[0] : item).trim().toLowerCase();
         map.set(name, item);
       });
-      setCustomLeaveTypes(Array.from(map.values()));
+      const list = Array.from(map.values());
+      if (branchToSave) {
+        const bName = toBranchName(branchToSave);
+        const bId = toBranchId(branchToSave);
+        setBranchLeaveTypes(prev => ({ 
+          ...prev, 
+          [branchToSave]: list,
+          [bName]: list,
+          [bId]: list 
+        }));
+      } else {
+        setCustomLeaveTypes(list);
+      }
     }
-    if (type === "departments") setCustomDepartments(updatedList);
+    if (type === "departments") {
+      if (branchToSave) {
+        const bName = toBranchName(branchToSave);
+        const bId = toBranchId(branchToSave);
+        setBranchDepartments(prev => ({ 
+          ...prev, 
+          [branchToSave]: updatedList,
+          [bName]: updatedList,
+          [bId]: updatedList
+        }));
+      } else {
+        setCustomDepartments(updatedList);
+      }
+    }
     if (type === "branches") setCustomBranches(updatedList);
-    if (type === "amenities") setCustomAmenities(updatedList);
+    if (type === "amenities") {
+      if (branchToSave) {
+        const bName = toBranchName(branchToSave);
+        const bId = toBranchId(branchToSave);
+        setBranchAmenities(prev => ({ 
+          ...prev, 
+          [branchToSave]: updatedList,
+          [bName]: updatedList,
+          [bId]: updatedList
+        }));
+      } else {
+        setCustomAmenities(updatedList);
+      }
+    }
 
     try {
       const res = await fetch("/api/config-collections", {
@@ -1692,18 +1883,20 @@ export default function App() {
           updatedList,
           addedItem: action === "add" ? item : undefined,
           removedItem: action === "remove" ? item : undefined,
-          companyId
+          companyId,
+          branch: branchToSave
         })
       });
 
       if (res.ok) {
         const typeLabel = type === "leaveTypes" ? "Leave Policy" : type === "departments" ? "Department" : type === "branches" ? "Branch" : "Room Amenity";
+        const scopeSuffix = branchToSave ? ` (${branchToSave})` : "";
         if (action === "add") {
-          showToast(`Added "${item}" to ${typeLabel}s successfully!`, "success");
+          showToast(`Added "${item}" to ${typeLabel}s${scopeSuffix} successfully!`, "success");
         } else if (action === "remove") {
-          showToast(`Removed "${item}" from ${typeLabel}s.`, "info");
+          showToast(`Removed "${item}" from ${typeLabel}s${scopeSuffix}.`, "info");
         } else {
-          showToast(`Updated ${typeLabel}s successfully.`, "success");
+          showToast(`Updated ${typeLabel}s${scopeSuffix} successfully.`, "success");
         }
         await refreshDatabase();
       } else {
@@ -1718,17 +1911,30 @@ export default function App() {
   const handleSaveTimingSettings = async (settings: any) => {
     try {
       const changedBy = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
+      // If a branch is selected (not "All Branches"), save timing settings for that branch
+      const branchToSave = settings.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/attendance/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settings, changedBy, companyId })
+        body: JSON.stringify({ ...settings, changedBy, companyId, branch: branchToSave })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.timingSettings) {
-          setTimingSettings(data.timingSettings);
+          if (branchToSave) {
+            const bName = toBranchName(branchToSave);
+            const bId = toBranchId(branchToSave);
+            setBranchTimingSettings(prev => ({ 
+              ...prev, 
+              [branchToSave]: data.timingSettings,
+              [bName]: data.timingSettings,
+              [bId]: data.timingSettings
+            }));
+          } else {
+            setTimingSettings(data.timingSettings);
+          }
         }
-        showToast("Timing settings updated successfully!", "success");
+        showToast(`Timing settings updated${branchToSave ? ` for ${branchToSave}` : " (Global)"}!`, "success");
         await refreshDatabase();
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -1740,20 +1946,25 @@ export default function App() {
     }
   };
 
+
   const handleSaveWifiSettings = async (settings: { enabled: boolean; allowedIp?: string; allowedIps: string[] }) => {
     try {
       const changedBy = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
+      const branchToSave = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      if (branchToSave) {
+        setBranchWifiSettings(prev => ({ ...prev, [branchToSave]: settings }));
+      }
       const res = await fetch("/api/attendance/wifi-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...settings, changedBy, companyId })
+        body: JSON.stringify({ ...settings, changedBy, companyId, branch: branchToSave })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.wifiRestrictionSettings) {
           setWifiRestrictionSettings(data.wifiRestrictionSettings);
         }
-        showToast("WiFi restriction settings saved successfully!", "success");
+        showToast(`WiFi restriction settings saved${branchToSave ? ` for ${branchToSave}` : ""} successfully!`, "success");
         await refreshDatabase();
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -1766,16 +1977,21 @@ export default function App() {
   };
 
   const handleToggleLeaveCount = async (val: boolean) => {
+    const branchToSave = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+    if (branchToSave) {
+      setBranchLeaveCountVisibility(prev => ({ ...prev, [branchToSave]: val }));
+    }
     setShowLeaveCount(val); // optimistic update
     try {
       const activeCompanyId = (typeof window !== "undefined" && localStorage.getItem("snailhr_companyId")) || companyId;
       const res = await fetch("/api/config/leave-count-visibility", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ showLeaveCount: val, companyId: activeCompanyId })
+        body: JSON.stringify({ showLeaveCount: val, companyId: activeCompanyId, branch: branchToSave })
       });
       if (res.ok) {
-        showToast(val ? "Leave counts are now VISIBLE to all employees" : "Leave counts are now HIDDEN from all employees", "success");
+        showToast(val ? `Leave counts VISIBLE${branchToSave ? ` (${branchToSave})` : ""}` : `Leave counts HIDDEN${branchToSave ? ` (${branchToSave})` : ""}`, "success");
+        await refreshDatabase();
       } else {
         showToast("Failed to update leave count visibility setting.", "error");
       }
@@ -1785,10 +2001,61 @@ export default function App() {
     }
   };
 
+  const handleSaveEmpCodePrefix = async (prefix: string, branch?: string) => {
+    const branchToSave = branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
+    const clean = prefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!clean) return;
+
+    const activeCompanyId = companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") : "") || "";
+
+    if (branchToSave) {
+      const bName = toBranchName(branchToSave);
+      const bId = toBranchId(branchToSave);
+      setBranchCodePrefixes(prev => ({
+        ...prev,
+        [branchToSave]: clean,
+        [bName]: clean,
+        [bId]: clean
+      }));
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`snailhr_empCodePrefix_${bName}`, clean);
+        localStorage.setItem(`snailhr_empCodePrefix_${bId}`, clean);
+        localStorage.setItem(`snailhr_empCodePrefix_${branchToSave}`, clean);
+      }
+    } else {
+      setEmpCodePrefix(clean);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("snailhr_empCodePrefix", clean);
+      }
+    }
+
+    try {
+      const res = await fetch("/api/config/branch-code-prefix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix: clean, companyId: activeCompanyId, branch: branchToSave })
+      });
+      if (res.ok) {
+        const resData = await res.json().catch(() => ({}));
+        if (resData.branchCodePrefixes) {
+          setBranchCodePrefixes(prev => ({ ...prev, ...resData.branchCodePrefixes }));
+        }
+        showToast(`Branch code prefix "${clean}" saved${branchToSave ? ` for ${branchToSave}` : ""} successfully!`, "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to save branch code prefix.", "error");
+      }
+    } catch (err) {
+      console.error("Error saving branch code prefix:", err);
+      showToast("Error saving branch code prefix.", "error");
+    }
+  };
+
   const handleAddInfractionType = async (name: string, description: string, defaultAmount: number = 0) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const tempId = `infr-${Date.now()}`;
-      const newType: InfractionType = { id: tempId, name, companyId, description, defaultAmount };
+      const newType: InfractionType = { id: tempId, name, companyId, branch: branchToAssign, description, defaultAmount };
       setInfractionTypes(prev => [newType, ...prev]);
 
       const res = await fetch("/api/infraction-types", {
@@ -1812,7 +2079,8 @@ export default function App() {
 
   const handleUpdateInfractionType = async (id: string, name: string, description: string, defaultAmount: number) => {
     try {
-      const updated: InfractionType = { id, name, description, defaultAmount, companyId };
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      const updated: InfractionType = { id, name, description, defaultAmount, companyId, branch: branchToAssign };
       setInfractionTypes(prev => prev.map(t => t.id === id ? updated : t));
 
       const res = await fetch("/api/infraction-types", {
@@ -1854,11 +2122,13 @@ export default function App() {
 
   const handleAddExpenseCategory = async (name: string, description: string) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const tempId = `expcat-${Date.now()}`;
       const newCat: ExpenseCategory = {
         id: tempId,
         name,
         companyId,
+        branch: branchToAssign,
         description
       };
       setExpenseCategories(prev => [newCat, ...prev]);
@@ -1902,14 +2172,60 @@ export default function App() {
     }
   };
 
+  const handleAddDesignation = async (title: string, department: string) => {
+    try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      const tempId = `des-${Date.now()}`;
+      const newDes: Designation = { id: tempId, title, department, companyId, branch: branchToAssign };
+      setDesignations(prev => [newDes, ...prev]);
+
+      const res = await fetch("/api/designations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newDes)
+      });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Designation created successfully!", "success");
+      } else {
+        showToast("Failed to create designation.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error creating designation.", "error");
+      await refreshDatabase();
+    }
+  };
+
+  const handleRemoveDesignation = async (id: string) => {
+    try {
+      setDesignations(prev => prev.filter(d => d.id !== id));
+      const res = await fetch(`/api/designations?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await refreshDatabase();
+        showToast("Designation deleted.", "info");
+      } else {
+        showToast("Failed to delete designation.", "error");
+        await refreshDatabase();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error deleting designation.", "error");
+      await refreshDatabase();
+    }
+  };
+
   const handleAddCorporateAllowanceFaq = async (title: string, description: string, id?: string) => {
     try {
+      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
       const faqId = id || `faq-${Date.now()}`;
       const newFaq: CorporateAllowanceFaq = {
         id: faqId,
         title,
         description,
-        companyId
+        companyId,
+        branch: branchToAssign
       };
       setCorporateAllowancesFaqs(prev => [newFaq, ...prev.filter(f => f.id !== faqId)]);
 
@@ -1954,10 +2270,12 @@ export default function App() {
 
   const handleAddMeeting = async (meetingData: any) => {
     try {
+      const resolvedCompanyId = companyId || currentEmployee?.companyId || meetingData.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
+      const branchToAssign = meetingData.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(meetingData)
+        body: JSON.stringify({ ...meetingData, companyId: resolvedCompanyId, branch: branchToAssign })
       });
       if (res.ok) {
         await refreshDatabase();
@@ -2030,10 +2348,11 @@ export default function App() {
     try {
       const changer = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "Admin";
       const resolvedCompanyId = layout.companyId || companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
+      const branchToAssign = layout.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/seating", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...layout, companyId: resolvedCompanyId, updatedBy: changer })
+        body: JSON.stringify({ ...layout, companyId: resolvedCompanyId, branch: branchToAssign, updatedBy: changer })
       });
       if (res.ok) {
         const resData = await res.json();
@@ -2072,10 +2391,11 @@ export default function App() {
   const handleSaveRoom = async (room: Room): Promise<boolean> => {
     try {
       const resolvedCompanyId = room.companyId || companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "") || "";
+      const branchToAssign = room.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...room, companyId: resolvedCompanyId })
+        body: JSON.stringify({ ...room, companyId: resolvedCompanyId, branch: branchToAssign })
       });
       if (res.ok) {
         const resData = await res.json();
@@ -2252,9 +2572,279 @@ export default function App() {
     ] : []),
     { id: "password-update", label: "Password Update", icon: <Lock className="w-4.5 h-4.5" /> },
     ...((activeRole === "admin" || activeRole === "hr") ? [
-      { id: "configurations", label: "System Settings", icon: <Settings className="w-4.5 h-4.5" /> }
+      { id: "configurations", label: "System Settings", icon: <Settings className="w-4.5 h-4.5" /> },
+      { id: "company-settings", label: "Company Settings", icon: <Building2 className="w-4.5 h-4.5" /> }
     ] : [])
   ];
+
+  // ─── Derive All Available Branches ──────────────────────────────────────────
+  const allAvailableBranches = Array.from(
+    new Set([
+      ...customBranches,
+      ...employees.map(e => e.branch ? toBranchName(e.branch) : "").filter(Boolean) as string[]
+    ])
+  ).filter(b => b && b.trim().length > 0);
+
+  // ─── Active Branch Resolution ────────────────────────────────────────────────
+  // For Employee: strictly locked to employee's assigned branch
+  // For Admin / HR: selected from top branch toggle dropdown
+  const employeeBranchName = currentEmployee?.branch ? toBranchName(currentEmployee.branch) : "";
+  const effectiveBranch = activeRole === "employee"
+    ? (employeeBranchName || "All Branches")
+    : selectedBranch;
+
+  const isBranchMatched = (itemBranch?: string) => {
+    if (!effectiveBranch || effectiveBranch === "All Branches") return true;
+    if (!itemBranch) return false;
+    const cleanItem = toBranchName(itemBranch).trim().toLowerCase();
+    const cleanTarget = toBranchName(effectiveBranch).trim().toLowerCase();
+    if (cleanItem === cleanTarget) return true;
+    const idItem = toBranchId(itemBranch);
+    const idTarget = toBranchId(effectiveBranch);
+    return Boolean(idItem && idTarget && idItem === idTarget);
+  };
+
+  // ─── Branch-Filtered Slices ──────────────────────────────────────────────────
+  // 1. Filtered Employees (Employees only see staff from their own branch)
+  const filteredEmployees = effectiveBranch === "All Branches"
+    ? employees
+    : employees.filter(e => isBranchMatched(e.branch));
+
+  const branchEmployeeIdSet = new Set(filteredEmployees.map(e => e.id));
+
+  // 2. Filtered Attendance
+  const filteredAttendance = effectiveBranch === "All Branches"
+    ? attendance
+    : attendance.filter(a => branchEmployeeIdSet.has(a.employeeId));
+
+  // 3. Filtered Leaves
+  const filteredLeaves = effectiveBranch === "All Branches"
+    ? leaves
+    : leaves.filter(l => branchEmployeeIdSet.has(l.employeeId));
+
+  // 4. Filtered Holidays
+  const filteredHolidays = effectiveBranch === "All Branches"
+    ? holidays
+    : holidays.filter(h => !h.branch || h.branch === "All Branches" || isBranchMatched(h.branch));
+
+  // 5. Filtered Policies (strictly isolated by branch)
+  const filteredPolicies = effectiveBranch === "All Branches"
+    ? policies
+    : policies.filter(p => !p.branch || p.branch === "All Branches" || isBranchMatched(p.branch));
+
+  // 6. Filtered Expenses
+  const filteredExpenses = effectiveBranch === "All Branches"
+    ? expenses
+    : expenses.filter(e => branchEmployeeIdSet.has(e.employeeId));
+
+  // 7. Filtered Inventory
+  const filteredInventory = effectiveBranch === "All Branches"
+    ? inventory
+    : inventory.filter(i => {
+        if (i.branch && isBranchMatched(i.branch)) return true;
+        if (i.assignedToEmployeeId && branchEmployeeIdSet.has(i.assignedToEmployeeId)) return true;
+        return false;
+      });
+
+  // 8. Filtered Inventory Requests
+  const filteredInventoryRequests = effectiveBranch === "All Branches"
+    ? inventoryRequests
+    : inventoryRequests.filter(r => {
+        if ((r as any).branch && isBranchMatched((r as any).branch)) return true;
+        if (branchEmployeeIdSet.has(r.employeeId)) return true;
+        return false;
+      });
+
+  // 9. Filtered Fines
+  const filteredFines = effectiveBranch === "All Branches"
+    ? fines
+    : fines.filter(f => branchEmployeeIdSet.has(f.employeeId));
+
+  // 10. Filtered Reimbursements
+  const filteredReimbursements = effectiveBranch === "All Branches"
+    ? reimbursements
+    : reimbursements.filter(r => branchEmployeeIdSet.has(r.employeeId));
+
+  // 11. Filtered Payslips
+  const filteredPayslips = effectiveBranch === "All Branches"
+    ? payslips
+    : payslips.filter(p => branchEmployeeIdSet.has(p.employeeId));
+
+  // 12. Filtered Meetings
+  const filteredMeetings = effectiveBranch === "All Branches"
+    ? meetings
+    : meetings.filter(m => 
+        (m.branch && isBranchMatched(m.branch)) ||
+        (!m.branch && branchEmployeeIdSet.has(m.organizerId)) || 
+        (!m.branch && m.participantIds && m.participantIds.some(pid => branchEmployeeIdSet.has(pid)))
+      );
+
+  // 13. Filtered Seat Layouts
+  const filteredSeatLayouts = effectiveBranch === "All Branches"
+    ? seatLayouts
+    : seatLayouts.filter(s => !s.branch || s.branch === "All Branches" || isBranchMatched(s.branch));
+
+  // 14. Filtered Rooms
+  const filteredRooms = effectiveBranch === "All Branches"
+    ? rooms
+    : rooms.filter(r => {
+        const itemBranch = r.branch || "Shashtri Nagar";
+        return isBranchMatched(itemBranch);
+      });
+
+  // 15. Filtered Room Bookings
+  const filteredRoomBookings = effectiveBranch === "All Branches"
+    ? roomBookings
+    : roomBookings.filter(rb => {
+        const room = rooms.find(r => r.id === rb.roomId);
+        const bookingBranch = (rb as any).branch || room?.branch || "Shashtri Nagar";
+        return isBranchMatched(bookingBranch);
+      });
+
+  // 16. Filtered Grievances
+  const filteredGrievanceTickets = effectiveBranch === "All Branches"
+    ? grievanceTickets
+    : grievanceTickets.filter(g => (g.branch && isBranchMatched(g.branch)) || (!g.branch && branchEmployeeIdSet.has(g.employeeId)));
+
+  // 17. Filtered Performance Records
+  const filteredPerformanceRecords = effectiveBranch === "All Branches"
+    ? performanceRecords
+    : performanceRecords.filter(p => branchEmployeeIdSet.has(p.employeeId));
+
+  // 16. Effective Timing Settings for active branch
+  const getBranchTiming = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
+    const direct = branchTimingSettings[branchNameOrId];
+    if (direct) return direct;
+    const byName = branchTimingSettings[toBranchName(branchNameOrId)];
+    if (byName) return byName;
+    const byId = branchTimingSettings[toBranchId(branchNameOrId)];
+    if (byId) return byId;
+    const matchKey = Object.keys(branchTimingSettings).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return matchKey ? branchTimingSettings[matchKey] : null;
+  };
+
+  const effectiveTimingSettings = getBranchTiming(effectiveBranch)
+    || getBranchTiming(employeeBranchName)
+    || timingSettings;
+
+  // 17. Effective Collections for active branch
+  const getBranchLeaveTypes = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchLeaveTypes) return null;
+    const direct = branchLeaveTypes[branchNameOrId];
+    if (direct && direct.length > 0) return direct;
+    const byName = branchLeaveTypes[toBranchName(branchNameOrId)];
+    if (byName && byName.length > 0) return byName;
+    const byId = branchLeaveTypes[toBranchId(branchNameOrId)];
+    if (byId && byId.length > 0) return byId;
+    const matchKey = Object.keys(branchLeaveTypes).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return (matchKey && branchLeaveTypes[matchKey]?.length > 0) ? branchLeaveTypes[matchKey] : null;
+  };
+
+  const effectiveLeaveTypes = getBranchLeaveTypes(effectiveBranch)
+    || getBranchLeaveTypes(employeeBranchName)
+    || customLeaveTypes;
+
+  const getBranchDepartments = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchDepartments) return null;
+    const direct = branchDepartments[branchNameOrId];
+    if (direct && direct.length > 0) return direct;
+    const byName = branchDepartments[toBranchName(branchNameOrId)];
+    if (byName && byName.length > 0) return byName;
+    const byId = branchDepartments[toBranchId(branchNameOrId)];
+    if (byId && byId.length > 0) return byId;
+    const matchKey = Object.keys(branchDepartments).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return (matchKey && branchDepartments[matchKey]?.length > 0) ? branchDepartments[matchKey] : null;
+  };
+
+  const effectiveDepartments = getBranchDepartments(effectiveBranch)
+    || getBranchDepartments(employeeBranchName)
+    || customDepartments;
+
+  const getBranchAmenities = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchAmenities) return null;
+    const direct = branchAmenities[branchNameOrId];
+    if (direct && direct.length > 0) return direct;
+    const byName = branchAmenities[toBranchName(branchNameOrId)];
+    if (byName && byName.length > 0) return byName;
+    const byId = branchAmenities[toBranchId(branchNameOrId)];
+    if (byId && byId.length > 0) return byId;
+    const matchKey = Object.keys(branchAmenities).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return (matchKey && branchAmenities[matchKey]?.length > 0) ? branchAmenities[matchKey] : null;
+  };
+
+  const effectiveAmenities = getBranchAmenities(effectiveBranch)
+    || getBranchAmenities(employeeBranchName)
+    || customAmenities;
+
+  const getBranchCodePrefix = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchCodePrefixes) return empCodePrefix || "CODE";
+    const direct = branchCodePrefixes[branchNameOrId];
+    if (direct) return direct;
+    const byName = branchCodePrefixes[toBranchName(branchNameOrId)];
+    if (byName) return byName;
+    const byId = branchCodePrefixes[toBranchId(branchNameOrId)];
+    if (byId) return byId;
+    const matchKey = Object.keys(branchCodePrefixes).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return matchKey ? branchCodePrefixes[matchKey] : (empCodePrefix || "CODE");
+  };
+
+  const effectiveEmpCodePrefix = getBranchCodePrefix(effectiveBranch)
+    || getBranchCodePrefix(employeeBranchName)
+    || empCodePrefix
+    || "CODE";
+
+  const effectiveLeaveCountVisibility = (effectiveBranch !== "All Branches" && branchLeaveCountVisibility[effectiveBranch] !== undefined)
+    ? branchLeaveCountVisibility[effectiveBranch]
+    : showLeaveCount;
+
+  const effectiveWifiRestrictionSettings = (effectiveBranch !== "All Branches" && branchWifiSettings[effectiveBranch])
+    ? branchWifiSettings[effectiveBranch]
+    : wifiRestrictionSettings;
+
+  const filteredDesignations = effectiveBranch === "All Branches"
+    ? designations
+    : designations.filter(d => !d.branch || d.branch === "All Branches" || isBranchMatched(d.branch));
+
+  const filteredExpenseCategories = effectiveBranch === "All Branches"
+    ? expenseCategories
+    : expenseCategories.filter(c => !c.branch || c.branch === "All Branches" || isBranchMatched(c.branch));
+
+  const filteredInfractionTypes = effectiveBranch === "All Branches"
+    ? infractionTypes
+    : infractionTypes.filter(i => !i.branch || i.branch === "All Branches" || isBranchMatched(i.branch));
+
+  const filteredCorporateAllowancesFaqs = effectiveBranch === "All Branches"
+    ? corporateAllowancesFaqs
+    : corporateAllowancesFaqs.filter(f => !f.branch || f.branch === "All Branches" || isBranchMatched(f.branch));
+
+  const filteredOnboardingChecklistTemplates = effectiveBranch === "All Branches"
+    ? onboardingChecklistTemplates
+    : onboardingChecklistTemplates.filter(t => !t.branch || t.branch === "All Branches" || isBranchMatched(t.branch));
+
+  const filteredExitChecklistTemplates = effectiveBranch === "All Branches"
+    ? exitChecklistTemplates
+    : exitChecklistTemplates.filter(t => !t.branch || t.branch === "All Branches" || isBranchMatched(t.branch));
 
   return (
     <div id="snailhr-panel" className="min-h-screen flex flex-col font-sans text-slate-700 dark:text-gray-200 antialiased">
@@ -2291,8 +2881,123 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Access Controls - Top Right Corner */}
+        {/* Global Access Controls - Top Right Corner & Branch Selector */}
         <div className="flex items-center space-x-2 sm:space-x-3 shrink-0 min-w-0">
+
+          {/* Branch Selector Dropdown - Visible to Admin and HR */}
+          {(activeRole === "admin" || activeRole === "hr") && (
+            <div className="relative" ref={branchMenuRef}>
+              <button
+                onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border font-semibold text-xs transition-all cursor-pointer shadow-xs ${
+                  selectedBranch !== "All Branches"
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20"
+                    : "bg-slate-50 dark:bg-[#141414] border-slate-200 dark:border-[#222] text-slate-700 dark:text-gray-300 hover:border-slate-300 dark:hover:border-[#333]"
+                }`}
+                title="Filter entire application by branch"
+              >
+                <Building2 className={`w-4 h-4 ${selectedBranch !== "All Branches" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />
+                <span className="font-bold max-w-[130px] sm:max-w-[180px] truncate">
+                  {selectedBranch}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+                  selectedBranch !== "All Branches"
+                    ? "bg-emerald-600 text-white"
+                    : "bg-slate-200 dark:bg-[#252525] text-slate-600 dark:text-gray-400"
+                }`}>
+                  {selectedBranch === "All Branches" ? `${allAvailableBranches.length} Branches` : "Branch Active"}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {/* Branch Dropdown Menu */}
+              {branchDropdownOpen && (
+                <div className="absolute right-0 top-11 z-50 w-72 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-2xl p-2.5 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#1a1a1a] mb-1 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+                      Select Branch Filter
+                    </span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {employees.length} Total Staff
+                    </span>
+                  </div>
+
+                  {/* All Branches Option */}
+                  <button
+                    onClick={() => {
+                      setSelectedBranch("All Branches");
+                      setBranchDropdownOpen(false);
+                      showToast("Showing data for All Branches (Company-wide)", "info");
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                      selectedBranch === "All Branches"
+                        ? "bg-emerald-600 text-white font-bold shadow-xs"
+                        : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <span className="text-base">🏢</span>
+                      <div className="text-left">
+                        <p className="leading-tight">All Branches</p>
+                        <p className={`text-[10px] ${selectedBranch === "All Branches" ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
+                          Corporate Master View
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                      selectedBranch === "All Branches"
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
+                    }`}>
+                      {employees.length}
+                    </span>
+                  </button>
+
+                  {/* Per-Branch Options */}
+                  <div className="pt-1 space-y-1">
+                    {allAvailableBranches.map(branchName => {
+                      const branchEmpCount = employees.filter(e => e.branch && e.branch.trim().toLowerCase() === branchName.trim().toLowerCase()).length;
+                      const isSelected = selectedBranch.trim().toLowerCase() === branchName.trim().toLowerCase();
+
+                      return (
+                        <button
+                          key={branchName}
+                          onClick={() => {
+                            setSelectedBranch(branchName);
+                            setBranchDropdownOpen(false);
+                            showToast(`Filtered data to ${branchName} branch only`, "success");
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                            isSelected
+                              ? "bg-emerald-600 text-white font-bold shadow-xs"
+                              : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <span className="text-base">📍</span>
+                            <div className="text-left truncate">
+                              <p className="leading-tight truncate">{branchName}</p>
+                              <p className={`text-[10px] truncate ${isSelected ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
+                                Branch Workspace
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0 ml-2 ${
+                            isSelected
+                              ? "bg-white/20 text-white"
+                              : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
+                          }`}>
+                            {branchEmpCount}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quick Theme Switcher */}
           <button
@@ -2525,17 +3230,20 @@ export default function App() {
           {currentView === "dashboard" && (
             <DashboardView
               currentEmployee={currentEmployee}
-              employees={employees}
+              employees={filteredEmployees}
               designations={designations}
-              holidays={holidays}
-              leaves={leaves}
-              payslips={payslips}
-              attendance={attendance}
-              expenses={expenses}
-              inventory={inventory}
-              fines={fines}
+              holidays={filteredHolidays}
+              leaves={filteredLeaves}
+              payslips={filteredPayslips}
+              attendance={filteredAttendance}
+              expenses={filteredExpenses}
+              inventory={filteredInventory}
+              fines={filteredFines}
               role={activeRole}
               companyName={companyName}
+              selectedBranch={selectedBranch}
+              customLeaveTypes={effectiveLeaveTypes}
+              showLeaveCount={effectiveLeaveCountVisibility}
               onboardingChecklistTemplates={onboardingChecklistTemplates}
               exitChecklistTemplates={exitChecklistTemplates}
               onPunchAction={handlePunchAction}
@@ -2551,15 +3259,18 @@ export default function App() {
 
           {currentView === "directory" && (
             <DirectoryView
-              employees={employees}
+              employees={filteredEmployees}
               designations={designations}
               role={activeRole}
               currentUserId={currentEmployeeId}
-              customDepartments={customDepartments}
+              customDepartments={effectiveDepartments}
               customBranches={customBranches}
               companyId={companyId}
               companyName={companyName}
+              selectedBranch={selectedBranch}
               subscriptionModel={subscriptionModel}
+              empCodePrefix={empCodePrefix}
+              branchCodePrefixes={branchCodePrefixes}
               onboardingChecklistTemplates={onboardingChecklistTemplates}
               exitChecklistTemplates={exitChecklistTemplates}
               onOnboardEmployee={handleOnboardEmployee}
@@ -2598,13 +3309,16 @@ export default function App() {
 
           {currentView === "attendance" && (
             <AttendanceView
-              attendance={attendance}
-              employees={employees}
-              leaves={leaves}
-              holidays={holidays}
+              attendance={filteredAttendance}
+              employees={filteredEmployees}
+              leaves={filteredLeaves}
+              holidays={filteredHolidays}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
-              timingSettings={timingSettings}
+              timingSettings={effectiveTimingSettings}
+              branchTimingSettings={branchTimingSettings}
+              selectedBranch={effectiveBranch}
+              customBranches={customBranches}
               companyName={companyName}
               onPunchAction={handlePunchAction}
               onUpdatePunch={handleUpdatePunch}
@@ -2617,13 +3331,14 @@ export default function App() {
 
           {currentView === "leaves" && (
             <LeavesView
-              leaves={leaves}
-              holidays={holidays}
-              employees={employees}
+              leaves={filteredLeaves}
+              holidays={filteredHolidays}
+              employees={filteredEmployees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
-              customLeaveTypes={customLeaveTypes}
-              showLeaveCount={showLeaveCount}
+              customLeaveTypes={effectiveLeaveTypes}
+              showLeaveCount={effectiveLeaveCountVisibility}
+              selectedBranch={effectiveBranch}
               onApplyLeave={handleApplyLeave}
               onReviewLeave={handleReviewLeave}
               onAddHoliday={handleAddHoliday}
@@ -2633,17 +3348,20 @@ export default function App() {
 
           {currentView === "payroll" && (
             <PayrollView
-              employees={employees}
+              employees={filteredEmployees}
               designations={designations}
-              payslips={payslips}
+              payslips={filteredPayslips}
               emails={emails}
-              fines={fines}
+              fines={filteredFines}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               companyName={companyName}
               companyId={companyId}
               companyLogoUrl={companyLogoUrl}
+              companyPan={companyPan}
+              companyTan={companyTan}
               empCodePrefix={empCodePrefix}
+              selectedBranch={selectedBranch}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onGeneratePayslip={handleGeneratePayslip}
@@ -2673,12 +3391,13 @@ export default function App() {
 
           {currentView === "expenses" && (
             <ExpensesView
-              expenses={expenses}
-              expenseCategories={expenseCategories}
-              corporateAllowancesFaqs={corporateAllowancesFaqs}
-              employees={employees}
+              expenses={filteredExpenses}
+              expenseCategories={filteredExpenseCategories}
+              corporateAllowancesFaqs={filteredCorporateAllowancesFaqs}
+              employees={filteredEmployees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
+              selectedBranch={effectiveBranch}
               onSubmitExpense={handleSubmitExpense}
               onReviewExpense={handleReviewExpense}
             />
@@ -2686,12 +3405,13 @@ export default function App() {
 
           {currentView === "inventory" && (
             <InventoryView
-              inventory={inventory}
-              inventoryRequests={inventoryRequests}
-              employees={employees}
+              inventory={filteredInventory}
+              inventoryRequests={filteredInventoryRequests}
+              employees={filteredEmployees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               customBranches={customBranches}
+              selectedBranch={selectedBranch}
               onAddAsset={handleAddAsset}
               onDeleteAsset={handleDeleteAsset}
               onApplyAssetRequest={handleApplyAssetRequest}
@@ -2701,8 +3421,9 @@ export default function App() {
 
           {currentView === "policies" && (
             <PoliciesView
-              policies={policies}
+              policies={filteredPolicies}
               role={activeRole}
+              selectedBranch={selectedBranch}
               onAddPolicy={handleAddPolicy}
               onDeletePolicy={handleDeletePolicy}
             />
@@ -2710,11 +3431,12 @@ export default function App() {
 
           {currentView === "fines" && (
             <FinesView
-              fines={fines}
-              employees={employees}
+              fines={filteredFines}
+              employees={filteredEmployees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
               companyName={companyName}
+              selectedBranch={selectedBranch}
               infractionTypes={infractionTypes}
               onAddFine={handleAddFine}
               onUpdateFineStatus={handleUpdateFineStatus}
@@ -2724,11 +3446,13 @@ export default function App() {
 
           {currentView === "meetings" && (
             <MeetingsView
-              meetings={meetings}
-              employees={employees}
+              meetings={filteredMeetings}
+              employees={filteredEmployees}
               role={activeRole}
               currentEmployeeId={currentEmployeeId}
-              customDepartments={customDepartments}
+              customDepartments={effectiveDepartments}
+              selectedBranch={selectedBranch}
+              companyId={companyId}
               onAddMeeting={handleAddMeeting}
               onCancelMeeting={handleCancelMeeting}
               onEditMeeting={handleEditMeeting}
@@ -2742,11 +3466,12 @@ export default function App() {
               companyId={companyId}
               companyName={companyName}
               currentEmployeeId={currentEmployeeId}
-              employees={employees}
-              seatLayouts={seatLayouts}
-              rooms={rooms}
-              roomBookings={roomBookings}
-              customAmenities={customAmenities}
+              employees={filteredEmployees}
+              seatLayouts={filteredSeatLayouts}
+              rooms={filteredRooms}
+              roomBookings={filteredRoomBookings}
+              customAmenities={effectiveAmenities}
+              selectedBranch={effectiveBranch}
               onSaveSeatLayout={handleSaveSeatLayout}
               onDeleteSeatLayout={handleDeleteSeatLayout}
               onSaveRoom={handleSaveRoom}
@@ -2759,7 +3484,7 @@ export default function App() {
           {currentView === "password-update" && (
             <PasswordUpdateView
               currentEmployee={currentEmployee}
-              employees={employees}
+              employees={filteredEmployees}
               role={activeRole}
               companyId={companyId}
               showToast={showToast}
@@ -2771,7 +3496,8 @@ export default function App() {
               role={activeRole}
               currentEmployee={currentEmployee}
               companyId={companyId}
-              employees={employees}
+              employees={filteredEmployees}
+              selectedBranch={selectedBranch}
               showToast={showToast}
             />
           )}
@@ -2781,25 +3507,31 @@ export default function App() {
               role={activeRole}
               currentEmployee={currentEmployee}
               companyId={companyId}
-              employees={employees}
-              fines={fines}
+              employees={filteredEmployees}
+              fines={filteredFines}
+              selectedBranch={selectedBranch}
               showToast={showToast}
             />
           )}
 
           {currentView === "configurations" && (activeRole === "admin" || activeRole === "hr") && (
             <ConfigurationView
-              designations={designations}
-              customLeaveTypes={customLeaveTypes}
-              customDepartments={customDepartments}
+              designations={filteredDesignations}
+              customLeaveTypes={effectiveLeaveTypes}
+              customDepartments={effectiveDepartments}
               customBranches={customBranches}
-              customAmenities={customAmenities}
-              expenseCategories={expenseCategories}
-              infractionTypes={infractionTypes}
-              corporateAllowancesFaqs={corporateAllowancesFaqs}
+              customAmenities={effectiveAmenities}
+              expenseCategories={filteredExpenseCategories}
+              infractionTypes={filteredInfractionTypes}
+              corporateAllowancesFaqs={filteredCorporateAllowancesFaqs}
               supabaseStatus={supabaseStatus}
               subscriptionModel={subscriptionModel}
-              wifiRestrictionSettings={wifiRestrictionSettings}
+              wifiRestrictionSettings={effectiveWifiRestrictionSettings}
+              selectedBranch={selectedBranch}
+              timingSettings={effectiveTimingSettings}
+              branchTimingSettings={branchTimingSettings}
+              showLeaveCount={effectiveLeaveCountVisibility}
+              onSaveTimingSettings={handleSaveTimingSettings}
               onAddDesignation={handleAddDesignation}
               onRemoveDesignation={handleRemoveDesignation}
               onUpdateCollection={handleUpdateCollection}
@@ -2811,12 +3543,27 @@ export default function App() {
               onAddCorporateAllowanceFaq={handleAddCorporateAllowanceFaq}
               onRemoveCorporateAllowanceFaq={handleRemoveCorporateAllowanceFaq}
               onSaveWifiSettings={handleSaveWifiSettings}
-              showLeaveCount={showLeaveCount}
               onToggleLeaveCount={handleToggleLeaveCount}
-              onboardingChecklistTemplates={onboardingChecklistTemplates}
-              exitChecklistTemplates={exitChecklistTemplates}
-              onAddChecklistTemplate={handleAddChecklistTemplate}
-              onRemoveChecklistTemplate={handleRemoveChecklistTemplate}
+              onboardingChecklistTemplates={filteredOnboardingChecklistTemplates}
+              exitChecklistTemplates={filteredExitChecklistTemplates}
+              onAddChecklistTemplate={handleCreateChecklistTemplate}
+              onRemoveChecklistTemplate={handleDeleteChecklistTemplate}
+              empCodePrefix={empCodePrefix}
+              branchCodePrefixes={branchCodePrefixes}
+              onSaveEmpCodePrefix={handleSaveEmpCodePrefix}
+            />
+          )}
+
+          {currentView === "company-settings" && (activeRole === "admin" || activeRole === "hr") && (
+            <CompanySettingsView
+              companyId={companyId || currentEmployee?.companyId || (typeof window !== "undefined" ? localStorage.getItem("snailhr_companyId") || "" : "")}
+              companyName={companyName}
+              companyLogoUrl={companyLogoUrl}
+              showToast={showToast}
+              onSaveCompanySettings={async (settings) => {
+                setCompanyPan(settings.pan);
+                setCompanyTan(settings.tan);
+              }}
             />
           )}
 

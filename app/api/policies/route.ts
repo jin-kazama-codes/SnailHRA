@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { Policy } from "@/src/types";
+import { toBranchName, encodeBranchPrefix } from "@/src/lib/branchUtils";
 
 export async function GET() {
   try {
@@ -15,6 +16,7 @@ export async function GET() {
           title: row.title || "",
           category: row.category || "Conduct & Ethics",
           content: row.content || "",
+          branch: row.branch ? toBranchName(row.branch) : undefined,
           lastUpdated: row.last_updated || row.lastUpdated || new Date().toISOString().split("T")[0]
         }));
         return NextResponse.json({ policies });
@@ -40,6 +42,9 @@ export async function POST(request: Request) {
     if (!policy.lastUpdated) {
       policy.lastUpdated = new Date().toISOString().split("T")[0];
     }
+    if (policy.branch) {
+      policy.branch = toBranchName(policy.branch);
+    }
     const db = loadDatabase();
     const existingIndex = db.policies.findIndex(p => p.id === policy.id);
     if (existingIndex >= 0) {
@@ -51,20 +56,37 @@ export async function POST(request: Request) {
 
     const dbClient = supabaseAdmin || supabase;
     if (dbClient) {
-      try {
-        const { error: sbErr } = await dbClient.from("policies").upsert({
-          id: policy.id,
-          title: policy.title,
-          category: policy.category,
-          content: policy.content,
-          last_updated: policy.lastUpdated,
-          company_id: (policy as any).companyId || (policy as any).company_id || null
-        });
-        if (sbErr) {
-          console.warn("Failed to sync policy to Supabase:", sbErr.message);
+      const bName = policy.branch && policy.branch !== "All Branches" ? toBranchName(policy.branch) : null;
+      let synced = false;
+      if (bName) {
+        try {
+          const { error: sbErr } = await dbClient.from("policies").upsert({
+            id: policy.id,
+            title: policy.title,
+            category: policy.category,
+            content: policy.content,
+            branch: bName,
+            last_updated: policy.lastUpdated,
+            company_id: (policy as any).companyId || (policy as any).company_id || null
+          });
+          if (!sbErr) synced = true;
+        } catch {}
+      }
+
+      if (!synced) {
+        try {
+          const encodedContent = bName ? encodeBranchPrefix(policy.content, bName) : policy.content;
+          await dbClient.from("policies").upsert({
+            id: policy.id,
+            title: policy.title,
+            category: policy.category,
+            content: encodedContent,
+            last_updated: policy.lastUpdated,
+            company_id: (policy as any).companyId || (policy as any).company_id || null
+          });
+        } catch (sbErr) {
+          console.warn("Failed to sync policy to Supabase:", sbErr);
         }
-      } catch (sbErr) {
-        console.warn("Failed to sync policy to Supabase:", sbErr);
       }
     }
 

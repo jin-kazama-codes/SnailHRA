@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig, EmployeeTaxProfile } from "../types";
 import TaxProfileModal from "./TaxProfileModal";
-import { computeMonthlyTDSFromEmployee } from "../lib/taxEngine";
+import { computeMonthlyTDSFromEmployee, computeTDS, TaxComputationInput, TaxComputationResult } from "../lib/taxEngine";
 
 interface PayrollViewProps {
   employees: Employee[];
@@ -28,6 +28,9 @@ interface PayrollViewProps {
   companyId?: string;
   companyLogoUrl?: string;
   empCodePrefix?: string; // e.g. "MGMDIR" — set by admin in System Settings
+  selectedBranch?: string;
+  companyPan?: string;
+  companyTan?: string;
 }
 
 export function computeIncomeTax(gross: number, taxType: "percentage" | "fixed" | "slab" | string | undefined, taxValue: number | undefined): number {
@@ -65,10 +68,13 @@ export default function PayrollView({
   onPayAllPayslips,
   onResetPayslip,
   onUpdateEmployee,
-  companyName = "Your Company",
-  companyId = "a1b2c3d4-0001-0001-0001-000000000001",
-  companyLogoUrl,
+  companyName = "SnailHR Payroll",
+  companyId = "",
+  companyLogoUrl = "",
   empCodePrefix = "EMP",
+  selectedBranch = "All Branches",
+  companyPan = "",
+  companyTan = ""
 }: PayrollViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"payslips" | "config">(() => {
     if (typeof window !== "undefined") {
@@ -364,6 +370,7 @@ export default function PayrollView({
 
   // Selected payslip for detailed view modal
   const [activeSlip, setActiveSlip] = useState<Payslip | null>(null);
+  const [slipModalTab, setSlipModalTab] = useState<"payslip" | "form16">("payslip");
 
   // Number to Indian Rupees words converter
   const numberToWordsIndian = (amount: number): string => {
@@ -625,11 +632,24 @@ export default function PayrollView({
 
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => setActiveSlip(slip)}
-                          className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+                          onClick={() => {
+                            setActiveSlip(slip);
+                            setSlipModalTab("payslip");
+                          }}
+                          className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
                         >
                           <FileText className="w-3.5 h-3.5" />
                           <span>View PDF Slip</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveSlip(slip);
+                            setSlipModalTab("form16");
+                          }}
+                          className="bg-violet-600/10 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 hover:bg-violet-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
+                        >
+                          <Calculator className="w-3.5 h-3.5" />
+                          <span>View Form 16</span>
                         </button>
                       </div>
                     </div>
@@ -1876,7 +1896,28 @@ export default function PayrollView({
 
       {/* Detailed Salary Slip Modal */}
       {activeSlip && (() => {
-        const emp = employees.find(e => e.id === activeSlip.employeeId);
+        const emp = employees.find(e => e.id === activeSlip.employeeId || e.code === activeSlip.employeeId || getEmployeeCode(e) === activeSlip.employeeId);
+        const empPan = String(
+          (emp?.customFields?.pan as string) ||
+          (emp as any)?.pan ||
+          (emp as any)?.panNumber ||
+          (emp as any)?.pan_number ||
+          (emp?.customFields?.panNumber as string) ||
+          (emp?.customFields?.pan_number as string) ||
+          (emp as any)?.custom_fields?.pan ||
+          ""
+        ).trim();
+        const empUan = String(
+          (emp?.customFields?.uan as string) ||
+          (emp as any)?.uan ||
+          (emp as any)?.uanNumber ||
+          (emp as any)?.uan_number ||
+          (emp?.customFields?.uanNumber as string) ||
+          (emp?.customFields?.uan_number as string) ||
+          (emp as any)?.custom_fields?.uan ||
+          ""
+        ).trim();
+
         const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(activeSlip.employeeId) ||
                            (emp && ((config?.pfExemptEmployeeIds || []).includes(emp.id) ||
                                    (config?.pfExemptEmployeeIds || []).includes(emp.code || "") ||
@@ -1928,12 +1969,48 @@ export default function PayrollView({
         if (slipAllowances > 0) activeEarnings.push({ label: "SPECIAL ALLOWANCE", amount: slipAllowances });
 
         const totalTableRows = Math.max(activeEarnings.length, activeDeductions.length, 1);
+        const empTaxProfile = emp?.salary?.taxProfile;
+        const regime = empTaxProfile?.regime ?? (config?.defaultTaxRegime ?? "new");
+        const basic = activeSlip.basic || 0;
+        const hra = activeSlip.hra || 0;
+        const telephone = slipTelephone;
+        const fuel = slipFuel;
+        const profDev = slipProfDev;
+        const lta = slipLta;
+        const allowances = slipAllowances;
+        const pf = slipPf;
+
+        const taxInput: TaxComputationInput = {
+          annualBasic: basic * 12,
+          annualHRA: hra * 12,
+          annualLTA: lta * 12,
+          annualSpecialAllowance: allowances * 12,
+          annualTelephone: telephone * 12,
+          annualFuel: fuel * 12,
+          annualProfDev: profDev * 12,
+          annualPFEmployee: pf * 12,
+          regime,
+          monthlyRentPaid: empTaxProfile?.monthlyRentPaid || 0,
+          cityType: empTaxProfile?.cityType || "non-metro",
+          section80C: empTaxProfile?.section80C || 0,
+          section80CCD1B: empTaxProfile?.section80CCD1B || 0,
+          section80D: empTaxProfile?.section80D || 0,
+          section80E: empTaxProfile?.section80E || 0,
+          section80G: empTaxProfile?.section80G || 0,
+          section80EEA: empTaxProfile?.section80EEA || 0,
+          employerNPS: empTaxProfile?.employerNPS || 0,
+          professionalTax: empTaxProfile?.professionalTax || 2400,
+          manualMonthlyTDS: empTaxProfile?.tdsLocked ? empTaxProfile.manualMonthlyTDS : undefined,
+          tdsLocked: empTaxProfile?.tdsLocked || false,
+        };
+
+        const taxResult: TaxComputationResult = computeTDS(taxInput);
 
         return (
           <div className="fixed inset-0 bg-slate-100 dark:bg-[#0a0e17] z-50 flex flex-col w-full h-full min-h-screen overflow-hidden animate-in fade-in duration-200">
 
             {/* Full-Width Header Controls Bar */}
-            <div className="bg-slate-900 px-6 py-3.5 text-white flex items-center justify-between shadow-md shrink-0 print:hidden">
+            <div className="bg-slate-900 px-6 py-3 text-white flex flex-wrap items-center justify-between gap-3 shadow-md shrink-0 print:hidden">
               <div className="flex items-center space-x-3">
                 <button
                   onClick={() => setActiveSlip(null)}
@@ -1943,12 +2020,42 @@ export default function PayrollView({
                   <X className="w-5 h-5" />
                 </button>
                 <div>
-                  <h3 className="font-bold text-base leading-tight">Official Salary Payslip Statement</h3>
-                  <p className="text-[11px] text-slate-400 font-mono">ID: {activeSlip.id}</p>
+                  <h3 className="font-bold text-sm sm:text-base leading-tight">
+                    {slipModalTab === "payslip" ? "Official Salary Payslip Statement" : "Form 16 Part-B & Annual Tax Certificate"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {emp?.fullName || getEmployeeName(activeSlip.employeeId)} · {empCode} · {activeSlip.month}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
+              {/* View Switcher Tabs */}
+              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 shadow-inner">
+                <button
+                  onClick={() => setSlipModalTab("payslip")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    slipModalTab === "payslip"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Salary Payslip</span>
+                </button>
+                <button
+                  onClick={() => setSlipModalTab("form16")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
+                    slipModalTab === "form16"
+                      ? "bg-violet-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <Calculator className="w-3.5 h-3.5" />
+                  <span>Form 16 (Tax Part-B)</span>
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => window.print()}
                   className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer shadow-md"
@@ -1965,161 +2072,479 @@ export default function PayrollView({
               </div>
             </div>
 
-            {/* FULL PAGE PAYSLIP DOCUMENT CONTAINER */}
+            {/* FULL PAGE DOCUMENT CONTAINER */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-8 md:p-10 flex justify-center custom-scrollbar">
-              <div className="bg-white text-slate-900 shadow-2xl border border-slate-300 rounded-2xl w-full max-w-4xl p-6 sm:p-10 my-auto printable-payslip font-sans space-y-6">
 
-                {/* Document Top Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
-                  {/* Logo & Company Name */}
-                  <div className="flex items-center space-x-4">
-                    {companyLogoUrl ? (
-                      <img
-                        src={companyLogoUrl}
-                        alt={companyName || "Company Logo"}
-                        className="h-12 max-w-[180px] object-contain shrink-0"
-                      />
-                    ) : (
-                      <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-                        <div className="absolute inset-0 border-[3.5px] border-amber-500 rotate-45 rounded-xs"></div>
-                        <div className="absolute inset-1.5 border-[3.5px] border-slate-900 rotate-45 rounded-xs"></div>
+              {slipModalTab === "payslip" ? (
+                /* ─── PAYSLIP VIEW ────────────────────────────────────────── */
+                <div className="bg-white text-slate-900 shadow-2xl border border-slate-300 rounded-2xl w-full max-w-4xl p-6 sm:p-10 my-auto printable-payslip font-sans space-y-6">
+
+                  {/* Document Top Header */}
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 gap-4">
+                    <div className="flex items-center space-x-4">
+                      {companyLogoUrl ? (
+                        <img
+                          src={companyLogoUrl}
+                          alt={companyName || "Company Logo"}
+                          className="h-12 max-w-[180px] object-contain shrink-0"
+                        />
+                      ) : (
+                        <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
+                          <div className="absolute inset-0 border-[3.5px] border-amber-500 rotate-45 rounded-xs"></div>
+                          <div className="absolute inset-1.5 border-[3.5px] border-slate-900 rotate-45 rounded-xs"></div>
+                        </div>
+                      )}
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 font-sans">
+                          {companyName || "MGM FINANCIERS PRIVATE LIMITED"}
+                        </h2>
                       </div>
-                    )}
-                    <div>
-                      <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 font-sans">
-                        {companyName || "MGM FINANCIERS PRIVATE LIMITED"}
-                      </h2>
+                    </div>
+
+                    <div className="sm:text-right space-y-0.5">
+                      <p className="text-xs font-bold text-slate-900">
+                        Pay Slip for: <span className="font-bold">{activeSlip.month}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500 italic">Amount in Rupees</p>
                     </div>
                   </div>
 
-                  {/* Pay Slip Details */}
-                  <div className="sm:text-right space-y-0.5">
-                    <p className="text-xs font-bold text-slate-900">
-                      Pay Slip for: <span className="font-bold">{activeSlip.month}</span>
+                  {/* Employee Info Grid Table */}
+                  <div className="border border-slate-700 overflow-hidden">
+                    <table className="w-full text-xs text-left border-collapse font-sans">
+                      <tbody>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Employee Code</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono w-2/6">{empCode}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Name</td>
+                          <td className="p-2.5 text-slate-900 font-semibold w-2/6">{emp?.fullName || getEmployeeName(activeSlip.employeeId)}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Email Id</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 truncate max-w-[170px]">{emp?.email || getEmployeeEmail(activeSlip.employeeId)}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Bank Account</td>
+                          <td className="p-2.5 text-slate-900 font-mono">{emp?.bankDetails?.accountNumber ? `****${emp.bankDetails.accountNumber.slice(-4)}` : <span className="text-slate-400 italic">Not provided</span>}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">DOJ</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">{emp?.joiningDate || ""}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Department</td>
+                          <td className="p-2.5 text-slate-900">{emp?.department || ""}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Designation</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700">{designation || ""}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">PAN</td>
+                          <td className="p-2.5 text-slate-900 font-mono">{empPan}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Location</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.branch || ""}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">UAN</td>
+                          <td className="p-2.5 text-slate-900 font-mono">{empUan}</td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">STD Days</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">30</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Worked Days</td>
+                          <td className="p-2.5 text-slate-900 font-mono">30</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Earnings & Deductions Table */}
+                  <div className="border border-slate-700 overflow-hidden">
+                    <table className="w-full text-xs text-left border-collapse font-sans">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-700 font-bold text-slate-900">
+                          <th className="p-2.5 border-r border-slate-700 w-1/4 uppercase">EARNINGS</th>
+                          <th className="p-2.5 border-r border-slate-700 w-1/4 text-right uppercase">AMOUNT</th>
+                          <th className="p-2.5 border-r border-slate-700 w-1/4 uppercase">DEDUCTIONS</th>
+                          <th className="p-2.5 w-1/4 text-right uppercase">AMOUNT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: totalTableRows }).map((_, idx) => {
+                          const earn = activeEarnings[idx];
+                          const ded = activeDeductions[idx];
+                          return (
+                            <tr key={idx}>
+                              {earn ? (
+                                <>
+                                  <td className="p-2.5 border-r border-slate-700 font-bold uppercase">{earn.label}</td>
+                                  <td className="p-2.5 border-r border-slate-700 text-right font-mono">{earn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-2.5 border-r border-slate-700"></td>
+                                  <td className="p-2.5 border-r border-slate-700 text-right"></td>
+                                </>
+                              )}
+                              {ded ? (
+                                <>
+                                  <td className={`p-2.5 border-r border-slate-700 font-bold uppercase ${ded.isRose ? "text-rose-700" : ""}`}>{ded.label}</td>
+                                  <td className={`p-2.5 text-right font-mono ${ded.isRose ? "text-rose-700" : ""}`}>{ded.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="p-2.5 border-r border-slate-700"></td>
+                                  <td className="p-2.5 text-right"></td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })}
+                        {/* Totals Row */}
+                        <tr className="border-t-2 border-slate-700 font-bold bg-slate-50">
+                          <td className="p-2.5 border-r border-slate-700 uppercase">GROSS EARNINGS</td>
+                          <td className="p-2.5 border-r border-slate-700 text-right font-mono">{grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td className="p-2.5 border-r border-slate-700 uppercase">GROSS DEDUCTIONS</td>
+                          <td className="p-2.5 text-right font-mono">{grossDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                        {/* Net Pay Row */}
+                        <tr className="border-t border-slate-700 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 bg-white" colSpan={2}></td>
+                          <td className="p-2.5 border-r border-slate-700 uppercase font-extrabold text-slate-900 bg-slate-100">NET PAY</td>
+                          <td className="p-2.5 text-right font-mono font-black text-slate-900 bg-slate-100 text-sm">
+                            {displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Net Pay In Words */}
+                  <div className="pt-2 space-y-1">
+                    <p className="font-bold text-slate-900 text-xs">
+                      NET Pay for the Month: <span className="font-mono font-extrabold">{displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /-</span> ({numberToWordsIndian(displayNetPay)} Only)
                     </p>
-                    <p className="text-[10px] text-slate-500 italic">Amount in Rupees</p>
+                  </div>
+
+                  {/* Document Subtext & Switch Action */}
+                  <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <p className="text-[11px] text-slate-600 italic">
+                      ** This is a computer generated payslip and does not require signature and stamp.
+                    </p>
+                    <button
+                      onClick={() => setSlipModalTab("form16")}
+                      className="text-xs font-bold text-violet-700 hover:text-violet-900 bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg border border-violet-200 transition-colors flex items-center space-x-1.5 cursor-pointer print:hidden"
+                    >
+                      <Calculator className="w-3.5 h-3.5" />
+                      <span>Switch to View Form 16 Part-B</span>
+                    </button>
                   </div>
                 </div>
+              ) : (
+                /* ─── FORM 16 PART-B VIEW ─────────────────────────────────── */
+                <div className="bg-white text-slate-900 shadow-2xl border border-slate-300 rounded-2xl w-full max-w-4xl p-6 sm:p-10 my-auto printable-payslip font-sans space-y-6">
 
-                {/* Employee Info Grid Table */}
-                <div className="border border-slate-700 overflow-hidden">
-                  <table className="w-full text-xs text-left border-collapse font-sans">
-                    <tbody>
-                      <tr className="border-b border-slate-700">
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Employee Code</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono w-2/6">{empCode}</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/6">Name</td>
-                        <td className="p-2.5 text-slate-900 font-semibold w-2/6">{emp?.fullName || getEmployeeName(activeSlip.employeeId)}</td>
-                      </tr>
-                      <tr className="border-b border-slate-700">
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Email Id</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700 truncate max-w-[170px]">{emp?.email || getEmployeeEmail(activeSlip.employeeId)}</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Bank Account</td>
-                        <td className="p-2.5 text-slate-900 font-mono">{emp?.bankDetails?.accountNumber ? `****${emp.bankDetails.accountNumber.slice(-4)}` : <span className="text-slate-400 italic">Not provided</span>}</td>
-                      </tr>
-                      <tr className="border-b border-slate-700">
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">DOJ</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.joiningDate || <span className="text-slate-400 italic">—</span>}</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Department</td>
-                        <td className="p-2.5 text-slate-900">{emp?.department || <span className="text-slate-400 italic">—</span>}</td>
-                      </tr>
-                      <tr className="border-b border-slate-700">
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Designation</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{designation}</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">PAN</td>
-                        <td className="p-2.5 text-slate-900 font-mono">{(emp?.customFields?.pan as string) || <span className="text-slate-400 italic">Not provided</span>}</td>
-                      </tr>
-                      <tr className="border-b border-slate-700">
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Location</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.branch || emp?.address || <span className="text-slate-400 italic">—</span>}</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">UAN</td>
-                        <td className="p-2.5 text-slate-900 font-mono">{(emp?.customFields?.uan as string) || <span className="text-slate-400 italic">Not provided</span>}</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">STD Days</td>
-                        <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">30</td>
-                        <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Worked Days</td>
-                        <td className="p-2.5 text-slate-900 font-mono">30</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                  {/* Form 16 Top Header */}
+                  <div className="text-center border-b pb-4 space-y-1">
+                    <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 font-sans">
+                      FORM NO. 16
+                    </h2>
+                    <p className="text-xs font-semibold text-slate-600">
+                      [See rule 31(1)(a)]
+                    </p>
+                    <p className="text-xs font-bold text-slate-800">
+                      PART B: Certificate under Section 203 of the Income-tax Act, 1961 for Tax Deducted at Source on Salary
+                    </p>
+                    <div className="flex items-center justify-center gap-4 text-xs font-mono font-bold text-slate-700 pt-1">
+                      <span>Assessment Year: <strong className="text-slate-900">2026-27</strong></span>
+                      <span>|</span>
+                      <span>Financial Year: <strong className="text-slate-900">2025-26</strong></span>
+                      <span>|</span>
+                      <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-bold border border-violet-200">
+                        {taxResult.regime === "new" ? "New Tax Regime (u/s 115BAC)" : "Old Tax Regime"}
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Earnings & Deductions Grid Table */}
-                <div className="border border-slate-700 overflow-hidden">
-                  <table className="w-full text-xs text-left border-collapse font-sans">
-                    <thead>
-                      <tr className="border-b border-slate-700 bg-slate-100">
-                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 w-2/6">EARNINGS</th>
-                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 text-right w-1/6">AMOUNT</th>
-                        <th className="p-2.5 font-bold text-slate-900 border-r border-slate-700 w-2/6">DEDUCTIONS</th>
-                        <th className="p-2.5 font-bold text-slate-900 text-right w-1/6">AMOUNT</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                      {Array.from({ length: totalTableRows }).map((_, idx) => {
-                        const earn = activeEarnings[idx];
-                        const ded = activeDeductions[idx];
-                        return (
-                          <tr key={idx}>
-                            {earn ? (
-                              <>
-                                <td className="p-2.5 border-r border-slate-700 font-bold uppercase">{earn.label}</td>
-                                <td className="p-2.5 border-r border-slate-700 text-right font-mono">{earn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="p-2.5 border-r border-slate-700"></td>
-                                <td className="p-2.5 border-r border-slate-700 text-right"></td>
-                              </>
-                            )}
-                            {ded ? (
-                              <>
-                                <td className={`p-2.5 border-r border-slate-700 font-bold uppercase ${ded.isRose ? "text-rose-700" : ""}`}>{ded.label}</td>
-                                <td className={`p-2.5 text-right font-mono ${ded.isRose ? "text-rose-700" : ""}`}>{ded.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="p-2.5 border-r border-slate-700"></td>
-                                <td className="p-2.5 text-right"></td>
-                              </>
-                            )}
+                  {/* Employer and Employee Info Grid */}
+                  <div className="border border-slate-700 overflow-hidden">
+                    <table className="w-full text-xs text-left border-collapse font-sans">
+                      <tbody>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/4">Name of Employer</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-semibold w-1/4">{companyName || ""}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700 w-1/4">Name of Employee</td>
+                          <td className="p-2.5 text-slate-900 font-semibold w-1/4">{emp?.fullName || getEmployeeName(activeSlip.employeeId)}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">PAN of Employer</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">
+                            {companyPan || (config as any)?.companyPan || (typeof window !== "undefined" ? (localStorage.getItem(`snailhr_companyPan_${companyId}`) || localStorage.getItem("snailhr_companyPan") || "") : "") || ""}
+                          </td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Employee PAN</td>
+                          <td className="p-2.5 text-slate-900 font-mono">{empPan}</td>
+                        </tr>
+                        <tr className="border-b border-slate-700">
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">TAN of Employer</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700 font-mono">
+                            {companyTan || (config as any)?.companyTan || (typeof window !== "undefined" ? (localStorage.getItem(`snailhr_companyTan_${companyId}`) || localStorage.getItem("snailhr_companyTan") || "") : "") || ""}
+                          </td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Employee Code</td>
+                          <td className="p-2.5 text-slate-900 font-mono">{empCode}</td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Branch & Location</td>
+                          <td className="p-2.5 text-slate-900 border-r border-slate-700">{emp?.branch || ""}</td>
+                          <td className="p-2.5 font-bold text-slate-900 bg-slate-50 border-r border-slate-700">Designation / Dept</td>
+                          <td className="p-2.5 text-slate-900">
+                            {(() => {
+                              const desig = emp?.designationId ? getDesignationTitle(emp.designationId) : ((emp as any)?.designation || "");
+                              const dept = emp?.department || "";
+                              if (desig && dept) return `${desig} (${dept})`;
+                              return desig || dept || "";
+                            })()}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Form 16 Part-B Computation Breakdown Table */}
+                  <div className="border border-slate-700 overflow-hidden">
+                    <table className="w-full text-xs text-left border-collapse font-sans">
+                      <thead>
+                        <tr className="bg-slate-100 border-b border-slate-700 font-bold text-slate-900">
+                          <th className="p-2.5 border-r border-slate-700 w-12 text-center">S.No</th>
+                          <th className="p-2.5 border-r border-slate-700">Particulars</th>
+                          <th className="p-2.5 border-r border-slate-700 w-36 text-right">Amount (₹)</th>
+                          <th className="p-2.5 w-36 text-right font-bold">Total (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-300">
+                        {/* 1. Gross Salary */}
+                        <tr className="bg-slate-50/70 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 text-center">1</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Gross Salary as per provisions of section 17(1)
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold">
+                            ₹{taxResult.annualGrossIncome.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                          <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">(a) Annual Basic Salary</td>
+                          <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{(basic * 12).toLocaleString('en-IN')}</td>
+                          <td className="p-2.5 text-right font-mono"></td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                          <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">(b) House Rent Allowance (HRA)</td>
+                          <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{(hra * 12).toLocaleString('en-IN')}</td>
+                          <td className="p-2.5 text-right font-mono"></td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                          <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">(c) Special & Other Allowances</td>
+                          <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{((allowances + telephone + fuel + profDev + lta) * 12).toLocaleString('en-IN')}</td>
+                          <td className="p-2.5 text-right font-mono"></td>
+                        </tr>
+
+                        {/* 2. Exemptions u/s 10 */}
+                        <tr className="bg-slate-50/70 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 text-center">2</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Less: Allowances to the extent exempt under section 10
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                            {taxResult.hraExemption + taxResult.ltaExemption > 0
+                              ? `(−) ₹${(taxResult.hraExemption + taxResult.ltaExemption).toLocaleString('en-IN')}`
+                              : "₹0"}
+                          </td>
+                        </tr>
+                        {taxResult.hraExemption > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">HRA Exemption u/s 10(13A)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.hraExemption.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
                           </tr>
-                        );
-                      })}
-                      {/* Totals Row */}
-                      <tr className="border-t-2 border-slate-700 font-bold bg-slate-50">
-                        <td className="p-2.5 border-r border-slate-700 uppercase">GROSS EARNINGS</td>
-                        <td className="p-2.5 border-r border-slate-700 text-right font-mono">{grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="p-2.5 border-r border-slate-700 uppercase">GROSS DEDUCTIONS</td>
-                        <td className="p-2.5 text-right font-mono">{grossDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      {/* Net Pay Row */}
-                      <tr className="border-t border-slate-700 font-bold">
-                        <td className="p-2.5 border-r border-slate-700 bg-white" colSpan={2}></td>
-                        <td className="p-2.5 border-r border-slate-700 uppercase font-extrabold text-slate-900 bg-slate-100">NET PAY</td>
-                        <td className="p-2.5 text-right font-mono font-black text-slate-900 bg-slate-100 text-sm">
-                          {displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                        )}
+                        {taxResult.ltaExemption > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">LTA Exemption u/s 10(5)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.ltaExemption.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
 
-                {/* Net Pay In Words */}
-                <div className="pt-2 space-y-1">
-                  <p className="font-bold text-slate-900 text-xs">
-                    NET Pay for the Month: <span className="font-mono font-extrabold">{displayNetPay.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} /-</span> ({numberToWordsIndian(displayNetPay)} Only)
-                  </p>
-                </div>
+                        {/* 3. Deductions u/s 16 */}
+                        <tr className="bg-slate-50/70 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 text-center">3</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Deductions under section 16
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                            (−) ₹{(taxResult.standardDeduction + taxResult.professionalTaxDeduction).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                          <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">(a) Standard Deduction u/s 16(ia)</td>
+                          <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.standardDeduction.toLocaleString('en-IN')}</td>
+                          <td className="p-2.5 text-right font-mono"></td>
+                        </tr>
+                        {taxResult.professionalTaxDeduction > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">(b) Tax on Employment (PT) u/s 16(iii)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.professionalTaxDeduction.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
 
-                {/* Document Subtext Footer */}
-                <div className="pt-6 border-t border-slate-200">
-                  <p className="text-[11px] text-slate-600 italic">
-                    ** This is a computer generated payslip and does not require signature and stamp.
-                  </p>
+                        {/* 4. Chapter VI-A Deductions */}
+                        <tr className="bg-slate-50/70 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 text-center">4</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Deductions under Chapter VI-A (80C, 80D, 80CCD, etc.)
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-rose-700">
+                            {taxResult.totalChapterVIA > 0 ? `(−) ₹${taxResult.totalChapterVIA.toLocaleString('en-IN')}` : "₹0"}
+                          </td>
+                        </tr>
+                        {taxResult.section80C > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">Section 80C (PPF / EPF / LIC / ELSS)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.section80C.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
+                        {taxResult.section80CCD1B > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">Section 80CCD(1B) (NPS Self)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.section80CCD1B.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
+                        {taxResult.section80D > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">Section 80D (Health Insurance)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.section80D.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
+                        {taxResult.employerNPSDeduction > 0 && (
+                          <tr>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">Section 80CCD(2) (Employer NPS)</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{taxResult.employerNPSDeduction.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        )}
+
+                        {/* 5. Net Taxable Income */}
+                        <tr className="bg-slate-100 font-extrabold text-slate-900 text-sm">
+                          <td className="p-2.5 border-r border-slate-700 text-center">5</td>
+                          <td className="p-2.5 border-r border-slate-700 uppercase" colSpan={2}>
+                            Total Taxable Income (Rounded off u/s 288A)
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-black text-slate-900">
+                            ₹{taxResult.netTaxableIncome.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+
+                        {/* 6. Tax Computation on Total Income */}
+                        <tr className="bg-slate-50/70 font-bold">
+                          <td className="p-2.5 border-r border-slate-700 text-center">6</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Tax Computation on Total Income
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold">
+                            ₹{taxResult.baseTax.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                        {taxResult.slabwiseTax.map((slab, i) => (
+                          <tr key={i}>
+                            <td className="p-2.5 border-r border-slate-700 text-center text-slate-400"></td>
+                            <td className="p-2.5 border-r border-slate-700 pl-6 text-slate-700">Slab: {slab.slab} @ {slab.rate}%</td>
+                            <td className="p-2.5 border-r border-slate-700 text-right font-mono text-slate-700">₹{slab.tax.toLocaleString('en-IN')}</td>
+                            <td className="p-2.5 text-right font-mono"></td>
+                          </tr>
+                        ))}
+
+                        {/* 7. Section 87A Rebate */}
+                        {taxResult.rebate87A > 0 && (
+                          <tr className="text-emerald-700 font-semibold">
+                            <td className="p-2.5 border-r border-slate-700 text-center">7</td>
+                            <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                              Less: Rebate under section 87A (Income eligible for full tax rebate)
+                            </td>
+                            <td className="p-2.5 text-right font-mono font-bold">
+                              (−) ₹{taxResult.rebate87A.toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* 8. Health & Education Cess */}
+                        <tr>
+                          <td className="p-2.5 border-r border-slate-700 text-center">8</td>
+                          <td className="p-2.5 border-r border-slate-700" colSpan={2}>
+                            Add: Health and Education Cess @ 4%
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-slate-800">
+                            (+) ₹{taxResult.cess.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+
+                        {/* 9. Final Annual Tax Liability */}
+                        <tr className="bg-slate-900 text-white font-extrabold text-sm">
+                          <td className="p-3 border-r border-slate-700 text-center">9</td>
+                          <td className="p-3 border-r border-slate-700 uppercase" colSpan={2}>
+                            Total Annual Tax Liability Payable
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-emerald-400 text-base">
+                            ₹{taxResult.netAnnualTax.toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+
+                        {/* 10. Monthly TDS Deduction */}
+                        <tr className="bg-emerald-50 text-emerald-950 font-bold">
+                          <td className="p-3 border-r border-slate-700 text-center">10</td>
+                          <td className="p-3 border-r border-slate-700" colSpan={2}>
+                            Monthly TDS Applicable to Payroll (Annual Tax ÷ 12)
+                          </td>
+                          <td className="p-3 text-right font-mono font-black text-emerald-700 text-base">
+                            ₹{taxResult.netMonthlyTDS.toLocaleString('en-IN')} / mo
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Verification Note & Footer */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs text-slate-700">
+                    <p className="font-bold text-slate-900">Verification & Certification:</p>
+                    <p className="text-[11px] leading-relaxed text-slate-600">
+                      I, in capacity of Principal Payroll Officer for <strong>{companyName || "Code Vamp Tech"}</strong>, hereby certify that a sum of <strong>₹{taxResult.netAnnualTax.toLocaleString('en-IN')}</strong> is the calculated annual tax liability on the gross earnings of <strong>{emp?.fullName || getEmployeeName(activeSlip.employeeId)}</strong> for Assessment Year 2026-27 under the selected tax regime.
+                    </p>
+                    <p className="text-[10px] text-slate-400 italic pt-1">
+                      ** This is a digitally generated Form 16 Part-B computation sheet valid for employee records and IT return filing.
+                    </p>
+                  </div>
+
+                  {/* Bottom Switch Action */}
+                  <div className="pt-2 flex justify-end print:hidden">
+                    <button
+                      onClick={() => setSlipModalTab("payslip")}
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-4 py-2 rounded-xl border border-emerald-200 transition-colors flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Switch to View Monthly Payslip</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
+
             </div>
           </div>
         );
@@ -2128,6 +2553,7 @@ export default function PayrollView({
       {taxProfileEmp && (
         <TaxProfileModal
           employee={taxProfileEmp}
+          config={config}
           defaultRegime={config?.defaultTaxRegime ?? "new"}
           onClose={() => setTaxProfileEmp(null)}
           onSave={async (empId, taxProfile) => {

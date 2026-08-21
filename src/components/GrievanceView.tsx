@@ -7,12 +7,14 @@ import {
 } from "lucide-react";
 import { GrievanceTicket, Employee, TicketMessage } from "../types";
 import { supabase } from "../lib/supabase-browser";
+import { toBranchName, toBranchId } from "../lib/branchUtils";
 
 interface GrievanceViewProps {
   role: "admin" | "hr" | "employee";
   currentEmployee: Employee | undefined;
   companyId: string;
   employees: Employee[];
+  selectedBranch?: string;
   showToast: (msg: string, type?: "success" | "error" | "info") => void;
 }
 
@@ -64,7 +66,7 @@ function capitalizeFirstWord(text?: string): string {
   return text.slice(0, idx) + text.charAt(idx).toUpperCase() + text.slice(idx + 1);
 }
 
-export default function GrievanceView({ role, currentEmployee, companyId, employees, showToast }: GrievanceViewProps) {
+export default function GrievanceView({ role, currentEmployee, companyId, employees, selectedBranch = "All Branches", showToast }: GrievanceViewProps) {
   const [tickets, setTickets] = useState<GrievanceTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
@@ -79,6 +81,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
   // Raise ticket form state
   const emptyForm = { title: "", description: "", category: "Other", priority: "Medium" as typeof PRIORITIES[number], isAnonymous: false };
   const [form, setForm] = useState(emptyForm);
+  const [onBehalfEmpId, setOnBehalfEmpId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   // Resolution panel state
@@ -269,21 +272,40 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
     }
     setSubmitting(true);
     try {
-      const formattedTitle = capitalizeFirstWord(form.title);
-      const formattedDescription = capitalizeFirstWord(form.description);
+      const targetEmp = (isHRAdmin && onBehalfEmpId) ? employees.find(e => e.id === onBehalfEmpId) : currentEmployee;
+      const empId = targetEmp?.id || currentEmployee?.id || (employees && employees.length > 0 ? employees[0].id : "EMP-1001");
+      const empName = targetEmp?.fullName || currentEmployee?.fullName || (isHRAdmin ? (role === "admin" ? "Administrator" : "HR Manager") : "Employee");
+      const branchToAssign = targetEmp?.branch || currentEmployee?.branch || (selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : undefined);
+
       const res = await fetch("/api/grievances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, employeeId: currentEmployee?.id, employeeName: currentEmployee?.fullName, ...form, title: formattedTitle, description: formattedDescription }),
+        body: JSON.stringify({ 
+          companyId, 
+          employeeId: empId, 
+          employeeName: empName, 
+          branch: branchToAssign ? toBranchName(branchToAssign) : undefined,
+          title: form.title.trim(),
+          description: form.description.trim(),
+          category: form.category || "Other",
+          priority: form.priority || "Medium",
+          isAnonymous: !onBehalfEmpId && !!form.isAnonymous
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         setTickets(prev => [data.ticket, ...prev]);
         setShowRaiseModal(false);
         setForm(emptyForm);
+        setOnBehalfEmpId("");
         showToast("Ticket raised successfully!", "success");
-      } else { showToast(data.error || "Failed to raise ticket", "error"); }
-    } catch (e) { showToast("Network error", "error"); }
+      } else { 
+        showToast(data.error || "Failed to raise ticket", "error"); 
+      }
+    } catch (e: any) { 
+      console.error("Grievance raise error:", e);
+      showToast(e?.message || "Failed to raise ticket", "error"); 
+    }
     setSubmitting(false);
   };
 
@@ -316,12 +338,29 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
       showToast("Ticket deleted.", "info");
     } catch (e) { showToast("Failed to delete ticket", "error"); }
   };
-
   useEffect(() => {
     setCurrentPage(1);
   }, [filterStatus, filterPriority, searchQuery]);
 
-  const filteredTickets = tickets.filter(t => {
+  const branchTickets = tickets.filter(t => {
+    if (selectedBranch && selectedBranch !== "All Branches") {
+      const emp = employees.find(e => e.id === t.employeeId);
+      const itemBranch = t.branch || emp?.branch;
+      if (itemBranch) {
+        const cleanItem = toBranchName(itemBranch).trim().toLowerCase();
+        const cleanTarget = toBranchName(selectedBranch).trim().toLowerCase();
+        const idItem = toBranchId(itemBranch);
+        const idTarget = toBranchId(selectedBranch);
+        const matches = cleanItem === cleanTarget || (idItem && idTarget && idItem === idTarget);
+        if (!matches) return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const filteredTickets = branchTickets.filter(t => {
     const matchStatus = filterStatus === "All" || t.status === filterStatus ||
       (filterStatus === "Closed / Rejected" && (t.status === "Closed" || t.status === "Rejected"));
     const matchPriority = filterPriority === "All" || t.priority === filterPriority;
@@ -356,14 +395,14 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
   // Employee-facing status pill filter
   const empStatusFilters = ["All", "Open", "In Progress", "Resolved", "Closed", "Rejected"];
   const empStatusAccent: Record<string, string> = {
-    All: "bg-violet-600 text-white",
-    Open: "bg-sky-500 text-white",
-    "In Progress": "bg-amber-500 text-white",
-    Resolved: "bg-emerald-500 text-white",
-    Closed: "bg-slate-500 text-white",
-    Rejected: "bg-rose-500 text-white",
+    "All": "bg-violet-600 text-white shadow-xs",
+    "Open": "bg-sky-600 text-white shadow-xs",
+    "In Progress": "bg-violet-600 text-white shadow-xs",
+    "Resolved": "bg-emerald-600 text-white shadow-xs",
+    "Closed": "bg-slate-700 text-white shadow-xs",
+    "Rejected": "bg-rose-600 text-white shadow-xs",
   };
-  const empStatusInactive = "bg-white dark:bg-[#111] border border-slate-200 dark:border-[#2a2a2a] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]";
+  const empStatusInactive = "bg-white dark:bg-[#111] text-slate-600 dark:text-slate-400 border border-slate-200/80 dark:border-[#222] hover:bg-slate-100 dark:hover:bg-[#1a1a1a]";
 
   const ticketAccentBar: Record<string, string> = {
     Open: "bg-sky-500",
@@ -374,36 +413,36 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
   };
 
   return (
-    <div className="relative">
+    <div className="space-y-6 animate-fade-in">
       {/* === EMPLOYEE UI === */}
       {!isHRAdmin && (
-        <div className="space-y-0">
-          {/* Simple Header */}
-          <div className="px-4 sm:px-6 pt-5 pb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs overflow-hidden">
+          {/* Top header bar */}
+          <div className="p-4 sm:p-6 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#1a1a1a]">
             <div>
-              <h1 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
-                <MessageSquareWarning className="w-5 h-5 text-violet-500" /> Support &amp; Grievance
-              </h1>
-              <p className="text-xs text-slate-400 mt-0.5">Raise and track your support requests</p>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center font-black">
+                  <MessageSquareWarning className="w-4 h-4" />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Support &amp; Grievance Portal</h2>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Raise complaints, requests, or questions directly to HR &amp; Admin.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={fetchTickets} className="p-2 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-500 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer">
-                <RefreshCw className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setShowRaiseModal(true)}
-                className="flex items-center gap-1.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-md cursor-pointer transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" /> Raise Ticket
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowRaiseModal(true)}
+              className="flex items-center gap-1.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" /> Raise a Ticket
+            </button>
           </div>
 
-          {/* Search bar */}
-          <div className="px-4 sm:px-6 pb-3">
-            <div className="relative">
+          {/* Search & filter bar */}
+          <div className="px-6 py-3 bg-slate-50/60 dark:bg-[#0a0a0a]/60 border-b border-slate-100 dark:border-[#1a1a1a] flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
               <input
+                type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search tickets by title or category…"
@@ -413,7 +452,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
           </div>
 
           {/* Status pill tabs */}
-          <div className="px-6 py-3 bg-slate-50 dark:bg-[#0a0a0a] border-b border-slate-100 dark:border-[#1a1a1a] flex items-center gap-2 overflow-x-auto scrollbar-none">
+          <div className="px-6 py-3 bg-white dark:bg-[#0f0f0f] border-b border-slate-100 dark:border-[#1a1a1a] flex items-center gap-2 overflow-x-auto scrollbar-none">
             {empStatusFilters.map(st => (
               <button
                 key={st}
@@ -438,7 +477,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
             )}
 
             {/* Empty — no tickets */}
-            {!loading && tickets.length === 0 && (
+            {!loading && branchTickets.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-16 h-16 bg-gradient-to-br from-violet-100 to-indigo-100 dark:from-violet-950/30 dark:to-indigo-950/30 rounded-2xl flex items-center justify-center mb-4">
                   <Sparkles className="w-7 h-7 text-violet-500" />
@@ -455,7 +494,7 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
             )}
 
             {/* Empty — filtered */}
-            {!loading && tickets.length > 0 && filteredTickets.length === 0 && (
+            {!loading && branchTickets.length > 0 && filteredTickets.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1e1e1e]">
                 <Inbox className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
                 <p className="font-semibold text-sm text-slate-600 dark:text-slate-300">No {filterStatus === "All" ? "" : filterStatus} tickets found</p>
@@ -557,17 +596,72 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
 
       {/* === ADMIN / HR UI === */}
       {isHRAdmin && (
-      <div className="p-4 sm:p-6 space-y-5 relative">
+      <div className="space-y-5 relative">
+        {/* Top Header Bar for Admin / HR */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-6 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-violet-500/10 text-violet-600 dark:text-violet-400 flex items-center justify-center font-black shrink-0 shadow-xs">
+              <MessageSquareWarning className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-slate-900 dark:text-white">Support &amp; Grievance Portal</h1>
+                <span className="text-[10px] font-semibold bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full border border-violet-200 dark:border-violet-800/40 uppercase tracking-wider">
+                  {role === "admin" ? "Admin Console" : "HR Console"}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Raise complaints, requests, or questions directly, and manage employee grievance tickets.
+              </p>
+            </div>
+          </div>
 
-      {/* Interactive Stats Cards (HR/Admin only) */}
-      {isHRAdmin && tickets.length > 0 && (
+          <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto justify-end">
+            <div className="flex items-center p-1 bg-slate-100 dark:bg-[#161616] rounded-xl border border-slate-200/60 dark:border-[#222]">
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-white dark:bg-[#242424] text-slate-800 dark:text-white shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>List</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("kanban")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === "kanban"
+                    ? "bg-white dark:bg-[#242424] text-slate-800 dark:text-white shadow-xs"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                }`}
+              >
+                <Kanban className="w-3.5 h-3.5" />
+                <span>Kanban</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowRaiseModal(true)}
+              className="flex items-center gap-1.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" /> Raise a Ticket
+            </button>
+          </div>
+        </div>
+
+        {/* Interactive Stats Cards (HR/Admin only) */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: "Total Tickets", statusKey: "All", count: tickets.length, color: "text-slate-800 dark:text-white", badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", activeBg: "bg-slate-100/70 dark:bg-[#1a1a1a] border-slate-300 dark:border-slate-700" },
-            { label: "Open", statusKey: "Open", count: tickets.filter(t => t.status === "Open").length, color: "text-sky-600 dark:text-sky-400", badge: "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300", activeBg: "bg-sky-50/80 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800/60" },
-            { label: "In Progress", statusKey: "In Progress", count: tickets.filter(t => t.status === "In Progress").length, color: "text-violet-600 dark:text-violet-400", badge: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300", activeBg: "bg-violet-50/80 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800/60" },
-            { label: "Resolved", statusKey: "Resolved", count: tickets.filter(t => t.status === "Resolved").length, color: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300", activeBg: "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60" },
-            { label: "Closed / Rejected", statusKey: "Closed / Rejected", count: tickets.filter(t => t.status === "Closed" || t.status === "Rejected").length, color: "text-rose-600 dark:text-rose-400", badge: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300", activeBg: "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60" },
+            { label: "Total Tickets", statusKey: "All", count: branchTickets.length, color: "text-slate-800 dark:text-white", badge: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300", activeBg: "bg-slate-100/70 dark:bg-[#1a1a1a] border-slate-300 dark:border-slate-700" },
+            { label: "Open", statusKey: "Open", count: branchTickets.filter(t => t.status === "Open").length, color: "text-sky-600 dark:text-sky-400", badge: "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300", activeBg: "bg-sky-50/80 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800/60" },
+            { label: "In Progress", statusKey: "In Progress", count: branchTickets.filter(t => t.status === "In Progress").length, color: "text-violet-600 dark:text-violet-400", badge: "bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300", activeBg: "bg-violet-50/80 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800/60" },
+            { label: "Resolved", statusKey: "Resolved", count: branchTickets.filter(t => t.status === "Resolved").length, color: "text-emerald-600 dark:text-emerald-400", badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300", activeBg: "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60" },
+            { label: "Closed / Rejected", statusKey: "Closed / Rejected", count: branchTickets.filter(t => t.status === "Closed" || t.status === "Rejected").length, color: "text-rose-600 dark:text-rose-400", badge: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300", activeBg: "bg-rose-50/80 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60" },
           ].map(s => {
             const isActive = filterStatus === s.statusKey;
             return (
@@ -592,10 +686,8 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
             );
           })}
         </div>
-      )}
 
-      {/* Filters (HR/Admin only) */}
-      {isHRAdmin && (
+        {/* Filters (HR/Admin only) */}
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[180px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -613,9 +705,8 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
             {PRIORITIES.map(p => <option key={p}>{p}</option>)}
           </select>
         </div>
-      )}
 
-      {/* Loading */}
+        {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 text-violet-500 animate-spin" />
@@ -623,30 +714,32 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
       )}
 
       {/* Empty (no tickets overall) */}
-      {!loading && tickets.length === 0 && (
+      {!loading && branchTickets.length === 0 && (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Inbox className="w-12 h-12 text-slate-300 dark:text-slate-600 mb-4" />
-          <p className="font-semibold text-slate-500 dark:text-slate-400">No tickets yet</p>
+          <p className="font-semibold text-slate-500 dark:text-slate-400">No tickets found</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            {isHRAdmin ? "No grievances have been raised by employees." : "You haven't raised any support tickets."}
+            {isHRAdmin ? (selectedBranch !== "All Branches" ? `No tickets found for ${selectedBranch} branch.` : "No grievances have been raised yet.") : "You haven't raised any support tickets."}
           </p>
-          {!isHRAdmin && (
-            <button onClick={() => setShowRaiseModal(true)} className="mt-5 flex items-center space-x-2 bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow cursor-pointer">
-              <Plus className="w-4 h-4" /><span>Raise a Ticket</span>
-            </button>
-          )}
+          <button onClick={() => setShowRaiseModal(true)} className="mt-5 flex items-center space-x-2 bg-gradient-to-br from-violet-600 to-indigo-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow cursor-pointer hover:shadow-md transition-all">
+            <Plus className="w-4 h-4" /><span>Raise a Ticket</span>
+          </button>
         </div>
       )}
 
       {/* Empty (filtered results empty) */}
-      {!loading && tickets.length > 0 && filteredTickets.length === 0 && (
+      {!loading && branchTickets.length > 0 && filteredTickets.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-200/70 dark:border-[#1e1e1e] p-8">
           <Inbox className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-3" />
           <p className="font-semibold text-sm text-slate-600 dark:text-slate-300">No tickets found</p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
             No tickets match the selected status filter <span className="font-semibold text-slate-600 dark:text-slate-300">"{filterStatus}"</span>.
           </p>
-          <button onClick={() => { setFilterStatus("All"); setFilterPriority("All"); setSearchQuery(""); }} className="mt-4 text-xs text-violet-600 dark:text-violet-400 font-semibold hover:underline cursor-pointer">
+          <button
+            type="button"
+            onClick={() => { setFilterStatus("All"); setFilterPriority("All"); setSearchQuery(""); }}
+            className="mt-4 text-xs text-violet-600 dark:text-violet-400 font-semibold hover:underline cursor-pointer"
+          >
             Clear Filter &amp; Show All
           </button>
         </div>
@@ -677,6 +770,11 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
                     </span>
                     <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${priorityColor[ticket.priority]}`}>{ticket.priority}</span>
                     <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#1a1a1a] px-2.5 py-0.5 rounded-full">{ticket.category}</span>
+                    {(ticket.branch || employees.find(e => e.id === ticket.employeeId)?.branch) && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/50 dark:border-emerald-800/40">
+                        {ticket.branch || employees.find(e => e.id === ticket.employeeId)?.branch}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="font-bold text-sm text-slate-800 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors truncate">
@@ -947,6 +1045,23 @@ export default function GrievanceView({ role, currentEmployee, companyId, employ
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {isHRAdmin && (
+                <div>
+                  <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 block">Raise On Behalf Of / Creator</label>
+                  <select
+                    value={onBehalfEmpId}
+                    onChange={e => setOnBehalfEmpId(e.target.value)}
+                    className="w-full text-sm py-2.5 px-3 rounded-xl border border-slate-200 dark:border-[#2a2a2a] bg-white dark:bg-[#111] text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/30 cursor-pointer"
+                  >
+                    <option value="">Myself ({currentEmployee?.fullName || (role === "admin" ? "Admin" : "HR")})</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.fullName} ({emp.code || emp.id}) — {emp.department}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 block">Title *</label>
                 <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import path from "path";
 import { loadDatabase } from "./db";
+import { toBranchId, toBranchName, encodeBranchPrefix, extractBranchPrefix } from "./branchUtils";
 
 import { initWhatsappScheduler } from "./whatsappScheduler";
 
@@ -189,8 +190,12 @@ export async function syncExpenseToSupabase(expense: any) {
 export async function syncInventoryToSupabase(item: any) {
   if (!supabase) return;
   try {
-    const companyId = item.companyId || item.company_id || null;
-    const record = {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const client = supabaseAdmin || supabase;
+    if (!client) return;
+
+    const bName = item.branch && item.branch !== "All Branches" ? toBranchName(item.branch) : null;
+    const baseRecord = {
       id: item.id,
       name: item.name,
       serial_number: item.serialNumber || item.serial_number || "",
@@ -198,13 +203,30 @@ export async function syncInventoryToSupabase(item: any) {
       status: item.status || "Available",
       assigned_to_employee_id: item.assignedToEmployeeId || item.assigned_to_employee_id || null,
       assigned_date: item.assignedDate || item.assigned_date || null,
-      company_id: companyId
+      company_id: item.companyId || (item as any).company_id || null
     };
-    const { error } = await supabase.from("inventory").upsert(record, { onConflict: "id" });
-    if (error) {
-      console.warn("Supabase inventory table upsert error:", error.message, error.details);
-    } else {
-      console.log("Successfully synced inventory item to Supabase 'inventory' table:", item.id);
+
+    let synced = false;
+    if (bName) {
+      try {
+        const { error } = await client.from("inventory").upsert({
+          ...baseRecord,
+          branch: bName
+        }, { onConflict: "id" });
+        if (!error) synced = true;
+      } catch {}
+    }
+
+    if (!synced) {
+      try {
+        const encodedName = bName ? encodeBranchPrefix(item.name, bName) : item.name;
+        await client.from("inventory").upsert({
+          ...baseRecord,
+          name: encodedName
+        }, { onConflict: "id" });
+      } catch (e) {
+        console.warn("Supabase inventory sync exception:", e);
+      }
     }
   } catch (e) {
     console.warn("Supabase inventory sync warning:", e);
@@ -223,9 +245,14 @@ export async function deleteInventoryFromSupabase(itemId: string) {
 export async function syncInventoryRequestToSupabase(req: any) {
   if (!supabase) return;
   try {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const client = supabaseAdmin || supabase;
+    if (!client) return;
+
     await ensureEmployeeSynced(req.employeeId);
-    const companyId = await getCompanyIdForEmployee(req.employeeId);
-    const record = {
+    const companyId = req.companyId || (req as any).company_id || await getCompanyIdForEmployee(req.employeeId);
+    const bName = req.branch && req.branch !== "All Branches" ? toBranchName(req.branch) : null;
+    const baseRecord = {
       id: req.id,
       employee_id: req.employeeId,
       company_id: companyId,
@@ -236,11 +263,28 @@ export async function syncInventoryRequestToSupabase(req: any) {
       reason: req.reason || "",
       status: req.status || "Pending"
     };
-    const { error } = await supabase.from("inventory_requests").upsert(record, { onConflict: "id" });
-    if (error) {
-      console.warn("Supabase inventory_requests table upsert error:", error.message, error.details);
-    } else {
-      console.log("Successfully synced asset requisition request to Supabase 'inventory_requests' table:", req.id);
+
+    let synced = false;
+    if (bName) {
+      try {
+        const { error } = await client.from("inventory_requests").upsert({
+          ...baseRecord,
+          branch: bName
+        }, { onConflict: "id" });
+        if (!error) synced = true;
+      } catch {}
+    }
+
+    if (!synced) {
+      try {
+        const encodedName = bName ? encodeBranchPrefix(req.itemName, bName) : req.itemName;
+        await client.from("inventory_requests").upsert({
+          ...baseRecord,
+          item_name: encodedName
+        }, { onConflict: "id" });
+      } catch (e) {
+        console.warn("Supabase inventory_requests sync exception:", e);
+      }
     }
   } catch (e) {
     console.warn("Supabase inventory_requests sync warning:", e);
@@ -312,40 +356,51 @@ export async function deleteFineFromSupabase(fineId: string) {
 // Dynamic Configuration Sync Functions (Departments, Branches, Leave Types)
 // -------------------------------------------------------------
 
-export async function syncDepartmentToSupabase(name: string, companyId?: string) {
+export async function syncDepartmentToSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
-    // Check by name AND company_id so different companies can have same dept name
+    // Check by name + company_id + branch so different branches can have the same dept name
     let query = supabase.from("custom_departments").select("id").ilike("name", name);
     if (companyId) query = query.eq("company_id", companyId);
+    if (branch) {
+      query = (query as any).eq("branch", branch);
+    } else {
+      query = (query as any).is("branch", null);
+    }
     const { data: existing } = await query;
     if (existing && existing.length > 0) {
-      console.log(`Department "${name}" already exists for this company.`);
+      console.log(`Department "${name}" already exists for branch "${branch || "global"}".`);
       return;
     }
     const payload: any = { name };
     if (companyId) payload.company_id = companyId;
+    if (branch) payload.branch = branch;
     const { error } = await supabase.from("custom_departments").insert([payload]);
     if (error) {
       console.warn("Supabase custom_departments insert warning:", error.message);
     } else {
-      console.log(`Successfully synced department "${name}" to Supabase 'custom_departments' table.`);
+      console.log(`Successfully synced department "${name}" (branch: ${branch || "global"}) to Supabase.`);
     }
   } catch (e) {
     console.warn("Supabase custom_departments sync error:", e);
   }
 }
 
-export async function deleteDepartmentFromSupabase(name: string, companyId?: string) {
+export async function deleteDepartmentFromSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
     let query = supabase.from("custom_departments").delete().ilike("name", name);
     if (companyId) query = (query as any).eq("company_id", companyId);
+    if (branch) {
+      query = (query as any).eq("branch", branch);
+    } else {
+      query = (query as any).is("branch", null);
+    }
     const { error } = await query;
     if (error) {
       console.warn("Supabase custom_departments delete warning:", error.message);
     } else {
-      console.log(`Successfully deleted department "${name}" from Supabase 'custom_departments' table.`);
+      console.log(`Successfully deleted department "${name}" (branch: ${branch || "global"}) from Supabase.`);
     }
   } catch (e) {
     console.warn("Supabase custom_departments delete error:", e);
@@ -391,60 +446,73 @@ export async function deleteBranchFromSupabase(name: string, companyId?: string)
   }
 }
 
-export async function syncLeaveTypeToSupabase(name: string, companyId?: string) {
+export async function syncLeaveTypeToSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
-    let query = supabase.from("custom_leave_types").select("id").ilike("name", name);
-    if (companyId) {
-      query = query.eq("company_id", companyId);
+    const bName = (branch && branch !== "All Branches") ? toBranchName(branch) : null;
+    const bId = (branch && branch !== "All Branches") ? toBranchId(branch) : null;
+    const encodedName = bName ? `[${bName}] ${name}` : name;
+
+    // Try insert with branch column first
+    if (bName) {
+      const { error: branchErr } = await supabase.from("custom_leave_types").insert([{ 
+        name, 
+        company_id: companyId || null, 
+        branch: bName 
+      }]);
+      if (!branchErr) {
+        console.log(`Successfully synced leave type "${name}" with branch "${bName}" to Supabase.`);
+        return;
+      }
     }
+
+    // Fallback: insert with encoded branch name prefix if branch column is not available in schema
+    let query = supabase.from("custom_leave_types").select("id").ilike("name", encodedName);
+    if (companyId) query = query.eq("company_id", companyId);
     const { data: existing } = await query;
-    if (existing && existing.length > 0) {
-      console.log(`Leave type "${name}" already exists in Supabase 'custom_leave_types' for company ${companyId}.`);
-      return;
-    }
-    const { error } = await supabase.from("custom_leave_types").insert([{ name, company_id: companyId || null }]);
+    if (existing && existing.length > 0) return;
+
+    const { error } = await supabase.from("custom_leave_types").insert([{ 
+      name: encodedName, 
+      company_id: companyId || null 
+    }]);
     if (error) {
-      console.warn("Supabase custom_leave_types insert warning:", error.message);
-      // Fallback attempt to custom_leaves
-      let fallbackQuery = supabase.from("custom_leaves").select("id").ilike("name", name);
-      if (companyId) {
-        fallbackQuery = fallbackQuery.eq("company_id", companyId);
-      }
-      const { data: existingLeaves } = await fallbackQuery;
-      if (!existingLeaves || existingLeaves.length === 0) {
-        await supabase.from("custom_leaves").insert([{ name, company_id: companyId || null }]);
-      }
-    } else {
-      console.log(`Successfully synced leave type "${name}" to Supabase 'custom_leave_types' table.`);
+      await supabase.from("custom_leaves").insert([{ 
+        name: encodedName, 
+        company_id: companyId || null 
+      }]);
     }
   } catch (e) {
     console.warn("Supabase custom_leave_types sync error:", e);
   }
 }
 
-export async function deleteLeaveTypeFromSupabase(name: string, companyId?: string) {
+export async function deleteLeaveTypeFromSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
     const cleanName = (name.includes("|") ? name.split("|")[0] : name).trim();
-    let query1 = supabase.from("custom_leave_types").delete().ilike("name", cleanName);
-    let query2 = supabase.from("custom_leaves").delete().ilike("name", cleanName);
-    let query3 = supabase.from("leave_types").delete().ilike("name", cleanName);
-    if (companyId) {
-      query1 = query1.eq("company_id", companyId);
-      query2 = query2.eq("company_id", companyId);
-      query3 = query3.eq("company_id", companyId);
+    const bName = (branch && branch !== "All Branches") ? toBranchName(branch) : null;
+    const bId = (branch && branch !== "All Branches") ? toBranchId(branch) : null;
+    const encodedName = bName ? `[${bName}] ${cleanName}` : cleanName;
+    const encodedId = bId ? `[${bId}] ${cleanName}` : cleanName;
+
+    const targets = [cleanName, encodedName, encodedId];
+    for (const target of targets) {
+      let q1 = supabase.from("custom_leave_types").delete().ilike("name", `${target}%`);
+      let q2 = supabase.from("custom_leaves").delete().ilike("name", `${target}%`);
+      if (companyId) {
+        q1 = q1.eq("company_id", companyId);
+        q2 = q2.eq("company_id", companyId);
+      }
+      await q1;
+      await q2;
     }
-    await query1;
-    await query2;
-    await query3;
-    console.log(`Successfully deleted leave type "${cleanName}" from Supabase.`);
   } catch (e) {
     console.warn("Supabase custom_leave_types delete error:", e);
   }
 }
 
-export async function syncAmenityToSupabase(name: string, companyId?: string) {
+export async function syncAmenityToSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
     const { supabaseAdmin } = await import("./supabase-admin");
@@ -457,27 +525,46 @@ export async function syncAmenityToSupabase(name: string, companyId?: string) {
       [displayName, iconName] = name.split("|");
     }
 
-    let query = client.from("custom_amenities").select("id").ilike("name", displayName);
+    const bName = (branch && branch !== "All Branches") ? toBranchName(branch) : null;
+    const bId = (branch && branch !== "All Branches") ? toBranchId(branch) : null;
+    const encodedName = bName ? `[${bName}] ${displayName}` : displayName;
+
+    // Try insert with branch column first
+    if (bName) {
+      const { error: branchErr } = await client.from("custom_amenities").insert([{ 
+        name: displayName, 
+        icon: iconName || null,
+        company_id: companyId || null, 
+        branch: bName 
+      }]);
+      if (!branchErr) {
+        console.log(`Successfully synced amenity "${displayName}" with branch "${bName}" to Supabase.`);
+        return;
+      }
+    }
+
+    // Fallback: insert with encoded branch name prefix if branch column is not available in schema
+    let query = client.from("custom_amenities").select("id").ilike("name", encodedName);
     if (companyId) query = query.eq("company_id", companyId);
     const { data: existing } = await query;
-    if (existing && existing.length > 0) {
-      console.log(`Amenity "${displayName}" already exists for this company.`);
-      return;
-    }
-    const payload: any = { name: displayName, icon: iconName || null };
-    if (companyId) payload.company_id = companyId;
-    const { error } = await client.from("custom_amenities").insert([payload]);
+    if (existing && existing.length > 0) return;
+
+    const { error } = await client.from("custom_amenities").insert([{ 
+      name: encodedName, 
+      icon: iconName || null,
+      company_id: companyId || null 
+    }]);
     if (error) {
       console.warn("Supabase custom_amenities insert warning:", error.message);
     } else {
-      console.log(`Successfully synced amenity "${displayName}" to Supabase 'custom_amenities' table.`);
+      console.log(`Successfully synced amenity "${encodedName}" to Supabase.`);
     }
   } catch (e) {
     console.warn("Supabase custom_amenities sync error:", e);
   }
 }
 
-export async function deleteAmenityFromSupabase(name: string, companyId?: string) {
+export async function deleteAmenityFromSupabase(name: string, companyId?: string, branch?: string) {
   if (!supabase) return;
   try {
     const { supabaseAdmin } = await import("./supabase-admin");
@@ -488,15 +575,19 @@ export async function deleteAmenityFromSupabase(name: string, companyId?: string
     if (name.includes("|")) {
       displayName = name.split("|")[0];
     }
+    const cleanName = displayName.trim();
+    const bName = (branch && branch !== "All Branches") ? toBranchName(branch) : null;
+    const bId = (branch && branch !== "All Branches") ? toBranchId(branch) : null;
+    const encodedName = bName ? `[${bName}] ${cleanName}` : cleanName;
+    const encodedId = bId ? `[${bId}] ${cleanName}` : cleanName;
 
-    let query = client.from("custom_amenities").delete().ilike("name", displayName);
-    if (companyId) query = (query as any).eq("company_id", companyId);
-    const { error } = await query;
-    if (error) {
-      console.warn("Supabase custom_amenities delete warning:", error.message);
-    } else {
-      console.log(`Successfully deleted amenity "${displayName}" from Supabase 'custom_amenities' table.`);
+    const targets = [cleanName, encodedName, encodedId];
+    for (const target of targets) {
+      let query = client.from("custom_amenities").delete().ilike("name", `${target}%`);
+      if (companyId) query = (query as any).eq("company_id", companyId);
+      await query;
     }
+    console.log(`Successfully deleted amenity "${cleanName}" from Supabase.`);
   } catch (e) {
     console.warn("Supabase custom_amenities delete error:", e);
   }
@@ -627,15 +718,20 @@ export async function syncPayslipToSupabase(payslip: any) {
 export async function syncMeetingToSupabase(meeting: any) {
   if (!supabase) return;
   try {
-    const record = {
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const client = supabaseAdmin || supabase;
+    if (!client) return;
+
+    const bName = meeting.branch && meeting.branch !== "All Branches" ? toBranchName(meeting.branch) : null;
+    const baseRecord = {
       id: meeting.id,
       company_id: meeting.companyId,
       title: meeting.title,
-      description: meeting.description,
-      reason: meeting.reason,
-      type: meeting.type,
-      organizer_id: meeting.organizerId,
-      participant_ids: meeting.participantIds,
+      description: meeting.description || "",
+      reason: meeting.reason || "General",
+      type: meeting.type || "Online",
+      organizer_id: meeting.organizerId || "",
+      participant_ids: meeting.participantIds || [],
       department: meeting.department || null,
       priority: meeting.priority || null,
       date: meeting.date,
@@ -647,7 +743,27 @@ export async function syncMeetingToSupabase(meeting: any) {
       link: meeting.link || null,
       created_at: meeting.createdAt || new Date().toISOString()
     };
-    const { error } = await supabase.from("meetings").upsert(record, { onConflict: "id" });
+
+    // 1. Try with direct branch column first
+    if (bName) {
+      const { error: branchErr } = await client.from("meetings").upsert({
+        ...baseRecord,
+        branch: bName
+      }, { onConflict: "id" });
+
+      if (!branchErr) {
+        console.log("Successfully synced meeting with branch column to Supabase:", meeting.id);
+        return;
+      }
+    }
+
+    // 2. Fallback: encode branch in description prefix if column doesn't exist in Supabase schema
+    const encodedDescription = bName ? encodeBranchPrefix(meeting.description, bName) : (meeting.description || "");
+    const { error } = await client.from("meetings").upsert({
+      ...baseRecord,
+      description: encodedDescription
+    }, { onConflict: "id" });
+
     if (error) {
       console.warn("Supabase meetings table upsert error:", error.message, error.details);
     } else {
@@ -771,15 +887,20 @@ export async function fetchPayrollConfigFromSupabase(companyId: string) {
         pfType: data.pf_type || "percentage",
         pfValue: Number(data.pf_value) ?? 12,
         pfModeDefault: data.pf_mode_default || "percentage",
+        pfFixedAmount: Number(data.pf_fixed_amount) ?? 1800,
+        pfCapLimit: data.pf_cap_limit ? Number(data.pf_cap_limit) : undefined,
+        pfIncludeEmployerShare: data.pf_include_employer_share ?? false,
+        esiType: data.esi_type || "percentage",
+        esiEmployeeValue: Number(data.esi_employee_value) ?? 0.75,
+        esiEmployerValue: Number(data.esi_employer_value) ?? 3.25,
+        esiWageThreshold: Number(data.esi_wage_threshold) ?? 21000,
+        tdsType: data.tds_type || "slab",
+        tdsDefaultPercent: Number(data.tds_default_percent) ?? 10,
+        tdsThreshold: Number(data.tds_threshold) ?? 250000,
+        allowOptOutPf: data.allow_opt_out_pf ?? false,
+        allowOptOutEsi: data.allow_opt_out_esi ?? false,
+        allowOptOutTds: data.allow_opt_out_tds ?? false,
         pfExemptEmployeeIds,
-        allowancesType: data.allowances_type || "percentage",
-        allowancesValue: Number(data.allowances_value) ?? 20,
-        taxType: data.tax_type || "percentage",
-        taxValue: Number(data.tax_value) ?? 5,
-        tdsOptInDefault: data.tds_opt_in_default !== false,
-        tdsModeDefault: data.tds_mode_default || "slab",
-        esiEnabled: data.esi_enabled !== false,
-        esiRatePercentage: Number(data.esi_rate_percentage) ?? 0.75,
         esiGrossCeiling: Number(data.esi_gross_ceiling) ?? 21000,
         esiExemptEmployeeIds,
         updatedAt: data.updated_at,
@@ -790,7 +911,3 @@ export async function fetchPayrollConfigFromSupabase(companyId: string) {
   }
   return null;
 }
-
-
-
-

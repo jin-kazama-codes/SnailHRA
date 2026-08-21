@@ -12,6 +12,7 @@ interface FinesViewProps {
   role: UserRole;
   currentEmployeeId: string;
   infractionTypes?: InfractionType[];
+  selectedBranch?: string;
   onAddFine: (fineData: any) => void;
   onUpdateFineStatus: (id: string, status: "Paid" | "Deducted From Payroll") => void;
   onDeleteFine?: (id: string) => void;
@@ -24,6 +25,7 @@ export default function FinesView({
   role,
   currentEmployeeId,
   infractionTypes = [],
+  selectedBranch = "All Branches",
   onAddFine,
   onUpdateFineStatus,
   onDeleteFine,

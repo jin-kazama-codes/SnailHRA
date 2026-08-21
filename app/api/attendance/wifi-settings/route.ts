@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase } from "@/src/lib/db";
 import { supabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
+import { toBranchId, toBranchName } from "@/src/lib/branchUtils";
 
 function parseIps(ipInput: string | string[] | undefined | null): string[] {
   if (!ipInput) return [];
@@ -26,17 +27,48 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const companyId = searchParams.get("companyId") || "";
+    const branch = searchParams.get("branch") || "";
     const db = loadDatabase();
     const dbClient = supabaseAdmin || supabase;
 
-    // Prefer Supabase as source of truth
+    // If branch-specific request, fetch per-branch row
+    if (dbClient && branch && branch !== "All Branches" && companyId) {
+      try {
+        const bName = toBranchName(branch);
+        const bId = toBranchId(branch);
+        // Query by branch column (try both name and id)
+        const { data: branchRow } = await dbClient
+          .from("wifi_restriction_settings")
+          .select("*")
+          .eq("company_id", companyId)
+          .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${branch}`)
+          .not("branch", "is", null)
+          .maybeSingle();
+        if (branchRow) {
+          const parsedIps = parseIps(branchRow.allowed_ip);
+          return NextResponse.json({
+            enabled: branchRow.enabled ?? false,
+            allowedIp: branchRow.allowed_ip || "",
+            allowedIps: parsedIps,
+            companyId: branchRow.company_id || companyId,
+            branch: bName
+          });
+        }
+      } catch (err) {
+        console.warn("Supabase per-branch wifi GET error:", err);
+      }
+    }
+
+    // Prefer Supabase as source of truth for company-level
     if (dbClient) {
       try {
         if (companyId) {
+          // Get company-level row (where branch IS NULL)
           const { data } = await dbClient
             .from("wifi_restriction_settings")
             .select("*")
             .eq("company_id", companyId)
+            .is("branch", null)
             .maybeSingle();
           if (data) {
             const parsedIps = parseIps(data.allowed_ip);
@@ -83,7 +115,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { enabled, companyId = "" } = body;
+    const { enabled, companyId = "", branch } = body;
 
     if (typeof enabled !== "boolean") {
       return NextResponse.json({ error: "enabled must be a boolean" }, { status: 400 });
@@ -94,6 +126,51 @@ export async function POST(request: Request) {
     const allowedIpString = allowedIps.join(", ");
 
     const db = loadDatabase();
+    const dbClient = supabaseAdmin || supabase;
+    const rawBranch = (branch && branch !== "All Branches") ? branch : "";
+    const bName = rawBranch ? toBranchName(rawBranch) : "";
+
+    if (rawBranch && bName) {
+      // Save per-branch WiFi settings
+      if (!db.branchWifiSettings) db.branchWifiSettings = {};
+      const setting = { enabled, allowedIp: allowedIpString, allowedIps, companyId: companyId || undefined };
+      db.branchWifiSettings[bName] = setting;
+      db.branchWifiSettings[toBranchId(bName)] = setting;
+      saveDatabase(db);
+
+      // Persist to Supabase with branch column
+      if (dbClient && companyId) {
+        try {
+          const recordId = `${companyId}-${toBranchId(bName)}`;
+          const validCompanyId = (companyId && companyId.length === 36) ? companyId : null;
+          const payload: any = {
+            id: recordId,
+            company_id: validCompanyId,
+            branch: bName,
+            enabled,
+            allowed_ip: allowedIpString,
+            updated_at: new Date().toISOString()
+          };
+          const { error } = await dbClient
+            .from("wifi_restriction_settings")
+            .upsert(payload, { onConflict: "id" });
+          if (error) {
+            console.error("Supabase per-branch wifi_restriction_settings upsert error:", error);
+            return NextResponse.json({ error: error.message || "Supabase save failed" }, { status: 500 });
+          }
+        } catch (err) {
+          console.error("Error saving per-branch wifi settings to Supabase:", err);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        branch: bName,
+        wifiRestrictionSettings: db.branchWifiSettings[bName]
+      });
+    }
+
+    // Global / company-level save
     db.wifiRestrictionSettings = {
       enabled,
       allowedIp: allowedIpString,
@@ -102,21 +179,17 @@ export async function POST(request: Request) {
     };
     saveDatabase(db);
 
-    const dbClient = supabaseAdmin || supabase;
-
-    // Sync to Supabase
     if (dbClient) {
       const recordId = companyId || "default";
       const validCompanyId = (companyId && companyId.length === 36) ? companyId : null;
-      
       const payload: any = {
         id: recordId,
         company_id: validCompanyId,
+        branch: null,
         enabled,
         allowed_ip: allowedIpString,
         updated_at: new Date().toISOString()
       };
-
       const { error } = await dbClient.from("wifi_restriction_settings").upsert(payload, { onConflict: "id" });
       if (error) {
         console.error("Supabase wifi_restriction_settings upsert error:", error);
@@ -132,4 +205,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message || "Failed to save WiFi settings" }, { status: 500 });
   }
 }
-

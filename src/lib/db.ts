@@ -29,7 +29,16 @@ export interface AppState {
   customBranches: string[];
   timingSettings: TimingSettings;
   companyTimingSettings?: Record<string, TimingSettings>;
+  branchTimingSettings?: Record<string, TimingSettings>;
+  branchLeaveTypes?: Record<string, string[]>;
+  branchDepartments?: Record<string, string[]>;
+  branchAmenities?: Record<string, string[]>;
+  branchLeaveCountVisibility?: Record<string, boolean>;
+  branchWifiSettings?: Record<string, WifiRestrictionSettings>;
+  branchCodePrefixes?: Record<string, string>;
+  empCodePrefix?: string;
   payrollConfigs?: Record<string, PayrollConfig>;
+  companySettings?: Record<string, any>;
   attendanceBreaks?: AttendanceBreak[];
   excelUploads?: ExcelUploadRecord[];
   meetings?: Meeting[];

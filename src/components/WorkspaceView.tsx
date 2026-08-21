@@ -28,6 +28,7 @@ interface WorkspaceViewProps {
   rooms: Room[];
   roomBookings: RoomBooking[];
   customAmenities: string[];
+  selectedBranch?: string;
   onSaveSeatLayout: (layout: SeatLayout) => Promise<boolean>;
   onDeleteSeatLayout: (id: string) => Promise<void>;
   onSaveRoom: (room: Room) => Promise<boolean>;
@@ -189,8 +190,8 @@ function buildDefaultLayout(companyId: string, companyName: string): SeatLayout 
 
 function SeatingPlan({
   role, companyId, companyName, employees, currentEmployeeId,
-  seatLayouts, onSaveSeatLayout, onDeleteSeatLayout
-}: Pick<WorkspaceViewProps, "role"|"companyId"|"companyName"|"employees"|"currentEmployeeId"|"seatLayouts"|"onSaveSeatLayout"|"onDeleteSeatLayout">) {
+  seatLayouts, selectedBranch = "All Branches", onSaveSeatLayout, onDeleteSeatLayout
+}: Pick<WorkspaceViewProps, "role" | "companyId" | "companyName" | "employees" | "currentEmployeeId" | "seatLayouts" | "selectedBranch" | "onSaveSeatLayout" | "onDeleteSeatLayout">) {
 
   const canEdit = role === "admin" || role === "hr";
   const currentEmployee = employees.find(e => e.id === currentEmployeeId);
@@ -215,7 +216,7 @@ function SeatingPlan({
   const [editMode, setEditMode] = useState(false);
   const [draftLayout, setDraftLayout] = useState<SeatLayout | null>(null);
   const [saving, setSaving] = useState(false);
-  
+
   // Modals
   const [addSectionModal, setAddSectionModal] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
@@ -285,6 +286,10 @@ function SeatingPlan({
     } else {
       // blank
       newLayout = buildBlankLayout(resolvedCompanyId, name.trim(), "", 0);
+    }
+
+    if (selectedBranch && selectedBranch !== "All Branches") {
+      newLayout.branch = selectedBranch;
     }
 
     setSaving(true);
@@ -749,11 +754,10 @@ function SeatingPlan({
             <button
               key={tab.id}
               onClick={() => setFilterAvailability(tab.id as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filterAvailability === tab.id
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterAvailability === tab.id
                   ? "bg-white dark:bg-[#0f0f0f] text-slate-800 dark:text-white shadow-sm"
                   : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-white"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -765,11 +769,10 @@ function SeatingPlan({
           <span className="text-[11px] font-bold text-slate-400 uppercase">Section:</span>
           <button
             onClick={() => setFilterSectionId("all")}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              filterSectionId === "all"
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${filterSectionId === "all"
                 ? "bg-slate-800 dark:bg-white text-white dark:text-slate-900"
                 : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-400"
-            }`}
+              }`}
           >
             All Sections
           </button>
@@ -777,11 +780,10 @@ function SeatingPlan({
             <button
               key={s.id}
               onClick={() => setFilterSectionId(s.id)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
-                filterSectionId === s.id
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${filterSectionId === s.id
                   ? "ring-2 ring-emerald-500/50"
                   : "opacity-80 hover:opacity-100"
-              }`}
+                }`}
               style={{ backgroundColor: s.color + "15", color: s.color, borderColor: s.color + "30" }}
             >
               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }} />
@@ -896,13 +898,12 @@ function SeatingPlan({
                         <div
                           key={seat.id}
                           onClick={() => setSelectedSeatModal({ seat, isViewingOnly: !editMode })}
-                          className={`relative group rounded-2xl p-3 flex flex-col items-center justify-between text-center transition-all cursor-pointer border ${
-                            isMySeat
+                          className={`relative group rounded-2xl p-3 flex flex-col items-center justify-between text-center transition-all cursor-pointer border ${isMySeat
                               ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-400 ring-2 ring-emerald-500/20 shadow-md shadow-emerald-500/10"
                               : isOccupied
-                              ? "bg-slate-50 dark:bg-[#141414] border-slate-200 dark:border-[#262626] hover:border-slate-300 dark:hover:border-[#3a3a3a]"
-                              : "bg-white dark:bg-[#0c0c0c] border-dashed border-slate-200 dark:border-[#262626] hover:border-emerald-400/80 hover:bg-emerald-50/30"
-                          } hover:shadow-lg hover:-translate-y-0.5`}
+                                ? "bg-slate-50 dark:bg-[#141414] border-slate-200 dark:border-[#262626] hover:border-slate-300 dark:hover:border-[#3a3a3a]"
+                                : "bg-white dark:bg-[#0c0c0c] border-dashed border-slate-200 dark:border-[#262626] hover:border-emerald-400/80 hover:bg-emerald-50/30"
+                            } hover:shadow-lg hover:-translate-y-0.5`}
                         >
                           {/* Seat Header Tag */}
                           <div className="w-full flex items-center justify-between gap-1 mb-1.5">
@@ -1293,11 +1294,10 @@ function SeatDetailsModal({
                 <button
                   type="button"
                   onClick={() => setAssignedEmployeeId(null)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border transition-all text-xs font-semibold ${
-                    !assignedEmployeeId
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left border transition-all text-xs font-semibold ${!assignedEmployeeId
                       ? "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
                       : "border-dashed border-slate-200 dark:border-[#2a2a2a] text-slate-400 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   <XCircle className="w-4 h-4 text-slate-400" />
                   <span>Unassigned (Keep Desk Empty)</span>
@@ -1310,11 +1310,10 @@ function SeatDetailsModal({
                       key={emp.id}
                       type="button"
                       onClick={() => setAssignedEmployeeId(emp.id)}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left border transition-all ${
-                        isSelected
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left border transition-all ${isSelected
                           ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 ring-1 ring-emerald-500/20"
                           : "border-transparent hover:bg-slate-50 dark:hover:bg-[#181818]"
-                      }`}
+                        }`}
                     >
                       <img
                         src={emp.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=40&auto=format&fit=crop"}
@@ -1463,11 +1462,10 @@ function NewLayoutModal({
                   key={opt.id}
                   type="button"
                   onClick={() => setCreationMode(opt.id as any)}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
-                    creationMode === opt.id
+                  className={`p-2.5 rounded-xl border text-left transition-all ${creationMode === opt.id
                       ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 shadow-sm"
                       : "border-slate-200 dark:border-[#2a2a2a] text-slate-600 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#181818]"
-                  }`}
+                    }`}
                 >
                   <p className="text-xs font-bold">{opt.title}</p>
                   <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{opt.desc}</p>
@@ -1554,8 +1552,8 @@ const getLocalDateString = (d: Date = new Date()): string => {
 
 function RoomBookingView({
   role, companyId, companyName, employees, currentEmployeeId,
-  rooms, roomBookings, customAmenities, onSaveRoom, onDeleteRoom, onBookRoom, onUpdateBooking
-}: Pick<WorkspaceViewProps, "role"|"companyId"|"companyName"|"employees"|"currentEmployeeId"|"rooms"|"roomBookings"|"customAmenities"|"onSaveRoom"|"onDeleteRoom"|"onBookRoom"|"onUpdateBooking">) {
+  rooms, roomBookings, customAmenities, selectedBranch = "All Branches", onSaveRoom, onDeleteRoom, onBookRoom, onUpdateBooking
+}: Pick<WorkspaceViewProps, "role" | "companyId" | "companyName" | "employees" | "currentEmployeeId" | "rooms" | "roomBookings" | "customAmenities" | "selectedBranch" | "onSaveRoom" | "onDeleteRoom" | "onBookRoom" | "onUpdateBooking">) {
 
   const canManageRooms = role === "admin" || role === "hr";
   const canApprove = role === "admin" || role === "hr";
@@ -1582,7 +1580,7 @@ function RoomBookingView({
   const [rName, setRName] = useState("");
   const [rCapacity, setRCapacity] = useState(6);
   const [rFloor, setRFloor] = useState("");
-  const [rBranch, setRBranch] = useState("");
+  const [rBranch, setRBranch] = useState(selectedBranch !== "All Branches" ? selectedBranch : "");
   const [rAmenities, setRAmenities] = useState<string[]>([]);
 
   const currentEmployee = employees.find(e => e.id === currentEmployeeId);
@@ -1698,7 +1696,7 @@ function RoomBookingView({
     setRName(room?.name || "");
     setRCapacity(room?.capacity || 6);
     setRFloor(room?.floor || "");
-    setRBranch(room?.branch || "");
+    setRBranch(room?.branch || (selectedBranch && selectedBranch !== "All Branches" ? selectedBranch : "Shashtri Nagar"));
     setRAmenities(room?.amenities || []);
     setRoomModal({ room });
   };
@@ -1759,11 +1757,10 @@ function RoomBookingView({
           <button
             key={tab.id}
             onClick={() => setActiveRoomTab(tab.id as any)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-              currentTab === tab.id
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${currentTab === tab.id
                 ? "bg-white dark:bg-[#0f0f0f] text-slate-800 dark:text-white shadow-sm"
                 : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200"
-            }`}
+              }`}
           >
             {tab.icon}
             {tab.label}
@@ -1817,11 +1814,10 @@ function RoomBookingView({
                 const dayBookings = getRoomBookingsForDay(room.id, selectedDate);
 
                 return (
-                  <div key={room.id} className={`relative bg-white dark:bg-[#0f0f0f] rounded-2xl border overflow-hidden transition-all hover:shadow-lg ${
-                    isBusy
+                  <div key={room.id} className={`relative bg-white dark:bg-[#0f0f0f] rounded-2xl border overflow-hidden transition-all hover:shadow-lg ${isBusy
                       ? "border-rose-200 dark:border-rose-800/40"
                       : "border-slate-100 dark:border-[#1a1a1a] hover:border-emerald-300 dark:hover:border-emerald-700/50"
-                  }`}>
+                    }`}>
                     {/* Status ribbon */}
                     <div className={`absolute top-0 left-0 right-0 h-1 ${isBusy ? "bg-rose-500" : "bg-emerald-500"}`} />
 
@@ -1909,11 +1905,10 @@ function RoomBookingView({
                 <button
                   key={s}
                   onClick={() => setFilterStatus(s)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    filterStatus === s
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === s
                       ? "bg-emerald-600 text-white"
                       : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-[#252525]"
-                  }`}
+                    }`}
                 >
                   {s === "all" ? "All" : s}
                 </button>
@@ -2017,7 +2012,7 @@ function RoomBookingView({
                       </div>
                     </div>
                   );
-              })}
+                })}
             </div>
           )}
         </div>
@@ -2036,29 +2031,38 @@ function RoomBookingView({
             </button>
           </div>
 
-          {rooms.filter(r => r.companyId === companyId).length === 0 ? (
+          {companyRooms.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               <DoorOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm font-semibold">No rooms added yet</p>
-              <p className="text-xs mt-1">Add your first meeting room to get started</p>
+              <p className="text-xs mt-1">
+                {selectedBranch !== "All Branches" ? `No rooms configured for ${selectedBranch} branch.` : "Add your first meeting room to get started."}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {rooms.filter(r => r.companyId === companyId).map(room => (
+              {companyRooms.map(room => (
                 <div key={room.id} className="bg-white dark:bg-[#0f0f0f] rounded-2xl border border-slate-100 dark:border-[#1a1a1a] p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="font-bold text-slate-800 dark:text-white">{room.name}</h4>
-                      <p className="text-xs text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-800 dark:text-white">{room.name}</h4>
+                        {room.branch && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-300 border border-slate-200/50 dark:border-[#262626]">
+                            {room.branch}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
                         {room.floor && `Floor: ${room.floor} · `}Capacity: {room.capacity}
                         {!room.isActive && " · ⚠️ Inactive"}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => openRoomModal(room)} className="p-2 rounded-xl bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 hover:bg-slate-200 transition-all">
+                      <button onClick={() => openRoomModal(room)} className="p-2 rounded-xl bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 hover:bg-slate-200 transition-all cursor-pointer">
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      <button onClick={() => onDeleteRoom(room.id)} className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-500 hover:bg-rose-100 transition-all">
+                      <button onClick={() => onDeleteRoom(room.id)} className="p-2 rounded-xl bg-rose-50 dark:bg-rose-950/20 text-rose-500 hover:bg-rose-100 transition-all cursor-pointer">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -2193,8 +2197,29 @@ function RoomBookingView({
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 mb-1.5 block">Floor</label>
-                  <input value={rFloor} onChange={e => setRFloor(e.target.value)} placeholder="e.g. 3rd Floor" className="w-full text-sm bg-slate-50 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
+                  <input type="date-text" value={rFloor} onChange={e => setRFloor(e.target.value)} placeholder="e.g. 3rd Floor" className="w-full text-sm bg-slate-50 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 mb-1.5 block">Branch Assignment *</label>
+                <select
+                  value={rBranch}
+                  onChange={e => setRBranch(e.target.value)}
+                  className="w-full text-sm bg-slate-50 dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] rounded-xl px-3 py-2.5 text-slate-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
+                >
+                  {Array.from(
+                    new Set([
+                      ...(selectedBranch && selectedBranch !== "All Branches" ? [selectedBranch] : []),
+                      ...employees.map(e => e.branch).filter(Boolean) as string[],
+                      "Shashtri Nagar",
+                      "Noida",
+                      "Ludhiana"
+                    ])
+                  ).map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 mb-1.5 block">Amenities</label>
@@ -2208,11 +2233,10 @@ function RoomBookingView({
                         key={am}
                         type="button"
                         onClick={() => setRAmenities(prev => prev.includes(am) ? prev.filter(a => a !== am) : [...prev, am])}
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                          isSelected
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${isSelected
                             ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                             : "bg-slate-50 dark:bg-[#1a1a1a] text-slate-500 border-slate-200 dark:border-[#2a2a2a] hover:border-emerald-300"
-                        }`}
+                          }`}
                       >
                         {icon}
                         {name}
@@ -2280,22 +2304,20 @@ export default function WorkspaceView(props: WorkspaceViewProps) {
       <div className="flex gap-1 bg-slate-100 dark:bg-[#1a1a1a] p-1 rounded-2xl w-fit">
         <button
           onClick={() => setActiveTab("seating")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-            activeTab === "seating"
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "seating"
               ? "bg-white dark:bg-[#0f0f0f] text-slate-800 dark:text-white shadow-sm"
               : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200"
-          }`}
+            }`}
         >
           <Armchair className="w-4 h-4" />
           Seating Plan
         </button>
         <button
           onClick={() => setActiveTab("rooms")}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
-            activeTab === "rooms"
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === "rooms"
               ? "bg-white dark:bg-[#0f0f0f] text-slate-800 dark:text-white shadow-sm"
               : "text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200"
-          }`}
+            }`}
         >
           <DoorOpen className="w-4 h-4" />
           Room Booking
@@ -2316,6 +2338,7 @@ export default function WorkspaceView(props: WorkspaceViewProps) {
           employees={props.employees}
           currentEmployeeId={props.currentEmployeeId}
           seatLayouts={props.seatLayouts}
+          selectedBranch={props.selectedBranch}
           onSaveSeatLayout={props.onSaveSeatLayout}
           onDeleteSeatLayout={props.onDeleteSeatLayout}
         />
@@ -2331,6 +2354,7 @@ export default function WorkspaceView(props: WorkspaceViewProps) {
           rooms={props.rooms}
           roomBookings={props.roomBookings}
           customAmenities={props.customAmenities}
+          selectedBranch={props.selectedBranch}
           onSaveRoom={props.onSaveRoom}
           onDeleteRoom={props.onDeleteRoom}
           onBookRoom={props.onBookRoom}
