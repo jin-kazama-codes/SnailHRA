@@ -798,7 +798,7 @@ export default function AttendanceView({
               My Attendance Statistics ({selectedMonth})
             </h3>
             
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Present Days</span>
                 <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono mt-1 block">
@@ -821,12 +821,6 @@ export default function AttendanceView({
                   {attendance.filter(a => a.employeeId === currentEmployeeId && a.workFromHome).length} WFH
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-1 inline-block">{userBranch}</span>
-              </div>
-
-              <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Remaining Leaves</span>
-                <span className="text-2xl font-bold text-teal-600 font-mono mt-1 block">14 Days</span>
-                <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">Of 30 Total</span>
               </div>
             </div>
           </div>

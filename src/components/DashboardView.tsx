@@ -26,6 +26,20 @@ interface DashboardViewProps {
   selectedBranch?: string;
   customLeaveTypes?: string[];
   showLeaveCount?: boolean;
+  timingSettings?: {
+    clockInTime?: string;
+    clockOutTime?: string;
+    lateThreshold?: string;
+    breakStartTime?: string;
+    breakEndTime?: string;
+  };
+  branchTimingSettings?: Record<string, {
+    clockInTime?: string;
+    clockOutTime?: string;
+    lateThreshold?: string;
+    breakStartTime?: string;
+    breakEndTime?: string;
+  }>;
   onboardingChecklistTemplates?: ChecklistItemTemplate[];
   exitChecklistTemplates?: ChecklistItemTemplate[];
   onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
@@ -54,6 +68,8 @@ export default function DashboardView({
   selectedBranch = "All Branches",
   customLeaveTypes,
   showLeaveCount = true,
+  timingSettings,
+  branchTimingSettings,
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
   onPunchAction,
@@ -163,6 +179,31 @@ export default function DashboardView({
     const consumed = getConsumedLeaveDays(name);
     return acc + Math.max(0, allocated - consumed);
   }, 0);
+
+  const formatTime12h = (time24?: string) => {
+    if (!time24) return "09:30 AM";
+    const parts = time24.split(":");
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h)) return "09:30 AM";
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${String(h12).padStart(2, "0")}:${String(isNaN(m) ? 0 : m).padStart(2, "0")} ${period}`;
+  };
+
+  const getBranchTiming = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
+    return branchTimingSettings[branchNameOrId]
+      || branchTimingSettings[toBranchName(branchNameOrId)]
+      || branchTimingSettings[toBranchId(branchNameOrId)]
+      || null;
+  };
+
+  const activeTiming = getBranchTiming(currentEmployee?.branch)
+    || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+    || timingSettings;
+
+  const lateThresholdDisplay = formatTime12h(activeTiming?.lateThreshold || "09:30");
 
   const myPayslips = (currentEmployee && payslips && payslips.length > 0)
     ? payslips.filter(p => p.employeeId === currentEmployee.id || (currentEmployee.code && p.employeeId === currentEmployee.code))
@@ -539,7 +580,7 @@ export default function DashboardView({
                 <Clock className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" />
               </div>
               <p className="text-3xl font-extrabold text-amber-500 font-mono">{myLateLogins}</p>
-              <p className="text-xs text-slate-400 mt-1">Logins after 09:30 AM</p>
+              <p className="text-xs text-slate-400 mt-1">Logins after {lateThresholdDisplay}</p>
             </div>
 
             <div

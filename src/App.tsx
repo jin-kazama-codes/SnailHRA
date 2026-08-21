@@ -3244,6 +3244,8 @@ export default function App() {
               selectedBranch={selectedBranch}
               customLeaveTypes={effectiveLeaveTypes}
               showLeaveCount={effectiveLeaveCountVisibility}
+              timingSettings={effectiveTimingSettings}
+              branchTimingSettings={branchTimingSettings}
               onboardingChecklistTemplates={onboardingChecklistTemplates}
               exitChecklistTemplates={exitChecklistTemplates}
               onPunchAction={handlePunchAction}
