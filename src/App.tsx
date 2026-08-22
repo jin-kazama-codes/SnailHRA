@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  LayoutDashboard, Users, Clock, Calendar, IndianRupee,
+  LayoutDashboard, Users, Clock, Calendar, IndianRupee, FileText,
   ReceiptText, Package, ShieldAlert, Sun, Moon, RefreshCw,
   Menu, X, ChevronRight, User, CircleCheck, Sparkles, AlertCircle, Scale, Settings, LogOut, Video, LayoutGrid, Lock,
   MessageSquareWarning, TrendingUp, Building2, ChevronDown
@@ -1796,6 +1796,109 @@ export default function App() {
     }
   };
 
+  // Upload document(s) for a specific employee & month's payslip (PDF, image, multiple files)
+  const handleUploadPayrollDocument = async (employeeId: string, month: string, fileOrFiles: File | File[], payslipId?: string) => {
+    try {
+      const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+      if (files.length === 0) return null;
+
+      showToast(`Uploading ${files.length} document${files.length > 1 ? "s" : ""}...`, "info");
+      const uploader = currentEmployee ? `${currentEmployee.fullName} (${activeRole.toUpperCase()})` : "Admin";
+
+      const uploadedDocItems: Array<{ url: string; name: string; fileType: string; size: string; uploadedBy: string }> = [];
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("folder", `payroll-documents/${month.replace(/\s+/g, "_")}`);
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadRes.ok && uploadData.url) {
+          uploadedDocItems.push({
+            url: uploadData.url,
+            name: file.name,
+            fileType: file.type || "document",
+            size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+            uploadedBy: uploader,
+          });
+        } else {
+          console.warn(`Failed to upload file ${file.name}:`, uploadData.error);
+        }
+      }
+
+      if (uploadedDocItems.length === 0) {
+        showToast("File upload failed. Please try again.", "error");
+        return null;
+      }
+
+      const attachRes = await fetch("/api/payroll/document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId,
+          month,
+          documents: uploadedDocItems,
+          documentUrl: uploadedDocItems[0]?.url,
+          documentName: uploadedDocItems[0]?.name,
+          uploadedBy: uploader,
+          payslipId
+        })
+      });
+
+      const attachData = await attachRes.json();
+      if (attachRes.ok && attachData.payslip) {
+        setPayslips(prev => {
+          const list = prev || [];
+          const idx = list.findIndex(p => p.id === attachData.payslip.id || (p.employeeId === employeeId && p.month === month));
+          if (idx >= 0) {
+            const updated = [...list];
+            updated[idx] = attachData.payslip;
+            return updated;
+          }
+          return [attachData.payslip, ...list];
+        });
+        showToast(`Uploaded ${uploadedDocItems.length} document${uploadedDocItems.length > 1 ? "s" : ""} successfully!`, "success");
+        await refreshDatabase();
+        return attachData.payslip;
+      } else {
+        showToast(attachData.error || "Failed to attach document to payroll", "error");
+        return null;
+      }
+    } catch (err: any) {
+      console.error("Upload payroll document error:", err);
+      showToast(err?.message || "Error uploading document", "error");
+      return null;
+    }
+  };
+
+  const handleDeletePayrollDocument = async (employeeId: string, month: string, payslipId?: string, docId?: string) => {
+    try {
+      const res = await fetch("/api/payroll/document", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId, month, payslipId, docId })
+      });
+      const data = await res.json();
+      if (res.ok && data.payslip) {
+        setPayslips(prev => (prev || []).map(p => (p.id === data.payslip.id || (p.employeeId === employeeId && p.month === month)) ? data.payslip : p));
+        showToast("Payroll document removed successfully.", "info");
+        await refreshDatabase();
+        return true;
+      } else {
+        showToast(data.error || "Failed to delete document", "error");
+        return false;
+      }
+    } catch (err: any) {
+      console.error("Delete payroll document error:", err);
+      showToast(err?.message || "Error deleting document", "error");
+      return false;
+    }
+  };
+
   // 19. Disburse payslips
   const handlePayAllPayslips = async (month: string) => {
     try {
@@ -2610,7 +2713,10 @@ export default function App() {
     ? employees
     : employees.filter(e => isBranchMatched(e.branch));
 
-  const branchEmployeeIdSet = new Set(filteredEmployees.map(e => e.id));
+  const branchEmployeeIdSet = new Set([
+    ...filteredEmployees.map(e => e.id),
+    ...filteredEmployees.map(e => e.code).filter(Boolean)
+  ] as string[]);
 
   // 2. Filtered Attendance
   const filteredAttendance = effectiveBranch === "All Branches"
@@ -3388,6 +3494,8 @@ export default function App() {
                   showToast("Error updating employee allowances", "error");
                 }
               }}
+              onUploadPayrollDocument={handleUploadPayrollDocument}
+              onDeletePayrollDocument={handleDeletePayrollDocument}
             />
           )}
 

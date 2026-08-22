@@ -312,6 +312,19 @@ export interface Payslip {
   status: "Draft" | "Generated" | "Paid";
   generatedAt: string;
   sentToEmail: string | null;
+  documentUrl?: string;
+  documentName?: string;
+  documentUploadedAt?: string;
+  documentUploadedBy?: string;
+  documents?: {
+    id: string;
+    name: string;
+    url: string;
+    uploadedAt: string;
+    uploadedBy?: string;
+    fileType?: string;
+    size?: string;
+  }[];
 }
 
 export interface SimulatedEmail {

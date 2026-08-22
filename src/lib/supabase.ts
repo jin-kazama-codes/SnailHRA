@@ -667,7 +667,7 @@ export async function syncPayslipToSupabase(payslip: any) {
       await ensureEmployeeSynced(employeeId);
     }
     const companyId = employeeId ? await getCompanyIdForEmployee(employeeId) : null;
-    const record = {
+    const record: Record<string, any> = {
       id: payslip.id,
       employee_id: employeeId,
       company_id: companyId,
@@ -688,24 +688,84 @@ export async function syncPayslipToSupabase(payslip: any) {
       generated_at: payslip.generatedAt || payslip.generated_at || new Date().toISOString(),
       sent_to_email: payslip.sentToEmail || payslip.sent_to_email || ""
     };
+
+    if (payslip.documents && Array.isArray(payslip.documents) && payslip.documents.length > 0) {
+      record.documents = payslip.documents;
+      record.document_url = payslip.documents[0]?.url || payslip.documentUrl || payslip.document_url;
+      // If single doc, store clean name; if multiple docs, store DOCS_JSON fallback so Supabase retains all files
+      record.document_name = payslip.documents.length === 1
+        ? (payslip.documents[0]?.name || "Payroll Document")
+        : `DOCS_JSON:${JSON.stringify(payslip.documents)}`;
+      record.document_uploaded_at = payslip.documents[0]?.uploadedAt || payslip.documentUploadedAt || new Date().toISOString();
+      record.document_uploaded_by = payslip.documents[0]?.uploadedBy || payslip.documentUploadedBy || "Admin";
+    } else if (payslip.documentUrl || payslip.document_url) {
+      record.document_url = payslip.documentUrl || payslip.document_url;
+      record.document_name = payslip.documentName || payslip.document_name || "Payroll Document";
+      record.document_uploaded_at = payslip.documentUploadedAt || payslip.document_uploaded_at || new Date().toISOString();
+      record.document_uploaded_by = payslip.documentUploadedBy || payslip.document_uploaded_by || "Admin";
+      record.documents = [{
+        id: "doc-1",
+        name: payslip.documentName || payslip.document_name || "Payroll Document",
+        url: payslip.documentUrl || payslip.document_url,
+        uploadedAt: payslip.documentUploadedAt || payslip.document_uploaded_at || new Date().toISOString(),
+        uploadedBy: payslip.documentUploadedBy || payslip.document_uploaded_by || "Admin"
+      }];
+    } else {
+      record.document_url = null;
+      record.document_name = null;
+      record.document_uploaded_at = null;
+      record.document_uploaded_by = null;
+      record.documents = [];
+    }
+
     // Prefer admin client (bypasses RLS) for writes; fall back to anon client
     const { supabaseAdmin } = await import("./supabase-admin");
     const writeClient = supabaseAdmin || supabase;
-    const { error } = await writeClient.from("payslips").upsert(record, { onConflict: "id" });
+    let { error } = await writeClient.from("payslips").upsert(record, { onConflict: "id" });
 
     if (error) {
-      // If error is about esi_deduction column not existing, retry without it
+      // Check if error is about document or esi columns missing
+      let cleanRecord = { ...record };
+      if (error.message?.includes('documents')) {
+        delete cleanRecord.documents;
+      }
+      if (error.message?.includes('document_')) {
+        delete cleanRecord.document_url;
+        delete cleanRecord.document_name;
+        delete cleanRecord.document_uploaded_at;
+        delete cleanRecord.document_uploaded_by;
+      }
       if (error.message?.includes('esi_deduction')) {
-        console.warn("esi_deduction column missing, retrying without it...");
-        const { esi_deduction, ...recordWithoutEsi } = record;
-        const { error: fallbackErr } = await writeClient.from("payslips").upsert(recordWithoutEsi, { onConflict: "id" });
-        if (fallbackErr) {
-          console.warn("Supabase payslips fallback upsert error:", fallbackErr.message, fallbackErr.details);
+        delete cleanRecord.esi_deduction;
+      }
+
+      const { error: retryErr } = await writeClient.from("payslips").upsert(cleanRecord, { onConflict: "id" });
+      if (retryErr) {
+        // As last resort, retry with standard core columns
+        const coreRecord = {
+          id: payslip.id,
+          employee_id: employeeId,
+          company_id: companyId,
+          month: payslip.month || "",
+          basic: Number(payslip.basic) || 0,
+          hra: Number(payslip.hra) || 0,
+          allowances: Number(payslip.allowances) || 0,
+          fines_deducted: Number(payslip.finesDeducted ?? 0),
+          pf_deduction: Number(payslip.pfDeduction ?? 0),
+          tax_deduction: Number(payslip.taxDeduction ?? 0),
+          net_pay: Number(payslip.netPay ?? 0),
+          status: payslip.status || "Generated",
+          generated_at: payslip.generatedAt || new Date().toISOString(),
+          sent_to_email: payslip.sentToEmail || ""
+        };
+        const { error: coreErr } = await writeClient.from("payslips").upsert(coreRecord, { onConflict: "id" });
+        if (coreErr) {
+          console.warn("Supabase payslips fallback upsert error:", coreErr.message, coreErr.details);
         } else {
-          console.log("Payslip synced without esi_deduction field (column missing):", payslip.id);
+          console.log("Payslip synced to Supabase (core fields fallback):", payslip.id);
         }
       } else {
-        console.warn("Supabase payslips table upsert error:", error.message, error.details);
+        console.log("Payslip synced to Supabase (safe retry):", payslip.id);
       }
     } else {
       console.log("Successfully synced payslip to Supabase 'payslips' table:", payslip.id);

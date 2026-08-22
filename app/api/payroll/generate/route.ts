@@ -170,9 +170,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    // Check if already exists for this employee + month
+    // Check if already exists for this employee + month (ignore Draft status)
     const exists = db.payslips.find(p => p.employeeId === employeeId && p.month === month);
-    if (exists) {
+    if (exists && exists.status !== "Draft") {
       return NextResponse.json({ error: `Payslip already generated for ${employee.fullName} for ${month}` }, { status: 400 });
     }
 
@@ -328,7 +328,7 @@ export async function POST(request: Request) {
     const netPay = gross - pf - finesDeduction - tax - esi;
 
     const newPayslip: Payslip = {
-      id: "pay-" + Date.now(),
+      id: exists?.id || ("pay-" + Date.now()),
       employeeId,
       month,
       basic,
@@ -345,9 +345,21 @@ export async function POST(request: Request) {
       netPay,
       status: "Generated",
       generatedAt: new Date().toISOString(),
-      sentToEmail: employee.email
+      sentToEmail: employee.email,
+      documentUrl: exists?.documentUrl,
+      documentName: exists?.documentName,
+      documentUploadedAt: exists?.documentUploadedAt,
+      documentUploadedBy: exists?.documentUploadedBy,
+      documents: (exists?.documents && exists.documents.length > 0)
+        ? exists.documents
+        : (exists?.documentUrl ? [{
+            id: "doc-1",
+            name: exists?.documentName || "Payroll Document",
+            url: exists.documentUrl,
+            uploadedAt: exists?.documentUploadedAt || new Date().toISOString(),
+            uploadedBy: exists?.documentUploadedBy || "Admin"
+          }] : [])
     };
-
 
     // Mark pending fines as deducted
     pendingFines.forEach(f => {
@@ -367,7 +379,13 @@ export async function POST(request: Request) {
       sentAt: new Date().toISOString()
     };
 
-    db.payslips.push(newPayslip);
+    if (exists) {
+      const idx = db.payslips.findIndex(p => p.id === exists.id);
+      if (idx >= 0) db.payslips[idx] = newPayslip;
+      else db.payslips.push(newPayslip);
+    } else {
+      db.payslips.push(newPayslip);
+    }
     db.simulatedEmails.push(newEmail);
     saveDatabase(db);
 

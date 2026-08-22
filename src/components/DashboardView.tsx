@@ -206,7 +206,7 @@ export default function DashboardView({
   const lateThresholdDisplay = formatTime12h(activeTiming?.lateThreshold || "09:30");
 
   const myPayslips = (currentEmployee && payslips && payslips.length > 0)
-    ? payslips.filter(p => p.employeeId === currentEmployee.id || (currentEmployee.code && p.employeeId === currentEmployee.code))
+    ? payslips.filter(p => (p.employeeId === currentEmployee.id || (currentEmployee.code && p.employeeId === currentEmployee.code)) && p.status !== "Draft")
     : [];
   const myPayslip = myPayslips.length > 0 ? myPayslips[myPayslips.length - 1] : undefined;
   const displaySalary = myPayslip ? myPayslip.netPay : null;

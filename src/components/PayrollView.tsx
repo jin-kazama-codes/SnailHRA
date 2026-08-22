@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import {
   IndianRupee, Mail, Plus, Trash2, ShieldCheck, FileText,
   Send, HelpCircle, Landmark, Sparkles, Settings, ArrowDownRight, Printer, CheckCircle,
-  ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X, Pencil
+  ChevronLeft, ChevronRight, RefreshCw, Sliders, Percent, ShieldAlert, Search, Save, UserCheck, UserX, Calculator, AlertCircle, Check, X, Pencil,
+  Upload, Paperclip, Download, Eye, ExternalLink, CheckCircle2, Image as ImageIcon, File
 } from "lucide-react";
 import { Employee, Designation, Payslip, SimulatedEmail, UserRole, Fine, PayrollConfig, EmployeeTaxProfile } from "../types";
 import TaxProfileModal from "./TaxProfileModal";
@@ -24,6 +25,8 @@ interface PayrollViewProps {
   onPayAllPayslips: (month: string) => void;
   onResetPayslip?: (employeeId: string, month: string, payslipId?: string) => Promise<void> | void;
   onUpdateEmployee?: (id: string, updatedData: any) => Promise<void> | void;
+  onUploadPayrollDocument?: (employeeId: string, month: string, fileOrFiles: File | File[], payslipId?: string) => Promise<any>;
+  onDeletePayrollDocument?: (employeeId: string, month: string, payslipId?: string, docId?: string) => Promise<boolean>;
   companyName?: string;
   companyId?: string;
   companyLogoUrl?: string;
@@ -31,6 +34,7 @@ interface PayrollViewProps {
   selectedBranch?: string;
   companyPan?: string;
   companyTan?: string;
+  initialSubTab?: "payslips" | "my_payslips" | "config";
 }
 
 export function computeIncomeTax(gross: number, taxType: "percentage" | "fixed" | "slab" | string | undefined, taxValue: number | undefined): number {
@@ -68,19 +72,24 @@ export default function PayrollView({
   onPayAllPayslips,
   onResetPayslip,
   onUpdateEmployee,
+  onUploadPayrollDocument,
+  onDeletePayrollDocument,
   companyName = "SnailHR Payroll",
   companyId = "",
   companyLogoUrl = "",
   empCodePrefix = "EMP",
   selectedBranch = "All Branches",
   companyPan = "",
-  companyTan = ""
+  companyTan = "",
+  initialSubTab
 }: PayrollViewProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"payslips" | "config">(() => {
+  const [activeSubTab, setActiveSubTab] = useState<"payslips" | "my_payslips" | "config">(() => {
+    if (initialSubTab) return initialSubTab;
+    if (role === "employee") return "my_payslips";
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("snailhr_payroll_activeSubTab");
-      if (saved === "payslips" || saved === "config") {
-        return saved;
+      if (saved === "payslips" || saved === "my_payslips" || saved === "config") {
+        return saved as any;
       }
     }
     return "payslips";
@@ -116,6 +125,105 @@ export default function PayrollView({
   const [editEsiCustom, setEditEsiCustom] = useState("");
   const [isSavingSalary, setIsSavingSalary] = useState(false);
   const [taxProfileEmp, setTaxProfileEmp] = useState<Employee | null>(null);
+
+  // Document Upload & Viewer States (Multiple Docs Support)
+  const [uploadModalEmp, setUploadModalEmp] = useState<{ emp: Employee; payslip?: Payslip } | null>(null);
+  const [viewDocModal, setViewDocModal] = useState<{ payslip: Payslip; employeeName: string; empCode: string } | null>(null);
+  const [uploadDocFiles, setUploadDocFiles] = useState<File[]>([]);
+  const [activeDocIndex, setActiveDocIndex] = useState(0);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [uploadDocError, setUploadDocError] = useState("");
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+
+  const isPdf = (url?: string, name?: string) => {
+    if (!url && !name) return false;
+    const str = `${url || ""} ${name || ""}`.toLowerCase();
+    return str.includes(".pdf") || str.includes("application/pdf");
+  };
+
+  const handleDownloadFile = (url: string, filename: string) => {
+    if (!url) return;
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "payslip-document";
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err) {
+      window.open(url, "_blank");
+    }
+  };
+
+  const handleDownloadAllFiles = (docs: Array<{ url: string; name: string }>) => {
+    if (!docs || docs.length === 0) return;
+    docs.forEach((doc, idx) => {
+      setTimeout(() => {
+        handleDownloadFile(doc.url, doc.name);
+      }, idx * 300);
+    });
+  };
+
+  const handleExecuteUploadDoc = async () => {
+    if (!uploadModalEmp || uploadDocFiles.length === 0 || !onUploadPayrollDocument) return;
+    setIsUploadingDoc(true);
+    setUploadDocError("");
+    try {
+      const updatedSlip = await onUploadPayrollDocument(
+        uploadModalEmp.emp.id,
+        selectedMonth,
+        uploadDocFiles,
+        uploadModalEmp.payslip?.id
+      );
+      if (updatedSlip) {
+        setUploadModalEmp(null);
+        setUploadDocFiles([]);
+        // If viewDocModal was open, update it
+        if (viewDocModal && (viewDocModal.payslip.id === updatedSlip.id || viewDocModal.payslip.employeeId === uploadModalEmp.emp.id)) {
+          setViewDocModal({
+            ...viewDocModal,
+            payslip: updatedSlip
+          });
+          setActiveDocIndex(0);
+        }
+      }
+    } catch (err: any) {
+      setUploadDocError(err?.message || "Failed to upload documents");
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteAttachedDoc = async (slip: Payslip, docId?: string) => {
+    if (!onDeletePayrollDocument) return;
+    if (!confirm("Are you sure you want to delete this attached payroll document?")) return;
+    setIsDeletingDoc(true);
+    try {
+      const success = await onDeletePayrollDocument(slip.employeeId, slip.month, slip.id, docId);
+      if (success) {
+        const remainingDocs = (slip.documents || []).filter(d => d.id !== docId);
+        if (remainingDocs.length === 0) {
+          setViewDocModal(null);
+        } else if (viewDocModal) {
+          setViewDocModal({
+            ...viewDocModal,
+            payslip: {
+              ...viewDocModal.payslip,
+              documents: remainingDocs,
+              documentUrl: remainingDocs[0]?.url,
+              documentName: remainingDocs[0]?.name
+            }
+          });
+          setActiveDocIndex(0);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDeletingDoc(false);
+    }
+  };
 
   const openEditAllowancesModal = (emp: Employee) => {
     setEditingEmpForSalary(emp);
@@ -481,16 +589,20 @@ export default function PayrollView({
   };
 
   const getEmployeeName = (empId: string) => {
-    return employees.find(e => e.id === empId)?.fullName || "Unknown Employee";
+    return employees.find(e => e.id === empId || e.code === empId)?.fullName || "Unknown Employee";
   };
 
   const getEmployeeEmail = (empId: string) => {
-    return employees.find(e => e.id === empId)?.email || "";
+    return employees.find(e => e.id === empId || e.code === empId)?.email || "";
   };
 
   const getEmployeeBank = (empId: string) => {
-    const emp = employees.find(e => e.id === empId);
-    return emp ? `${emp.bankDetails.bankName} - A/C ****${emp.bankDetails.accountNumber.slice(-4)}` : "HDFC Bank";
+    const emp = employees.find(e => e.id === empId || e.code === empId);
+    if (emp && emp.bankDetails && emp.bankDetails.bankName) {
+      const ac = emp.bankDetails.accountNumber ? ` - A/C ****${emp.bankDetails.accountNumber.slice(-4)}` : "";
+      return `${emp.bankDetails.bankName}${ac}`;
+    }
+    return "Direct Bank Transfer";
   };
 
   // Generate employee code: returns employee's exact database code/id if formatted, otherwise formats prefix
@@ -558,15 +670,30 @@ export default function PayrollView({
       {/* Tab Navigation header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-3.5 sm:p-4 shadow-xs dark:neon-glow">
         <div className="flex items-center space-x-1.5 bg-slate-50 dark:bg-[#0a0a0a] p-1 rounded-xl border border-slate-100 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
-          <button
-            onClick={() => setActiveSubTab("payslips")}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "payslips" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
-          >
-            {role === "employee" ? "My Salary Payslips" : "Payroll Dashboard"}
-          </button>
-
-          {(role === "admin" || role === "hr") && (
+          {role === "employee" ? (
+            <button
+              onClick={() => setActiveSubTab("my_payslips")}
+              className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "my_payslips" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs font-bold" : "text-slate-400 hover:text-slate-600"}`}
+            >
+              My Salary Payslips
+            </button>
+          ) : (
             <>
+              <button
+                onClick={() => setActiveSubTab("payslips")}
+                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap ${activeSubTab === "payslips" ? "bg-white dark:bg-[#1a1a1a] text-slate-800 dark:text-white shadow-xs font-bold" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                Payroll Dashboard
+              </button>
+
+              <button
+                onClick={() => setActiveSubTab("my_payslips")}
+                className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center space-x-1.5 ${activeSubTab === "my_payslips" ? "bg-white dark:bg-[#1a1a1a] text-emerald-600 dark:text-emerald-400 shadow-xs font-bold" : "text-slate-400 hover:text-slate-600"}`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>My Salary Payslips</span>
+              </button>
+
               <button
                 onClick={() => setActiveSubTab("config")}
                 className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg transition-all cursor-pointer whitespace-nowrap flex items-center space-x-1.5 ${activeSubTab === "config" ? "bg-white dark:bg-[#1a1a1a] text-emerald-600 dark:text-emerald-400 font-bold shadow-xs" : "text-slate-400 hover:text-slate-600"}`}
@@ -574,13 +701,11 @@ export default function PayrollView({
                 <Sliders className="w-3.5 h-3.5 text-emerald-500" />
                 <span>Salary & PF Rules</span>
               </button>
-
             </>
           )}
-
         </div>
 
-        {activeSubTab === "payslips" && (
+        {(activeSubTab === "payslips" || activeSubTab === "my_payslips") && (
           <div className="flex items-center space-x-2 shrink-0">
             <label className="text-xs font-semibold text-slate-400">Month Ledger:</label>
             <select
@@ -608,60 +733,156 @@ export default function PayrollView({
         )}
       </div>
 
-      {/* SUBTAB 1: Payslips Grid & Generating Station */}
-      {activeSubTab === "payslips" && (
+      {/* Employee View: My Salary Payslips / Vault */}
+      {(activeSubTab === "my_payslips" || (role === "employee" && activeSubTab === "payslips")) && (
         <div className="space-y-6">
-          {role === "employee" ? (
-            /* Employee View: Payslip Archives */
-            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-              <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">My Payslips Vault</h3>
-                <p className="text-xs text-slate-400 dark:text-gray-500">Download and print validated salary slips</p>
-              </div>
+          {(() => {
+            const currentEmpObj = employees.find(e => e.id === currentEmployeeId || e.code === currentEmployeeId);
+            const myEmployeeIds = new Set([
+              currentEmployeeId,
+              currentEmpObj?.id,
+              currentEmpObj?.code,
+              currentEmpObj ? getEmployeeCode(currentEmpObj) : undefined
+            ].filter(Boolean) as string[]);
 
-              <div className="space-y-3">
-                {payslips
-                  .filter(p => p.employeeId === currentEmployeeId)
-                  .map(slip => (
-                    <div key={slip.id} className="p-4 bg-slate-50/50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex items-center justify-between text-xs">
-                      <div className="space-y-1">
-                        <p className="font-bold text-slate-800 dark:text-white text-xs">{slip.month} Earnings Summary</p>
-                        <p className="text-slate-400 dark:text-gray-500 font-medium">Net Disbursed: <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{slip.netPay.toLocaleString()}</span></p>
-                        <p className="text-[10px] text-slate-400 dark:text-gray-500">Disbursed to: {getEmployeeBank(slip.employeeId)}</p>
-                      </div>
+            const myVaultPayslips = payslips.filter(p => 
+              myEmployeeIds.has(p.employeeId) && 
+              (!selectedMonth || selectedMonth === "All" || p.month === selectedMonth) &&
+              p.status !== "Draft"
+            );
 
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => {
-                            setActiveSlip(slip);
-                            setSlipModalTab("payslip");
-                          }}
-                          className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>View PDF Slip</span>
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActiveSlip(slip);
-                            setSlipModalTab("form16");
-                          }}
-                          className="bg-violet-600/10 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 hover:bg-violet-600/20 px-3 py-2 rounded-lg font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
-                        >
-                          <Calculator className="w-3.5 h-3.5" />
-                          <span>View Form 16</span>
-                        </button>
+            return (
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
+                <div className="mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">My Payslips Vault</h3>
+                  <p className="text-xs text-slate-400 dark:text-gray-500">Download and print validated salary slips and attached documents</p>
+                </div>
+
+                <div className="space-y-3">
+                  {myVaultPayslips.map(slip => {
+                    const docList = (slip.documents && slip.documents.length > 0)
+                      ? slip.documents
+                      : (slip.documentUrl ? [{ id: "doc-1", name: slip.documentName || "Document", url: slip.documentUrl }] : []);
+
+                    const targetEmp = employees.find(e => e.id === slip.employeeId || e.code === slip.employeeId) || currentEmpObj;
+                    const sal = targetEmp ? getEmpSalaryComponents(targetEmp) : null;
+                    const grossEarnings = sal ? (sal.basic + sal.hra + sal.telephone + sal.fuel + sal.professionalDev + sal.lta + sal.allowances) : 0;
+                    const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(slip.employeeId) || targetEmp?.salary?.pfMode === "exempt";
+                    let pfDeduction = 0;
+                    if (!isPfExempt && sal) {
+                      if (targetEmp?.salary?.pfMode === "fixed_1800" || config?.pfModeDefault === "fixed_1800") {
+                        pfDeduction = 1800;
+                      } else if (targetEmp?.salary?.pfMode === "custom" && targetEmp?.salary?.pfDeduction !== undefined && targetEmp.salary.pfDeduction > 0) {
+                        pfDeduction = targetEmp.salary.pfDeduction;
+                      } else {
+                        pfDeduction = (config?.pfType === "fixed")
+                          ? (config?.pfValue ?? 1800)
+                          : Math.round(sal.basic * ((config?.pfValue ?? 12) / 100));
+                      }
+                    }
+                    const empTdsOptIn = targetEmp?.salary?.tdsOptIn !== false;
+                    const defaultTaxes = (!empTdsOptIn || !targetEmp?.salary)
+                      ? 0
+                      : computeMonthlyTDSFromEmployee(
+                        { ...targetEmp.salary, taxProfile: targetEmp.salary?.taxProfile as any },
+                        config?.taxType || "percentage",
+                        config?.taxValue ?? 5
+                      );
+                    const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(slip.employeeId) ||
+                      (config?.esiExemptEmployeeIds || []).includes(targetEmp?.code || "") ||
+                      targetEmp?.salary?.esiOptIn === false;
+                    let esiEst = 0;
+                    if (config?.esiEnabled !== false && !isEsiExempt) {
+                      if (targetEmp?.salary?.esiMode === "custom" && targetEmp?.salary?.esiDeduction !== undefined && targetEmp.salary.esiDeduction > 0) {
+                        esiEst = targetEmp.salary.esiDeduction;
+                      } else {
+                        const esiCeiling = config?.esiGrossCeiling ?? 21000;
+                        if (esiCeiling <= 0 || grossEarnings <= esiCeiling) {
+                          esiEst = Math.round(grossEarnings * ((config?.esiRatePercentage ?? 0.75) / 100));
+                        }
+                      }
+                    }
+                    const empPendingFines = (fines || [])
+                      .filter(f => f.employeeId === slip.employeeId && f.status === "Deducted From Payroll")
+                      .reduce((sum, f) => sum + f.amount, 0);
+
+                    const estimatedNet = Math.max(0, grossEarnings - pfDeduction - defaultTaxes - esiEst - empPendingFines);
+                    const effectiveNetPay = (slip.netPay && slip.netPay > 0) ? slip.netPay : estimatedNet;
+
+                    return (
+                      <div key={slip.id} className="p-4 bg-slate-50/50 dark:bg-[#0a0a0a]/50 border border-slate-100 dark:border-[#1a1a1a] rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <p className="font-bold text-slate-800 dark:text-white text-xs">{slip.month} Earnings Summary</p>
+                            {slip.status === "Draft" && (
+                              <span className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200/50">
+                                Pending Compilation
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-400 dark:text-gray-500 font-medium">
+                            Net Disbursed: <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{effectiveNetPay.toLocaleString()}</span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 dark:text-gray-500">Disbursed to: {getEmployeeBank(slip.employeeId)}</p>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {docList.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const emp = targetEmp;
+                                setViewDocModal({
+                                  payslip: slip,
+                                  employeeName: emp?.fullName || getEmployeeName(slip.employeeId),
+                                  empCode: emp ? getEmployeeCode(emp) : slip.employeeId
+                                });
+                                setActiveDocIndex(0);
+                              }}
+                              className="bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 cursor-pointer transition-all border border-blue-200/80 dark:border-blue-800/60 shadow-2xs"
+                              title="View and download all attached salary documents"
+                            >
+                              <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                              <span>{docList.length === 1 ? "Attached Document" : `Attached Docs (${docList.length})`}</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setActiveSlip(slip);
+                              setSlipModalTab("payslip");
+                            }}
+                            className="bg-emerald-600/10 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 hover:bg-emerald-600/20 px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>View PDF Slip</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setActiveSlip(slip);
+                              setSlipModalTab("form16");
+                            }}
+                            className="bg-violet-600/10 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400 hover:bg-violet-600/20 px-3 py-2 rounded-xl font-bold flex items-center space-x-1.5 cursor-pointer transition-colors"
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                            <span>View Form 16</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                {payslips.filter(p => p.employeeId === currentEmployeeId).length === 0 && (
-                  <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No salary payslips generated for this billing month yet.</p>
-                )}
+                    );
+                  })}
+
+                  {myVaultPayslips.length === 0 && (
+                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6 bg-slate-50/50 dark:bg-[#0a0a0a]/10 rounded-xl">No salary payslips generated for this billing month yet.</p>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            /* HR/Admin View: Process and Generate Payslips */
-            <>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Admin/HR View: Payroll Processing Dashboard */}
+      {role !== "employee" && activeSubTab === "payslips" && (
+        <div className="space-y-6">
               {/* Top Monthly Summary KPI Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs dark:neon-glow flex items-center justify-between">
@@ -765,7 +986,7 @@ export default function PayrollView({
                         <th className="py-2.5 px-1.5 text-right text-rose-500">Fines</th>
                         <th className="py-2.5 px-1.5 text-right text-emerald-600">Net Pay</th>
                         <th className="py-2.5 px-2 text-center">Status</th>
-                        <th className="py-2.5 px-2 text-right">Actions</th>
+                        <th className="py-2.5 px-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
@@ -820,110 +1041,199 @@ export default function PayrollView({
                         return (
                           <tr key={emp.id} className="hover:bg-slate-50/50 dark:hover:bg-[#1a1a1a]/30 transition-colors">
                             <td className="py-2 px-2">
-                              <div className="flex items-center space-x-2">
-                                <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
+                              <div className="flex items-start space-x-2">
+                                <div className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center justify-center font-bold text-[10px] uppercase shrink-0 mt-0.5">
                                   {emp.fullName.charAt(0)}
                                 </div>
                                 <div className="min-w-0">
                                   <div className="font-semibold text-slate-800 dark:text-gray-100 text-xs truncate leading-tight">
                                     {emp.fullName}
                                   </div>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    <span className="font-mono text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200/60 dark:border-amber-800/40">
+                                  <div className="mt-0.5">
+                                    <span className="inline-block font-mono text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1 py-0.2 rounded border border-amber-200/60 dark:border-amber-800/40 leading-none">
                                       {getEmployeeCode(emp)}
                                     </span>
-                                    <span className="text-[10px] text-slate-400 dark:text-gray-500 font-normal truncate">• {emp.department}</span>
+                                  </div>
+                                  <div className="text-[9.5px] text-slate-400 dark:text-gray-500 font-medium truncate mt-0.5 leading-tight">
+                                    {(() => {
+                                      const des = designations.find(d => d.id === emp.designationId);
+                                      return des?.title || (emp as any).designation || emp.department || "Specialist";
+                                    })()}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-700 dark:text-gray-300 font-semibold whitespace-nowrap">₹{(hasSlip ? hasSlip.basic : sal.basic).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.hra : sal.hra).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.telephone : sal.telephone).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.fuel : sal.fuel).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.professionalDev : sal.professionalDev).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.lta : sal.lta).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(hasSlip ? hasSlip.allowances : sal.allowances).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes + esiEst).toLocaleString()}</td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
-                              ₹{hasSlip ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
-                            </td>
-                            <td className="py-2 px-1.5 text-right font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
-                              ₹{hasSlip ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
-                            </td>
-                            <td className="py-2 px-2 text-center whitespace-nowrap">
-                              <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${hasSlip?.status === "Paid"
-                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
-                                : hasSlip?.status === "Generated"
-                                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
-                                  : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
-                                }`}>
-                                {hasSlip ? hasSlip.status : "Pending Run"}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 text-right whitespace-nowrap">
-                              {hasSlip ? (
-                                <div className="flex items-center justify-end space-x-1.5">
-                                  <button
-                                    onClick={() => setActiveSlip(hasSlip)}
-                                    className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold text-[11px] inline-flex items-center space-x-1 cursor-pointer"
-                                  >
-                                    <span>Review</span>
-                                  </button>
-                                  {(role === "admin" || role === "hr") && onResetPayslip && (
-                                    <button
-                                      onClick={() => {
-                                        if (confirm(`Reset and delete the generated payslip for ${emp.fullName} for ${selectedMonth}? This will release the fine deductions back to payroll.`)) {
-                                          onResetPayslip(emp.id, selectedMonth, hasSlip?.id);
-                                        }
-                                      }}
-                                      className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-1 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition-colors"
-                                      title="Reset compiled slip to regenerate"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-end space-x-1">
-                                  {(role === "admin" || role === "hr") && onUpdateEmployee && (
-                                    <button
-                                      onClick={() => openEditAllowancesModal(emp)}
-                                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-[#1a1a1a] dark:hover:bg-amber-950/40 text-slate-600 hover:text-amber-600 dark:text-gray-300 dark:hover:text-amber-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
-                                      title="Edit Monthly Allowances (Tel, Fuel, Prof Dev, LTA)"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  {(role === "admin" || role === "hr") && onUpdateEmployee && (
-                                    <button
-                                      onClick={() => setTaxProfileEmp(emp)}
-                                      className="p-1.5 rounded-lg bg-slate-100 hover:bg-violet-50 dark:bg-[#1a1a1a] dark:hover:bg-violet-950/40 text-slate-600 hover:text-violet-600 dark:text-gray-300 dark:hover:text-violet-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
-                                      title="Set Tax Profile (Regime, HRA, 80C, etc.)"
-                                    >
-                                      <Calculator className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleCompileSlip(emp.id)}
-                                    disabled={compilingEmpId === emp.id}
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs shrink-0"
-                                  >
-                                    {compilingEmpId === emp.id ? (
-                                      <>
-                                        <RefreshCw className="w-3 h-3 shrink-0 animate-spin" />
-                                        <span>Compiling</span>
-                                      </>
+                            {(() => {
+                              const isCompiled = hasSlip && hasSlip.status !== "Draft";
+                              const docList = (hasSlip?.documents && hasSlip.documents.length > 0)
+                                ? hasSlip.documents
+                                : (hasSlip?.documentUrl ? [{ id: "doc-1", name: hasSlip.documentName || "Document", url: hasSlip.documentUrl }] : []);
+                              const docCount = docList.length;
+
+                              return (
+                                <>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-700 dark:text-gray-300 font-semibold whitespace-nowrap">₹{(isCompiled ? hasSlip.basic : sal.basic).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.hra : sal.hra).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.telephone : sal.telephone).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.fuel : sal.fuel).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.professionalDev : sal.professionalDev).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.lta : sal.lta).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.allowances : sal.allowances).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes + esiEst).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
+                                    ₹{isCompiled ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                                    ₹{isCompiled ? hasSlip.netPay.toLocaleString() : netSalaryEstimate.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-2 text-center whitespace-nowrap">
+                                    <span className={`inline-block px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-tight ${isCompiled && hasSlip?.status === "Paid"
+                                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200/50"
+                                      : isCompiled && hasSlip?.status === "Generated"
+                                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200/50"
+                                        : "bg-slate-100 text-slate-500 dark:bg-[#1a1a1a] dark:text-gray-400 border border-slate-200/50 dark:border-[#2a2a2a]"
+                                      }`}>
+                                      {isCompiled ? hasSlip.status : "Pending Run"}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-center whitespace-nowrap">
+                                    {isCompiled ? (
+                                      <div className="flex items-center justify-center space-x-1.5">
+                                        {/* Document Uploaded / Upload button */}
+                                        {docCount > 0 ? (
+                                          <button
+                                            onClick={() => {
+                                              setViewDocModal({
+                                                payslip: hasSlip,
+                                                employeeName: emp.fullName,
+                                                empCode: getEmployeeCode(emp)
+                                              });
+                                              setActiveDocIndex(0);
+                                            }}
+                                            className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/60 text-[10px] font-bold inline-flex items-center space-x-1 cursor-pointer transition-all shadow-2xs shrink-0"
+                                            title={`${docCount} document${docCount > 1 ? 's' : ''} attached. Click to view, download, or manage.`}
+                                          >
+                                            <Paperclip className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span className="font-bold">{docCount === 1 ? "1 Doc" : `${docCount} Docs`}</span>
+                                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          </button>
+                                        ) : (
+                                          (role === "admin" || role === "hr") && onUploadPayrollDocument && (
+                                            <button
+                                              onClick={() => {
+                                                setUploadModalEmp({ emp, payslip: hasSlip });
+                                                setUploadDocFiles([]);
+                                                setUploadDocError("");
+                                              }}
+                                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 dark:bg-[#1a1a1a] dark:hover:bg-blue-950/40 text-slate-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 border border-slate-200 dark:border-[#2a2a2a] text-[10px] font-semibold inline-flex items-center space-x-1 cursor-pointer transition-all shrink-0"
+                                              title="Upload PDF or Image document(s) for this employee's payslip"
+                                            >
+                                              <Upload className="w-3 h-3 text-blue-500 shrink-0" />
+                                              <span>Upload Doc</span>
+                                            </button>
+                                          )
+                                        )}
+
+                                        <button
+                                          onClick={() => {
+                                            setActiveSlip(hasSlip);
+                                            setSlipModalTab("payslip");
+                                          }}
+                                          className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold text-[11px] inline-flex items-center space-x-1 cursor-pointer"
+                                        >
+                                          <span>Review</span>
+                                        </button>
+                                        {(role === "admin" || role === "hr") && onResetPayslip && (
+                                          <button
+                                            onClick={() => {
+                                              if (confirm(`Reset and delete the generated payslip for ${emp.fullName} for ${selectedMonth}? This will release the fine deductions back to payroll.`)) {
+                                                onResetPayslip(emp.id, selectedMonth, hasSlip?.id);
+                                              }
+                                            }}
+                                            className="text-rose-500 hover:text-rose-700 font-bold inline-flex items-center cursor-pointer ml-1 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md transition-colors"
+                                            title="Reset compiled slip to regenerate"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
                                     ) : (
-                                      <>
-                                        <Sparkles className="w-3 h-3 shrink-0" />
-                                        <span>Compile</span>
-                                      </>
+                                      <div className="flex items-center justify-center space-x-1">
+                                        {/* Document Uploaded / Upload button for pending run */}
+                                        {docCount > 0 ? (
+                                          <button
+                                            onClick={() => {
+                                              setViewDocModal({
+                                                payslip: hasSlip!,
+                                                employeeName: emp.fullName,
+                                                empCode: getEmployeeCode(emp)
+                                              });
+                                              setActiveDocIndex(0);
+                                            }}
+                                            className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-700/60 text-[10px] font-bold inline-flex items-center space-x-1 cursor-pointer transition-all shadow-2xs shrink-0"
+                                            title={`${docCount} document${docCount > 1 ? 's' : ''} attached. Click to view, download, or manage.`}
+                                          >
+                                            <Paperclip className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                            <span className="font-bold">{docCount === 1 ? "1 Doc" : `${docCount} Docs`}</span>
+                                            <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                          </button>
+                                        ) : (
+                                          (role === "admin" || role === "hr") && onUploadPayrollDocument && (
+                                            <button
+                                              onClick={() => {
+                                                setUploadModalEmp({ emp, payslip: hasSlip });
+                                                setUploadDocFiles([]);
+                                                setUploadDocError("");
+                                              }}
+                                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 dark:bg-[#1a1a1a] dark:hover:bg-blue-950/40 text-slate-600 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                              title="Upload PDF or Image document(s) for this employee"
+                                            >
+                                              <Upload className="w-3.5 h-3.5 text-blue-500" />
+                                            </button>
+                                          )
+                                        )}
+
+                                        {(role === "admin" || role === "hr") && onUpdateEmployee && (
+                                          <button
+                                            onClick={() => openEditAllowancesModal(emp)}
+                                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-amber-50 dark:bg-[#1a1a1a] dark:hover:bg-amber-950/40 text-slate-600 hover:text-amber-600 dark:text-gray-300 dark:hover:text-amber-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                            title="Edit Monthly Allowances (Tel, Fuel, Prof Dev, LTA)"
+                                          >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                        {(role === "admin" || role === "hr") && onUpdateEmployee && (
+                                          <button
+                                            onClick={() => setTaxProfileEmp(emp)}
+                                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-violet-50 dark:bg-[#1a1a1a] dark:hover:bg-violet-950/40 text-slate-600 hover:text-violet-600 dark:text-gray-300 dark:hover:text-violet-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                            title="Set Tax Profile (Regime, HRA, 80C, etc.)"
+                                          >
+                                            <Calculator className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => handleCompileSlip(emp.id)}
+                                          disabled={compilingEmpId === emp.id}
+                                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] px-2.5 py-1.5 rounded-lg inline-flex items-center space-x-1 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs shrink-0"
+                                        >
+                                          {compilingEmpId === emp.id ? (
+                                            <>
+                                              <RefreshCw className="w-3 h-3 shrink-0 animate-spin" />
+                                              <span>Compiling</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Sparkles className="w-3 h-3 shrink-0" />
+                                              <span>Compile</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
                                     )}
-                                  </button>
-                                </div>
-                              )}
-                            </td>
+                                  </td>
+                                </>
+                              );
+                            })()}
                           </tr>
                         );
                       })}
@@ -986,10 +1296,8 @@ export default function PayrollView({
                   </div>
                 )}
               </div>
-            </>
+            </div>
           )}
-        </div>
-      )}
 
       {/* SUBTAB 2: Designation Settings Manager */}
 
@@ -2030,7 +2338,7 @@ export default function PayrollView({
               </div>
 
               {/* View Switcher Tabs */}
-              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 shadow-inner">
+              <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700 shadow-inner space-x-1">
                 <button
                   onClick={() => setSlipModalTab("payslip")}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${slipModalTab === "payslip"
@@ -2051,6 +2359,21 @@ export default function PayrollView({
                   <Calculator className="w-3.5 h-3.5" />
                   <span>Form 16 (Tax Part-B)</span>
                 </button>
+
+                {activeSlip.documentUrl && (
+                  <button
+                    onClick={() => setViewDocModal({
+                      payslip: activeSlip,
+                      employeeName: emp?.fullName || getEmployeeName(activeSlip.employeeId),
+                      empCode
+                    })}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer bg-blue-600/90 text-white hover:bg-blue-600 shadow-sm"
+                    title="View and download attached document"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" />
+                    <span>Attached Document</span>
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">
@@ -2906,6 +3229,405 @@ export default function PayrollView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Document Viewer & Gallery Management Modal */}
+      {viewDocModal && (() => {
+        const latestSlip = payslips.find(
+          p => p.id === viewDocModal.payslip.id || (p.employeeId === viewDocModal.payslip.employeeId && p.month === viewDocModal.payslip.month)
+        ) || viewDocModal.payslip;
+
+        const allDocs = (latestSlip.documents && latestSlip.documents.length > 0)
+          ? latestSlip.documents
+          : (latestSlip.documentUrl ? [{
+              id: "doc-1",
+              name: latestSlip.documentName || "Payroll Document",
+              url: latestSlip.documentUrl,
+              uploadedAt: latestSlip.documentUploadedAt || "",
+              uploadedBy: latestSlip.documentUploadedBy || "Admin"
+            }] : []);
+
+        const safeActiveIndex = activeDocIndex < allDocs.length ? activeDocIndex : 0;
+        const currentDoc = allDocs[safeActiveIndex] || allDocs[0];
+        const isCurrentPdf = currentDoc ? isPdf(currentDoc.url, currentDoc.name) : false;
+
+        return (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl w-full max-w-5xl max-h-[94vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-[#1a1a1a] shrink-0 bg-slate-50/80 dark:bg-[#121212]/80">
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    {isCurrentPdf ? (
+                      <FileText className="w-5 h-5 text-rose-500" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-blue-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm sm:text-base truncate">
+                      {currentDoc?.name || "Attached Payroll Document"}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 font-mono truncate">
+                      {viewDocModal.employeeName} ({viewDocModal.empCode}) · {latestSlip.month}
+                      {currentDoc?.uploadedBy && ` · Uploaded by: ${currentDoc.uploadedBy}`}
+                      {allDocs.length > 1 && ` · Showing ${safeActiveIndex + 1} of ${allDocs.length} documents`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 shrink-0">
+                  {currentDoc?.url && (
+                    <>
+                      <button
+                        onClick={() => handleDownloadFile(currentDoc.url, currentDoc.name || "payroll_document")}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-all shadow-xs"
+                        title="Download Active Document"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Download</span>
+                      </button>
+                      {allDocs.length > 1 && (
+                        <button
+                          onClick={() => handleDownloadAllFiles(allDocs)}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer transition-all shadow-xs hidden sm:flex"
+                          title="Download All Attached Documents"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download All ({allDocs.length})</span>
+                        </button>
+                      )}
+                      <a
+                        href={currentDoc.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-slate-600 dark:text-gray-300 transition-colors"
+                        title="Open file in new tab"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => setViewDocModal(null)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Multi-Document Gallery Selector Tabs (Always visible if 1 or more docs) */}
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-100/80 dark:bg-[#151515] border-b border-slate-200/80 dark:border-[#222] overflow-x-auto shrink-0">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-gray-400 mr-1 shrink-0">
+                  Attached Documents ({allDocs.length}):
+                </span>
+                {allDocs.map((doc, idx) => {
+                  const isPdfDoc = isPdf(doc.url, doc.name);
+                  const isSelected = safeActiveIndex === idx;
+                  return (
+                    <button
+                      key={doc.id || idx}
+                      onClick={() => setActiveDocIndex(idx)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 cursor-pointer transition-all border shrink-0 ${
+                        isSelected
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-500/30"
+                          : "bg-white dark:bg-[#1e1e1e] text-slate-700 dark:text-gray-300 border-slate-200 dark:border-[#2c2c2c] hover:bg-slate-50 dark:hover:bg-[#282828]"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black ${
+                        isSelected ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-[#2a2a2a] text-slate-500"
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      {isPdfDoc ? (
+                        <FileText className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-rose-500"}`} />
+                      ) : (
+                        <ImageIcon className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-blue-500"}`} />
+                      )}
+                      <span className="truncate max-w-[140px]">{doc.name}</span>
+                    </button>
+                  );
+                })}
+
+                {(role === "admin" || role === "hr") && onUploadPayrollDocument && (
+                  <button
+                    onClick={() => {
+                      const targetEmp = employees.find(e => e.id === latestSlip.employeeId);
+                      if (targetEmp) {
+                        setUploadModalEmp({ emp: targetEmp, payslip: latestSlip });
+                        setUploadDocFiles([]);
+                        setUploadDocError("");
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-xl border border-dashed border-blue-400/80 dark:border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs font-bold flex items-center space-x-1 cursor-pointer transition-all shrink-0 ml-1"
+                    title="Upload and attach more documents for this employee"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>+ Add More</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Document Content View Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-slate-100 dark:bg-[#070707] flex items-center justify-center min-h-[400px]">
+                {currentDoc?.url ? (
+                  isCurrentPdf ? (
+                    <div className="w-full h-full flex flex-col space-y-2">
+                      <div className="flex items-center justify-between px-2 text-[11px] text-slate-500">
+                        <span>Previewing: <strong className="text-slate-700 dark:text-gray-300">{currentDoc.name}</strong></span>
+                        <a
+                          href={currentDoc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 dark:text-blue-400 hover:underline font-bold flex items-center space-x-1"
+                        >
+                          <span>Open in Full Tab</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                      <iframe
+                        src={currentDoc.url}
+                        className="w-full h-[62vh] rounded-xl border border-slate-200 dark:border-[#202020] bg-white shadow-xs"
+                        title="PDF Document Preview"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center max-w-full">
+                      <img
+                        src={currentDoc.url}
+                        alt={currentDoc.name || "Document Image"}
+                        className="max-h-[65vh] max-w-full object-contain rounded-xl shadow-lg border border-slate-200 dark:border-[#202020] bg-white dark:bg-[#121212]"
+                      />
+                    </div>
+                  )
+                ) : (
+                  <div className="text-center py-12 text-slate-400">
+                    <FileText className="w-12 h-12 mx-auto mb-2 text-slate-300 dark:text-gray-600" />
+                    <p className="text-sm font-semibold">No document preview available.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-t border-slate-100 dark:border-[#1a1a1a] bg-white dark:bg-[#0f0f0f] shrink-0">
+                <div className="text-slate-400 text-xs font-mono">
+                  {currentDoc?.uploadedAt && (
+                    <span>Uploaded on: {new Date(currentDoc.uploadedAt).toLocaleString("en-IN")}</span>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {(role === "admin" || role === "hr") && onUploadPayrollDocument && (
+                    <button
+                      onClick={() => {
+                        const targetEmp = employees.find(e => e.id === latestSlip.employeeId);
+                        if (targetEmp) {
+                          setUploadModalEmp({ emp: targetEmp, payslip: latestSlip });
+                          setUploadDocFiles([]);
+                          setUploadDocError("");
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] text-slate-700 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-colors"
+                      title="Upload additional or replacement documents"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-blue-500" />
+                      <span>+ Add More Documents</span>
+                    </button>
+                  )}
+
+                  {(role === "admin" || role === "hr") && onDeletePayrollDocument && currentDoc && (
+                    <button
+                      onClick={() => handleDeleteAttachedDoc(latestSlip, currentDoc.id)}
+                      disabled={isDeletingDoc}
+                      className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                      title="Delete this document"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{isDeletingDoc ? "Deleting..." : "Delete This Doc"}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setViewDocModal(null)}
+                    className="px-4 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-slate-700 dark:text-gray-200 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Multi-Document Upload Modal (Rendered on top with z-[70]) */}
+      {uploadModalEmp && (
+        <div className="fixed inset-0 bg-black/75 z-[70] flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-[#1a1a1a] shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
+                    Upload Payroll Document(s)
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {uploadModalEmp.emp.fullName} ({getEmployeeCode(uploadModalEmp.emp)}) · {selectedMonth}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setUploadModalEmp(null);
+                  setUploadDocFiles([]);
+                  setUploadDocError("");
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Info Banner */}
+              <div className="bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-300 flex items-start space-x-2">
+                <HelpCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                <span>
+                  Upload <strong>1 or more documents</strong> (Salary slips, NEFT transfer receipts, incentive sheets, appraisal letters) in <strong>PDF or Image format (PNG, JPG, JPEG, WEBP)</strong>.
+                </span>
+              </div>
+
+              {uploadDocError && (
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-600 dark:text-rose-400 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{uploadDocError}</span>
+                </div>
+              )}
+
+              {/* Drag & Drop Zone */}
+              <label className="block border-2 border-dashed border-slate-300 dark:border-[#2a2a2a] hover:border-blue-500 hover:bg-blue-50/20 dark:hover:bg-blue-950/10 rounded-2xl p-6 text-center cursor-pointer transition-all">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,image/*,.png,.jpg,.jpeg,.webp,.svg"
+                  onChange={e => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      setUploadDocFiles(prev => [...prev, ...Array.from(files)]);
+                      setUploadDocError("");
+                    }
+                  }}
+                  className="hidden"
+                />
+                <div className="space-y-2">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center">
+                    <Upload className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-xs text-slate-700 dark:text-gray-200">
+                      Click or drag &amp; drop to choose file(s)
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Select 1 or multiple PDFs / Images (Max 25MB each)
+                    </p>
+                  </div>
+                </div>
+              </label>
+
+              {/* Staged Files List */}
+              {uploadDocFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700 dark:text-gray-300">
+                    <span>Selected Files ({uploadDocFiles.length})</span>
+                    <button
+                      type="button"
+                      onClick={() => setUploadDocFiles([])}
+                      className="text-rose-500 hover:underline text-[11px] font-normal cursor-pointer"
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
+                    {uploadDocFiles.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-[#151515] border border-slate-200/80 dark:border-[#252525] rounded-xl text-xs"
+                      >
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                            {isPdf(undefined, file.name) ? <FileText className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 dark:text-gray-100 truncate max-w-[240px]">
+                              {file.name}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {(file.size / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setUploadDocFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Remove file"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 border-t border-slate-100 dark:border-[#1a1a1a] bg-slate-50/50 dark:bg-[#121212]/50 shrink-0">
+              <span className="text-[11px] text-slate-400 font-medium">
+                {uploadDocFiles.length === 0
+                  ? "No files selected"
+                  : `${uploadDocFiles.length} file${uploadDocFiles.length > 1 ? "s" : ""} staged`}
+              </span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadModalEmp(null);
+                    setUploadDocFiles([]);
+                    setUploadDocError("");
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-[#1a1a1a] rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={uploadDocFiles.length === 0 || isUploadingDoc}
+                  onClick={handleExecuteUploadDoc}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                >
+                  {isUploadingDoc ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Upload {uploadDocFiles.length > 0 ? `${uploadDocFiles.length} Document${uploadDocFiles.length > 1 ? "s" : ""}` : "Documents"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

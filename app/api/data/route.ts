@@ -243,29 +243,79 @@ export async function GET(request: Request) {
       }
 
       if (payslipsRes && payslipsRes.data && payslipsRes.data.length > 0) {
-        const sbPayslips = payslipsRes.data.map((row: any) => ({
-          id: row.id,
-          employeeId: row.employee_id || row.employeeId || "",
-          month: row.month || "",
-          basic: Number(row.basic) || 0,
-          hra: Number(row.hra) || 0,
-          telephone: Number(row.telephone ?? 0),
-          fuel: Number(row.fuel ?? 0),
-          professionalDev: Number(row.professional_dev ?? row.professionalDev ?? 0),
-          lta: Number(row.lta ?? 0),
-          allowances: Number(row.allowances) || 0,
-          finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
-          pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
-          taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
-          esiDeduction: Number(row.esi_deduction ?? row.esiDeduction ?? 0),
-          netPay: Number(row.net_pay ?? row.netPay ?? 0),
-          status: row.status || "Generated",
-          generatedAt: row.generated_at || row.generatedAt || new Date().toISOString(),
-          sentToEmail: row.sent_to_email || row.sentToEmail || ""
-        }));
+        const sbPayslips = payslipsRes.data.map((row: any) => {
+          let parsedDocs: any[] = [];
+          if (row.documents) {
+            if (Array.isArray(row.documents)) {
+              parsedDocs = row.documents;
+            } else if (typeof row.documents === "string") {
+              try { parsedDocs = JSON.parse(row.documents); } catch (e) { parsedDocs = []; }
+            }
+          }
+          if (parsedDocs.length === 0 && row.document_name && (row.document_name.startsWith("DOCS_JSON:") || row.document_name.startsWith("["))) {
+            try {
+              const rawJson = row.document_name.startsWith("DOCS_JSON:") ? row.document_name.slice(10) : row.document_name;
+              parsedDocs = JSON.parse(rawJson);
+            } catch (e) {
+              parsedDocs = [];
+            }
+          }
+          if (parsedDocs.length === 0 && (row.document_url || row.documentUrl)) {
+            parsedDocs = [{
+              id: "doc-1",
+              name: row.document_name || row.documentName || "Payroll Document",
+              url: row.document_url || row.documentUrl,
+              uploadedAt: row.document_uploaded_at || row.documentUploadedAt || new Date().toISOString(),
+              uploadedBy: row.document_uploaded_by || row.documentUploadedBy || "Admin"
+            }];
+          }
+
+          const cleanDocName = (row.document_name && row.document_name.startsWith("DOCS_JSON:"))
+            ? (parsedDocs[0]?.name || "Payroll Document")
+            : (row.document_name || row.documentName || (parsedDocs[0]?.name || undefined));
+
+          return {
+            id: row.id,
+            employeeId: row.employee_id || row.employeeId || "",
+            month: row.month || "",
+            basic: Number(row.basic) || 0,
+            hra: Number(row.hra) || 0,
+            telephone: Number(row.telephone ?? 0),
+            fuel: Number(row.fuel ?? 0),
+            professionalDev: Number(row.professional_dev ?? row.professionalDev ?? 0),
+            lta: Number(row.lta ?? 0),
+            allowances: Number(row.allowances) || 0,
+            finesDeducted: Number(row.fines_deducted ?? row.finesDeducted ?? 0),
+            pfDeduction: Number(row.pf_deduction ?? row.pfDeduction ?? 0),
+            taxDeduction: Number(row.tax_deduction ?? row.taxDeduction ?? 0),
+            esiDeduction: Number(row.esi_deduction ?? row.esiDeduction ?? 0),
+            netPay: Number(row.net_pay ?? row.netPay ?? 0),
+            status: row.status || "Generated",
+            generatedAt: row.generated_at || row.generatedAt || new Date().toISOString(),
+            sentToEmail: row.sent_to_email || row.sentToEmail || "",
+            documentUrl: (parsedDocs[0]?.url) || row.document_url || row.documentUrl || undefined,
+            documentName: cleanDocName,
+            documentUploadedAt: row.document_uploaded_at || row.documentUploadedAt || undefined,
+            documentUploadedBy: row.document_uploaded_by || row.documentUploadedBy || undefined,
+            documents: parsedDocs
+          };
+        });
         const slipMap = new Map();
         (db.payslips || []).forEach((p: any) => { if (p && p.id) slipMap.set(p.id, p); });
-        sbPayslips.forEach((p: any) => { if (p && p.id) slipMap.set(p.id, p); });
+        sbPayslips.forEach((p: any) => {
+          if (p && p.id) {
+            const existing = slipMap.get(p.id) || {};
+            slipMap.set(p.id, {
+              ...existing,
+              ...p,
+              documentUrl: p.documentUrl || existing.documentUrl,
+              documentName: p.documentName || existing.documentName,
+              documentUploadedAt: p.documentUploadedAt || existing.documentUploadedAt,
+              documentUploadedBy: p.documentUploadedBy || existing.documentUploadedBy,
+              documents: (p.documents && p.documents.length > 0) ? p.documents : (existing.documents || []),
+            });
+          }
+        });
         db.payslips = Array.from(slipMap.values());
       }
 

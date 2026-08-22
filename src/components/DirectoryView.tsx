@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
   Search, UserPlus, FileText, CheckCircle2, XCircle,
-  Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight,
+  Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight, ChevronDown,
   Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, ShieldAlert, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
   ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut, Maximize2, Minimize2
@@ -103,6 +103,9 @@ export default function DirectoryView({
   onInitiateResignation,
   onUpdateCollection
 }: DirectoryViewProps) {
+  const loggedInUser = employees.find(e => e.id === currentUserId) || employees[0];
+  const userBranch = loggedInUser?.branch || "Mumbai Branch";
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
   const [selectedBranch, setSelectedBranch] = useState(globalSelectedBranch !== "All Branches" ? globalSelectedBranch : "All");
@@ -121,6 +124,8 @@ export default function DirectoryView({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Manage departments & branches state
   const [showManageCollections, setShowManageCollections] = useState(false);
@@ -690,9 +695,6 @@ export default function DirectoryView({
   };
 
 
-  const loggedInUser = employees.find(e => e.id === currentUserId) || employees[0];
-  const userBranch = loggedInUser?.branch || "Mumbai Branch";
-
   const accessibleEmployees = role === "admin"
     ? employees
     : role === "hr"
@@ -747,6 +749,248 @@ export default function DirectoryView({
 
   const getDesignationTitle = (id: string) => {
     return designations.find(d => d.id === id)?.title || "Specialist";
+  };
+
+  const getEmployeeCode = (emp: Employee): string => {
+    if (emp.code && emp.code.trim() !== "") {
+      return emp.code;
+    }
+    if (emp.id && (emp.id.startsWith("EMP-") || emp.id.startsWith("EMP0") || emp.id.includes("-"))) {
+      return emp.id;
+    }
+    if (emp.employeeNumber) {
+      const prefix = (typeof window !== "undefined" ? localStorage.getItem("snailhr_empCodePrefix") || empCodePrefix : empCodePrefix).toUpperCase();
+      return `${prefix}${String(emp.employeeNumber).padStart(4, "0")}`;
+    }
+    return emp.id || "EMP";
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    if (showExportMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showExportMenu]);
+
+  const handleExportExcel = () => {
+    const dataToExport = filteredEmployees.map((emp, index) => {
+      const desigTitle = designations.find(d => d.id === emp.designationId)?.title || "Specialist";
+      const basic = emp.salary?.basic || 0;
+      const hra = emp.salary?.hra || 0;
+      const allowances = emp.salary?.allowances || 0;
+      const gross = basic + hra + allowances + (emp.salary?.telephone || 0) + (emp.salary?.fuel || 0) + (emp.salary?.professionalDev || 0) + (emp.salary?.lta || 0);
+
+      return {
+        "S.No": index + 1,
+        "Employee Code": getEmployeeCode(emp),
+        "Full Name": emp.fullName,
+        "Department": emp.department,
+        "Designation": desigTitle,
+        "Role": emp.role.toUpperCase(),
+        "Status": emp.status || "Active",
+        "Branch": emp.branch || "All Branches",
+        "Official Email": emp.email,
+        "Phone Number": emp.phone || (emp as any).mobile || "",
+        "Joining Date": emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString("en-IN") : "",
+        "Basic Salary (₹)": basic,
+        "HRA (₹)": hra,
+        "Special Allowances (₹)": allowances,
+        "Gross Salary (₹)": gross,
+        "Bank Name": emp.bankDetails?.bankName || "",
+        "Account Number": emp.bankDetails?.accountNumber || "",
+        "IFSC Code": emp.bankDetails?.ifsc || (emp.bankDetails as any)?.ifscCode || "",
+        "PAN Number": (emp.customFields?.pan as string) || (emp as any).pan || "",
+        "Aadhaar Number": (emp.customFields?.aadhaar as string) || (emp as any).aadhaar || "",
+        "UAN Number": (emp.customFields?.uan as string) || (emp as any).uan || "",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    ws["!cols"] = [
+      { wch: 6 },  // S.No
+      { wch: 16 }, // Employee Code
+      { wch: 22 }, // Full Name
+      { wch: 18 }, // Department
+      { wch: 20 }, // Designation
+      { wch: 12 }, // Role
+      { wch: 12 }, // Status
+      { wch: 18 }, // Branch
+      { wch: 26 }, // Email
+      { wch: 16 }, // Phone
+      { wch: 14 }, // Joining Date
+      { wch: 16 }, // Basic
+      { wch: 14 }, // HRA
+      { wch: 18 }, // Allowances
+      { wch: 16 }, // Gross
+      { wch: 22 }, // Bank Name
+      { wch: 20 }, // Account No
+      { wch: 14 }, // IFSC
+      { wch: 14 }, // PAN
+      { wch: 16 }, // Aadhaar
+      { wch: 16 }, // UAN
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Employee_Roster");
+    const cleanComp = (companyName || "Corporate").replace(/[^a-zA-Z0-9]/g, "_");
+    const fileName = `${cleanComp}_Employee_Roster_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
+  const handleExportPDF = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      alert("Please allow popups to download/print the Employee Roster PDF.");
+      return;
+    }
+
+    const dateStr = new Date().toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const timeStr = new Date().toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
+    const rowsHtml = filteredEmployees.map((emp, index) => {
+      const desigTitle = designations.find(d => d.id === emp.designationId)?.title || "Specialist";
+      const basic = emp.salary?.basic || 0;
+      const hra = emp.salary?.hra || 0;
+      const allowances = emp.salary?.allowances || 0;
+      const gross = basic + hra + allowances + (emp.salary?.telephone || 0) + (emp.salary?.fuel || 0) + (emp.salary?.professionalDev || 0) + (emp.salary?.lta || 0);
+      const status = emp.status || "Active";
+      const statusColor = status === "Active" ? "#00875A" : status === "Probation" ? "#B76E00" : status === "Suspended" ? "#DE350B" : "#6554C0";
+      const statusBg = status === "Active" ? "#E3FCEF" : status === "Probation" ? "#FFF0B3" : status === "Suspended" ? "#FFEBE6" : "#EAE6FF";
+
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+          <td style="padding: 8px 6px; text-align: center; color: #64748b;">${index + 1}</td>
+          <td style="padding: 8px 6px; font-family: monospace; font-weight: 700; color: #1e293b;">${getEmployeeCode(emp)}</td>
+          <td style="padding: 8px 6px; font-weight: 700; color: #0f172a;">${emp.fullName}</td>
+          <td style="padding: 8px 6px; color: #334155;">${emp.department || "—"}</td>
+          <td style="padding: 8px 6px; color: #475569;">${desigTitle}</td>
+          <td style="padding: 8px 6px; color: #475569;">${emp.branch || "—"}</td>
+          <td style="padding: 8px 6px; text-align: center;">
+            <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 9px; font-weight: 700; background-color: ${statusBg}; color: ${statusColor}; text-transform: uppercase;">
+              ${status}
+            </span>
+          </td>
+          <td style="padding: 8px 6px; color: #334155;">${emp.phone || (emp as any).mobile || "—"}</td>
+          <td style="padding: 8px 6px; color: #475569; font-size: 10px;">${emp.email}</td>
+          <td style="padding: 8px 6px; text-align: right; font-family: monospace; font-weight: 700; color: #0f766e;">₹${gross.toLocaleString("en-IN")}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const activeCount = filteredEmployees.filter(e => (e.status || "Active") === "Active").length;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${companyName || "Corporate"} - Employee Roster Report</title>
+          <meta charset="utf-8" />
+          <style>
+            @page { size: A4 landscape; margin: 12mm 10mm; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 20px; }
+            .header-box { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #009966; padding-bottom: 12px; margin-bottom: 15px; }
+            .title-area h1 { margin: 0; font-size: 22px; font-weight: 800; color: #009966; }
+            .title-area p { margin: 3px 0 0 0; font-size: 12px; color: #64748b; }
+            .meta-area { text-align: right; font-size: 11px; color: #475569; }
+            .meta-area p { margin: 2px 0; }
+            .kpi-row { display: flex; gap: 15px; margin-bottom: 15px; }
+            .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 14px; font-size: 11px; }
+            .kpi-card span { color: #64748b; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+            .kpi-card strong { display: block; font-size: 14px; color: #0f172a; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; text-align: left; }
+            th { background-color: #f1f5f9; color: #475569; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 8px 6px; border-bottom: 2px solid #cbd5e1; }
+            tr:nth-child(even) { background-color: #fafbfc; }
+            @media print {
+              body { padding: 0; }
+              .no-print { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="margin-bottom: 15px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button onclick="window.print()" style="background: #009966; color: white; border: none; padding: 8px 18px; border-radius: 8px; font-weight: bold; cursor: pointer;">Print / Save as PDF</button>
+            <button onclick="window.close()" style="background: #e2e8f0; color: #334155; border: none; padding: 8px 14px; border-radius: 8px; font-weight: bold; cursor: pointer;">Close</button>
+          </div>
+
+          <div class="header-box">
+            <div class="title-area">
+              <h1>${companyName || "Corporate"} · Employee Roster</h1>
+              <p>Official Workforce Directory &amp; Staff Ledger</p>
+            </div>
+            <div class="meta-area">
+              <p><strong>Generated On:</strong> ${dateStr} at ${timeStr}</p>
+              <p><strong>Branch Filter:</strong> ${selectedBranch === "All" ? "All Branches" : selectedBranch} &nbsp;|&nbsp; <strong>Status:</strong> ${selectedStatusFilter}</p>
+            </div>
+          </div>
+
+          <div class="kpi-row">
+            <div class="kpi-card">
+              <span>Total Listed Staff</span>
+              <strong>${filteredEmployees.length} Employees</strong>
+            </div>
+            <div class="kpi-card">
+              <span>Active Workforce</span>
+              <strong>${activeCount} Active</strong>
+            </div>
+            <div class="kpi-card">
+              <span>Department Scope</span>
+              <strong>${selectedDept === "All" ? "All Departments" : selectedDept}</strong>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25px; text-align: center;">#</th>
+                <th>Emp Code</th>
+                <th>Full Name</th>
+                <th>Department</th>
+                <th>Designation</th>
+                <th>Branch</th>
+                <th style="text-align: center;">Status</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th style="text-align: right;">Gross Pay</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div style="margin-top: 25px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #94a3b8; display: flex; justify-content: space-between;">
+            <span>Confidential Workforce Records · Generated by SnailHRA</span>
+            <span>Document Complete</span>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   const handleOnboardSubmit = async (e: React.FormEvent) => {
@@ -1533,11 +1777,66 @@ export default function DirectoryView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Employee List */}
         <div className="lg:col-span-6 xl:col-span-6 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[650px] min-w-0">
-          <div className="mb-3">
-            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md sm:text-lg">
-              {selectedStatusFilter === "All" ? "Employees Roster" : `${selectedStatusFilter} Employees Roster`}
-            </h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} employees matching criteria</p>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md sm:text-lg">
+                {selectedStatusFilter === "All" ? "Employees Roster" : `${selectedStatusFilter} Employees Roster`}
+              </h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 dark:text-gray-500 mt-0.5">Found {filteredEmployees.length} employees matching criteria</p>
+            </div>
+
+            {(role === "admin" || role === "hr") && (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowExportMenu(prev => !prev)}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-[#141414] dark:hover:bg-[#1f1f1f] text-slate-700 dark:text-gray-200 text-xs font-bold flex items-center space-x-1.5 border border-slate-200/80 dark:border-[#2a2a2a] transition-all cursor-pointer shadow-2xs"
+                  title="Download Employee List in Excel (.xlsx) or PDF (.pdf)"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Download Roster</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
+
+                {showExportMenu && (
+                  <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-[#151515] border border-slate-200/80 dark:border-[#282828] rounded-xl shadow-xl z-30 p-1.5 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        handleExportExcel();
+                      }}
+                      className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors cursor-pointer text-left"
+                    >
+                      <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-bold">Excel (.xlsx)</p>
+                        <p className="text-[10px] text-slate-400 font-normal">Full spreadsheet export</p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        handleExportPDF();
+                      }}
+                      className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-gray-200 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300 transition-colors cursor-pointer text-left"
+                    >
+                      <div className="w-6 h-6 rounded-md bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="font-bold">PDF Document (.pdf)</p>
+                        <p className="text-[10px] text-slate-400 font-normal">Formatted printable report</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Segmented Status Filter Tabs */}
