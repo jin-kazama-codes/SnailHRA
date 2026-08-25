@@ -923,16 +923,16 @@ export default function PayrollView({
               </div>
 
               {/* Full-width Lending Agents Payroll Center Table Card */}
-              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
                   <div>
                     <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md">Employees Payroll Center</h3>
                     <p className="text-xs text-slate-400 dark:text-gray-500">Generate structural salary slips with automated email dispatch</p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
                     {/* Search by Name / Employee Code */}
-                    <div className="relative min-w-[240px]">
+                    <div className="relative w-full sm:w-64">
                       <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
@@ -958,7 +958,7 @@ export default function PayrollView({
                           onPayAllPayslips(selectedMonth);
                         }
                       }}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs whitespace-nowrap text-center justify-center"
                     >
                       Bulk Disburse Payments
                     </button>
@@ -970,23 +970,23 @@ export default function PayrollView({
                   <span>Generating a salary slip immediately locks any outstanding late-coming fines and compiles HRA structures. An automated verification notification with structural break-up is sent directly to the employee's email address.</span>
                 </div>
 
-                <div className="w-full overflow-hidden">
-                  <table className="w-full text-left border-collapse text-xs table-auto">
+                <div className="w-full overflow-x-auto custom-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0">
+                  <table className="w-full text-left border-collapse text-xs min-w-[980px]">
                     <thead>
                       <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase text-[10px] tracking-tight font-semibold">
-                        <th className="py-2.5 px-2 text-left">Employee &amp; Code</th>
-                        <th className="py-2.5 px-1.5 text-right">Basic</th>
-                        <th className="py-2.5 px-1.5 text-right">HRA</th>
-                        <th className="py-2.5 px-1.5 text-right">Tel.</th>
-                        <th className="py-2.5 px-1.5 text-right">Fuel</th>
-                        <th className="py-2.5 px-1.5 text-right">Prof Dev</th>
-                        <th className="py-2.5 px-1.5 text-right">LTA</th>
-                        <th className="py-2.5 px-1.5 text-right">Sp. Allow</th>
-                        <th className="py-2.5 px-1.5 text-right">PF+TDS</th>
-                        <th className="py-2.5 px-1.5 text-right text-rose-500">Fines</th>
-                        <th className="py-2.5 px-1.5 text-right text-emerald-600">Net Pay</th>
-                        <th className="py-2.5 px-2 text-center">Status</th>
-                        <th className="py-2.5 px-3 text-center">Actions</th>
+                        <th className="py-2.5 px-2 text-left min-w-[170px]">Employee &amp; Code</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[70px]">Basic</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[70px]">HRA</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[60px]">Tel.</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[60px]">Fuel</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[65px]">Prof Dev</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[60px]">LTA</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[70px]">Sp. Allow</th>
+                        <th className="py-2.5 px-1.5 text-right min-w-[70px]">PF+TDS</th>
+                        <th className="py-2.5 px-1.5 text-right text-rose-500 min-w-[65px]">Fines</th>
+                        <th className="py-2.5 px-1.5 text-right text-emerald-600 min-w-[80px]">Net Pay</th>
+                        <th className="py-2.5 px-2 text-center min-w-[80px]">Status</th>
+                        <th className="py-2.5 px-3 text-center min-w-[130px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]/50">
@@ -1256,16 +1256,16 @@ export default function PayrollView({
 
                 {/* Pagination Controls */}
                 {totalItems > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a] text-xs">
-                    <div className="text-slate-400 font-medium">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a] text-xs">
+                    <div className="text-slate-400 font-medium text-center sm:text-left">
                       Showing <span className="font-bold text-slate-700 dark:text-gray-200">{startIndex + 1}</span> to <span className="font-bold text-slate-700 dark:text-gray-200">{endIndex}</span> of <span className="font-bold text-slate-700 dark:text-gray-200">{totalItems}</span> employees
                     </div>
 
-                    <div className="flex items-center space-x-1.5">
+                    <div className="flex items-center space-x-1.5 overflow-x-auto max-w-full py-1">
                       <button
                         onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
                         disabled={safeCurrentPage === 1}
-                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer shrink-0"
                         title="Previous Page"
                       >
                         <ChevronLeft className="w-4 h-4" />
@@ -1275,7 +1275,7 @@ export default function PayrollView({
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all ${safeCurrentPage === page
+                          className={`w-7 h-7 rounded-lg text-xs font-semibold cursor-pointer transition-all shrink-0 ${safeCurrentPage === page
                             ? "bg-emerald-600 text-white shadow-xs"
                             : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-600 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] border border-slate-100 dark:border-[#1a1a1a]"
                             }`}
@@ -1287,7 +1287,7 @@ export default function PayrollView({
                       <button
                         onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
                         disabled={safeCurrentPage === totalPages}
-                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                        className="p-1.5 rounded-lg border border-slate-200 dark:border-[#1a1a1a] text-slate-600 dark:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer shrink-0"
                         title="Next Page"
                       >
                         <ChevronRight className="w-4 h-4" />
