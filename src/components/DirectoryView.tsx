@@ -1776,7 +1776,7 @@ export default function DirectoryView({
       {/* Main Grid: Directory List and Detail Profile Pane */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Employee List */}
-        <div className="lg:col-span-6 xl:col-span-6 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[650px] min-w-0">
+        <div className="lg:col-span-6 xl:col-span-6 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow flex flex-col h-[500px] lg:h-[650px] min-w-0">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="font-display font-semibold text-slate-800 dark:text-white text-md sm:text-lg">
@@ -1956,7 +1956,7 @@ export default function DirectoryView({
         </div>
 
         {/* Right Side: Tabular Profile Details */}
-        <div className="lg:col-span-6 xl:col-span-6 h-[650px] min-h-[650px] flex flex-col justify-between space-y-6">
+        <div className="lg:col-span-6 xl:col-span-6 flex flex-col space-y-6 min-w-0">
           {activeEmployee ? (
             <>
               {/* Profile Card Header */}
@@ -2202,15 +2202,15 @@ export default function DirectoryView({
               <div className="space-y-4 w-full">
                 {/* Header & Toggle Switch */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] p-4 rounded-2xl border border-slate-200 dark:border-[#222] shadow-xs">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2.5 rounded-xl text-white font-bold ${activeChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className={`p-2.5 rounded-xl text-white font-bold shrink-0 ${activeChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
                       {activeChecklistTab === "exit" ? <LogOut className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
                     </div>
-                    <div>
-                      <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-base sm:text-lg">
+                    <div className="min-w-0">
+                      <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-base sm:text-lg leading-tight">
                         {activeChecklistTab === "exit" ? "Employee Exit & Separation Clearance Checklist & Vault" : "Onboarding Document Checklist & Vault"}
                       </h3>
-                      <p className="text-xs text-slate-500 dark:text-gray-400">
+                      <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 hidden sm:block">
                         {activeChecklistTab === "exit"
                           ? "Exit separation requirements paired with approved exit document vault"
                           : "Mandatory employee KYC requirements paired with approved onboarding document vault"}
@@ -2219,30 +2219,32 @@ export default function DirectoryView({
                   </div>
 
                   {/* Toggle Switch */}
-                  <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto">
+                  <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 w-full sm:w-auto sm:flex sm:items-center">
                     <button
                       type="button"
                       onClick={() => setActiveChecklistTab("onboarding")}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 whitespace-nowrap ${
                         activeChecklistTab === "onboarding"
                           ? "bg-emerald-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:white"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
                       <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                      <span>Onboarding Checklist &amp; Vault</span>
+                      <span className="sm:hidden">Onboarding</span>
+                      <span className="hidden sm:inline">Onboarding Checklist &amp; Vault</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveChecklistTab("exit")}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 whitespace-nowrap ${
                         activeChecklistTab === "exit"
                           ? "bg-amber-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:white"
+                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                       }`}
                     >
                       <LogOut className="w-3.5 h-3.5 shrink-0" />
-                      <span>Exit Clearance Checklist &amp; Vault</span>
+                      <span className="sm:hidden">Exit Clearance</span>
+                      <span className="hidden sm:inline">Exit Clearance Checklist &amp; Vault</span>
                     </button>
                   </div>
                 </div>
@@ -2275,7 +2277,7 @@ export default function DirectoryView({
                       {/* Right Column: Onboarding Document Checklist Vault Card */}
                       <div className="bg-gradient-to-br from-emerald-500/5 via-white to-teal-500/5 dark:from-[#081b14] dark:via-[#0f0f0f] dark:to-[#091618] border border-emerald-200/80 dark:border-emerald-900/50 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
                         <div>
-                          <div className="flex items-center justify-between mb-4 border-b border-emerald-100 dark:border-emerald-950/60 pb-3 gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-emerald-100 dark:border-emerald-950/60 pb-3 gap-3">
                             <div className="flex items-start space-x-3 min-w-0 flex-1">
                               <div className="p-2.5 bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
                                 <FileText className="w-5 h-5" />
@@ -2295,7 +2297,7 @@ export default function DirectoryView({
                                 setDocCategory("Onboarding Document Checklist");
                                 setShowUploadModal(true);
                               }}
-                              className="border border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                              className="border border-emerald-600 text-emerald-600 dark:border-emerald-500 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center justify-center space-x-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs self-start sm:self-auto"
                             >
                               <FileUp className="w-4 h-4" />
                               <span>Upload Document</span>
@@ -2409,7 +2411,7 @@ export default function DirectoryView({
                       {/* Right Column: Employee Exit & Separation Clearance Checklist Vault Card */}
                       <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
                         <div>
-                          <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-3">
                             <div className="flex items-start space-x-3 min-w-0 flex-1">
                               <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
                                 <FileText className="w-5 h-5" />
@@ -2429,7 +2431,7 @@ export default function DirectoryView({
                                 setDocCategory("Employee Exit & Separation Clearance Checklist");
                                 setShowUploadModal(true);
                               }}
-                              className="border border-amber-600 text-amber-700 dark:border-amber-500 dark:text-amber-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center space-x-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                              className="border border-amber-600 text-amber-700 dark:border-amber-500 dark:text-amber-400 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center justify-center space-x-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/20 transition-colors cursor-pointer shrink-0 shadow-2xs self-start sm:self-auto"
                             >
                               <FileUp className="w-4 h-4" />
                               <span>Upload Document</span>

@@ -1010,11 +1010,11 @@ export default function DashboardView({
               </div>
 
               {/* Toggle Switch */}
-              <div className="flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto w-full sm:w-auto overflow-x-auto scrollbar-none">
+              <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 w-full sm:w-auto sm:flex sm:items-center">
                 <button
                   type="button"
                   onClick={() => setDashboardChecklistTab("onboarding")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
                     dashboardChecklistTab === "onboarding"
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
@@ -1025,7 +1025,7 @@ export default function DashboardView({
                 <button
                   type="button"
                   onClick={() => setDashboardChecklistTab("exit")}
-                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center justify-center ${
                     dashboardChecklistTab === "exit"
                       ? "bg-amber-600 text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
