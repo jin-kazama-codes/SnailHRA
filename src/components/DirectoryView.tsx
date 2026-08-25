@@ -2359,16 +2359,6 @@ export default function DirectoryView({
                                       >
                                         <Eye className="w-4 h-4" />
                                       </button>
-                                      {(role === "admin" || role === "hr" || activeEmployee.id === currentUserId) && (
-                                        <button
-                                          type="button"
-                                          onClick={() => onDeleteDocument(activeEmployee.id, doc.id || doc.name)}
-                                          className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-rose-500 hover:text-rose-700 dark:text-rose-400 cursor-pointer border border-rose-200/50 dark:border-rose-900/40"
-                                          title="Delete Document"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
-                                      )}
                                     </div>
                                   </div>
                                 );
