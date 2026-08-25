@@ -292,20 +292,9 @@ export default function DashboardView({
     .sort((a, b) => a.daysDiff - b.daysDiff);
 
   const getDesignationTitle = (id?: string) => {
-    if (!id) return "Specialist";
+    if (!id) return "";
     const found = designations?.find(d => d.id === id);
-    if (found) return found.title;
-    const map: Record<string, string> = {
-      "des-1": "Managing Director",
-      "des-2": "Head of Credit & Risk",
-      "des-3": "HR Business Partner",
-      "des-4": "Senior Loan Officer",
-      "des-5": "Insurance Underwriter",
-      "des-6": "Sales Relationship Manager",
-      "des-7": "Collections Specialist",
-      "des-8": "Compliance Officer"
-    };
-    return map[id] || "Specialist";
+    return found ? found.title : "";
   };
 
   const getMilestoneIcon = (years: number) => {
