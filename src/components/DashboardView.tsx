@@ -328,9 +328,9 @@ export default function DashboardView({
           <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 bg-emerald-400/20 rounded-full blur-xl pointer-events-none"></div>
 
           <div className="relative z-10 flex flex-col justify-between h-full space-y-4">
-            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full w-fit">
-              <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse" />
-              <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100">
+            <div className="flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full w-fit max-w-full overflow-hidden">
+              <Sparkles className="w-4 h-4 text-emerald-300 animate-pulse shrink-0" />
+              <span className="text-xs font-semibold tracking-wider uppercase text-emerald-100 truncate">
                 {role === "admin" ? `${companyName} System Administrator Portal` : role === "hr" ? `${companyName} Branch Management Desk (${userBranch})` : `${companyName} Employee Workspace`}
               </span>
             </div>
@@ -346,18 +346,18 @@ export default function DashboardView({
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-4 pt-2">
-              <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
+            <div className="flex flex-wrap gap-2 sm:gap-4 pt-2">
+              <div className="bg-white/10 backdrop-blur-xs px-3 sm:px-4 py-2 rounded-xl text-xs min-w-0">
                 <span className="block text-emerald-200">Designation</span>
-                <span className="font-semibold">{getDesignationTitle(currentEmployee?.designationId)}</span>
+                <span className="font-semibold truncate block max-w-[120px] sm:max-w-none">{getDesignationTitle(currentEmployee?.designationId)}</span>
               </div>
-              <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
-                <span className="block text-emerald-200">Clearance & Role</span>
+              <div className="bg-white/10 backdrop-blur-xs px-3 sm:px-4 py-2 rounded-xl text-xs">
+                <span className="block text-emerald-200">Clearance &amp; Role</span>
                 <span className="font-semibold uppercase tracking-wider text-emerald-300 font-mono">{role}</span>
               </div>
-              <div className="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-xs">
+              <div className="bg-white/10 backdrop-blur-xs px-3 sm:px-4 py-2 rounded-xl text-xs min-w-0">
                 <span className="block text-emerald-200">Branch Office</span>
-                <span className="font-semibold">{userBranch}</span>
+                <span className="font-semibold truncate block max-w-[120px] sm:max-w-none">{userBranch}</span>
               </div>
             </div>
           </div>
@@ -993,15 +993,15 @@ export default function DashboardView({
           <div className="space-y-4 w-full">
             {/* Header & Toggle Switch */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] p-4 rounded-2xl border border-slate-200 dark:border-[#222] shadow-xs">
-              <div className="flex items-center space-x-3">
-                <div className={`p-2.5 rounded-xl text-white font-bold ${dashboardChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className={`p-2.5 rounded-xl text-white font-bold shrink-0 ${dashboardChecklistTab === "exit" ? "bg-gradient-to-r from-amber-500 to-orange-600" : "bg-gradient-to-r from-emerald-500 to-teal-600"}`}>
                   <FileText className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-base sm:text-lg">
-                    {dashboardChecklistTab === "exit" ? "Employee Exit & Separation Clearance Checklist & Vault" : "Onboarding Document Checklist & Vault"}
+                <div className="min-w-0">
+                  <h3 className="font-display font-extrabold text-slate-800 dark:text-white text-sm sm:text-base lg:text-lg leading-tight">
+                    {dashboardChecklistTab === "exit" ? "Exit & Separation Checklist" : "Onboarding Document Checklist"}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-gray-400">
+                  <p className="text-xs text-slate-500 dark:text-gray-400 mt-0.5 hidden sm:block">
                     {dashboardChecklistTab === "exit"
                       ? "Exit separation requirements paired with approved exit document vault"
                       : "Mandatory employee KYC requirements paired with approved onboarding document vault"}
@@ -1010,28 +1010,28 @@ export default function DashboardView({
               </div>
 
               {/* Toggle Switch */}
-              <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto">
+              <div className="flex items-center p-1 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] shrink-0 self-start sm:self-auto w-full sm:w-auto overflow-x-auto scrollbar-none">
                 <button
                   type="button"
                   onClick={() => setDashboardChecklistTab("onboarding")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     dashboardChecklistTab === "onboarding"
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
-                  <span>Onboarding Checklist &amp; Vault</span>
+                  Onboarding
                 </button>
                 <button
                   type="button"
                   onClick={() => setDashboardChecklistTab("exit")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  className={`flex-1 sm:flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     dashboardChecklistTab === "exit"
                       ? "bg-amber-600 text-white shadow-xs"
                       : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
-                  <span>Exit Clearance Checklist &amp; Vault</span>
+                  Exit Clearance
                 </button>
               </div>
             </div>
@@ -1233,25 +1233,82 @@ export default function DashboardView({
       })()}
 
       {/* Leave Status Monitoring Row (Filtered by Role) */}
-      <div id="leaves-summary-row" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a]">
-          <div>
-            <h4 className="font-display font-semibold text-slate-800 dark:text-white text-md">
+      <div id="leaves-summary-row" className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow">
+        <div className="flex items-start sm:items-center justify-between mb-4 pb-3 border-b border-slate-50 dark:border-[#1a1a1a] gap-2">
+          <div className="min-w-0">
+            <h4 className="font-display font-semibold text-slate-800 dark:text-white text-sm sm:text-md">
               {role === "admin" ? "Company Leave Tracker" : role === "hr" ? `Branch Leave Tracker (${userBranch})` : "My Leave Requests"}
             </h4>
-            <p className="text-xs text-slate-400 dark:text-gray-400">
+            <p className="text-xs text-slate-400 dark:text-gray-400 hidden sm:block">
               {role === "employee" ? "Track your submitted casual and medical leave requests" : "Review status of submitted employee leave applications"}
             </p>
           </div>
           {role !== "employee" && (
-            <span className="text-xs bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 font-bold px-3 py-1 rounded-full flex items-center">
+            <span className="text-xs bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 font-bold px-2.5 py-1 rounded-full flex items-center shrink-0">
               <ShieldAlert className="w-3.5 h-3.5 mr-1" />
               {role === "admin" ? adminPendingLeaves : hrBranchPendingLeaves} Pending
             </span>
           )}
         </div>
 
-        <div className="overflow-x-auto custom-scrollbar">
+        {/* Mobile card view */}
+        <div className="sm:hidden space-y-3">
+          {(role === "admin"
+            ? leaves
+            : role === "hr"
+              ? leaves.filter(l => branchEmployees.some(e => e.id === l.employeeId))
+              : myLeaves
+          )
+            .slice()
+            .sort((a, b) => {
+              const dateA = new Date(a.appliedDate || a.startDate || 0).getTime();
+              const dateB = new Date(b.appliedDate || b.startDate || 0).getTime();
+              if (dateB !== dateA) return dateB - dateA;
+              return (b.id || "").localeCompare(a.id || "");
+            })
+            .slice(0, 5).map(leave => {
+              const matchedEmp = employees.find(e => e.id === leave.employeeId);
+              const empName = (matchedEmp && matchedEmp.fullName)
+                ? matchedEmp.fullName
+                : (leave.employeeName && !leave.employeeName.startsWith("Employee EMP-") && !leave.employeeName.startsWith("Employee "))
+                  ? leave.employeeName
+                  : (matchedEmp?.fullName || leave.employeeId || "Employee");
+              const statusVal = leave.status || "Pending";
+              return (
+                <div key={leave.id || `lvr-mob-${Math.random()}`} className="bg-slate-50 dark:bg-[#0a0a0a] rounded-xl p-3 border border-slate-100 dark:border-[#1a1a1a] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-[#1a1a1a] flex items-center justify-center font-bold text-[10px] uppercase shrink-0">
+                        {empName.charAt(0)}
+                      </div>
+                      <span className="font-semibold text-slate-700 dark:text-gray-300 text-xs truncate">{empName}</span>
+                    </div>
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide uppercase shrink-0 ml-1 ${statusVal === "Approved"
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+                      : statusVal === "Pending"
+                        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 animate-pulse"
+                        : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
+                      }`}>
+                      {statusVal}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-gray-400">
+                    <span className="font-medium">{leave.leaveType || "Leave"}</span>
+                    <span className="font-mono">{leave.startDate} → {leave.endDate}</span>
+                  </div>
+                  {leave.reason && (
+                    <p className="text-[10px] text-slate-400 dark:text-gray-500 truncate">{leave.reason}</p>
+                  )}
+                </div>
+              );
+            })}
+          {(role === "employee" ? myLeaves : leaves).length === 0 && (
+            <p className="text-center text-xs text-slate-400 italic py-4">No leave records found.</p>
+          )}
+        </div>
+
+        {/* Desktop table view */}
+        <div className="hidden sm:block overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#1a1a1a] text-slate-400 dark:text-gray-500 uppercase tracking-wider font-semibold">

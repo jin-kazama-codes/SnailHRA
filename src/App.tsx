@@ -3002,18 +3002,18 @@ export default function App() {
                 }`}
                 title="Filter entire application by branch"
               >
-                <Building2 className={`w-4 h-4 ${selectedBranch !== "All Branches" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />
-                <span className="font-bold max-w-[130px] sm:max-w-[180px] truncate">
+                <Building2 className={`w-4 h-4 shrink-0 ${selectedBranch !== "All Branches" ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`} />
+                <span className="font-bold max-w-[80px] sm:max-w-[130px] md:max-w-[180px] truncate hidden sm:block">
                   {selectedBranch}
                 </span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider hidden sm:inline-block ${
                   selectedBranch !== "All Branches"
                     ? "bg-emerald-600 text-white"
                     : "bg-slate-200 dark:bg-[#252525] text-slate-600 dark:text-gray-400"
                 }`}>
                   {selectedBranch === "All Branches" ? `${allAvailableBranches.length} Branches` : "Branch Active"}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               </button>
 
               {/* Branch Dropdown Menu */}
