@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Play, Square, Pause, RotateCcw, Clock, Calendar as CalendarIcon, CheckCircle2, 
   AlertTriangle, Eye, Sparkles, Coffee, AlertCircle, RefreshCw, Sliders,
   Home, Briefcase, Plus, ChevronRight, ChevronLeft, UserCheck, Check, Edit2, Info,
-  Trash2, X, FileText, User, Loader2, Search, Building2
+  Trash2, X, FileText, User, Loader2, Search, Building2, Upload, Download, TableProperties, CheckCheck, AlertOctagon
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { AttendancePunch, Employee, UserRole, LeaveRequest, Holiday } from "../types";
 import { toBranchId, toBranchName } from "../lib/branchUtils";
 
@@ -22,6 +23,7 @@ interface AttendanceViewProps {
   onDeletePunch?: (punchId: string) => void;
   onSaveDayPunch?: (punchData: any) => void;
   onClearAllAttendance?: () => void;
+  onBulkImportAttendance?: (rows: any[]) => Promise<void>;
   timingSettings?: {
     clockInTime: string;
     clockOutTime: string;
@@ -48,6 +50,7 @@ export default function AttendanceView({
   onDeletePunch,
   onSaveDayPunch,
   onClearAllAttendance,
+  onBulkImportAttendance,
   timingSettings,
   branchTimingSettings,
   onSaveTimingSettings,
@@ -248,6 +251,31 @@ export default function AttendanceView({
 
   // Timing Settings Modal state
   const [showTimingSettingsModal, setShowTimingSettingsModal] = useState(false);
+
+  // ─── Excel Import State ──────────────────────────────────────────────────────
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  // "download" = Step 1, "upload" = Step 2, "preview" = Step 3, "importing" = processing
+  const [importStep, setImportStep] = useState<"download" | "upload" | "preview" | "importing">("download");
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<{ row: number; message: string }[]>([]);
+  const [importMonth, setImportMonth] = useState(selectedMonth);
+  // Date-range & weekend config
+  const [importFromDate, setImportFromDate] = useState(() => {
+    const d = new Date(); d.setDate(1);
+    return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  });
+  const [importToDate, setImportToDate] = useState(() =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+  );
+  // 0=Sun,1=Mon,...,6=Sat — default only Sunday is a weekend
+  const [importWeekendDays, setImportWeekendDays] = useState<number[]>([0]);
+  // Employee IDs to exclude from the template (empty = all included)
+  const [importExcludedEmployees, setImportExcludedEmployees] = useState<string[]>([]);
+  // Default shift times pre-filled in the template
+  const [importDefaultClockIn, setImportDefaultClockIn] = useState(timingSettings?.clockInTime || "09:00");
+  const [importDefaultClockOut, setImportDefaultClockOut] = useState(timingSettings?.clockOutTime || "18:00");
+  const [importFileName, setImportFileName] = useState("");
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [settingsClockIn, setSettingsClockIn] = useState(activeTiming?.clockInTime || "09:00");
   const [settingsClockOut, setSettingsClockOut] = useState(activeTiming?.clockOutTime || "18:00");
   const [settingsLateThreshold, setSettingsLateThreshold] = useState(activeTiming?.lateThreshold || "09:30");
@@ -670,6 +698,160 @@ export default function AttendanceView({
     setShowManualForm(false);
   }
 
+  // ─── Excel Import Handlers ───────────────────────────────────────────────────
+
+  /** Generate and download the attendance template for the selected date range */
+  const handleDownloadTemplate = () => {
+    const from = new Date(importFromDate + "T00:00:00");
+    const to   = new Date(importToDate   + "T00:00:00");
+    if (from > to) { alert("'From' date must be before 'To' date."); return; }
+
+    const templateRows: any[] = [];
+    const cursor = new Date(from);
+
+    while (cursor <= to) {
+      const dayOfWeek = cursor.getDay();
+      const dateStr = cursor.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+      if (!importWeekendDays.includes(dayOfWeek)) {
+        const isHoliday = holidays.some(h => h.date === dateStr);
+        const dayLabel  = cursor.toLocaleDateString("en-IN", { weekday: "short" });
+
+        for (const emp of accessibleEmployees) {
+          if (importExcludedEmployees.includes(emp.id)) continue; // skip excluded
+          templateRows.push({
+            "Employee ID":       emp.id,
+            "Employee Name":     emp.fullName,
+            "Branch":            toBranchName(emp.branch) || "",
+            "Department":        emp.department || "",
+            "Date (YYYY-MM-DD)": dateStr,
+            "Day":               dayLabel,
+            "Holiday":           isHoliday ? "Yes" : "",
+            "Status":            isHoliday ? "" : "Present",
+            "Clock In (HH:MM)": isHoliday ? "" : importDefaultClockIn,
+            "Clock Out (HH:MM)": isHoliday ? "" : importDefaultClockOut,
+            "WFH (Yes/No)":      "No",
+            "Notes":             "",
+          });
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    if (templateRows.length === 0) {
+      alert("No working days found in the selected range. Please adjust the date range or weekend settings.");
+      return;
+    }
+
+    // Create workbook with attendance sheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(templateRows);
+
+    // Column widths
+    ws["!cols"] = [
+      { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 18 },
+      { wch: 18 }, { wch: 6 }, { wch: 8 }, { wch: 12 },
+      { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 22 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance");
+
+    // Add a legend/instructions sheet
+    const legendData = [
+      { "Column":      "Employee ID",       "Note": "DO NOT EDIT — used as the unique key" },
+      { "Column":      "Employee Name",     "Note": "DO NOT EDIT" },
+      { "Column":      "Date (YYYY-MM-DD)", "Note": "DO NOT EDIT" },
+      { "Column":      "Status",            "Note": "Valid values: Present | Late | Half Day | Absent | On Leave" },
+      { "Column":      "Clock In (HH:MM)", "Note": "24-hour format, e.g. 09:00. Leave blank if Absent/On Leave." },
+      { "Column":      "Clock Out (HH:MM)","Note": "24-hour format, e.g. 18:00. Leave blank if Absent/On Leave." },
+      { "Column":      "WFH (Yes/No)",      "Note": "Enter Yes or No" },
+      { "Column":      "Notes",             "Note": "Optional remarks" },
+    ];
+    const wsLegend = XLSX.utils.json_to_sheet(legendData);
+    wsLegend["!cols"] = [{ wch: 22 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsLegend, "Instructions");
+
+    const fileLabel = importFromDate === importToDate ? importFromDate : `${importFromDate}_to_${importToDate}`;
+    XLSX.writeFile(wb, `Attendance_Template_${fileLabel}.xlsx`);
+  };
+
+  /** Parse the uploaded Excel file and validate rows */
+  const handleExcelUpload = (file: File) => {
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target!.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheet = workbook.Sheets["Attendance"] || workbook.Sheets[workbook.SheetNames[0]];
+        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+        const validStatuses = ["Present", "Late", "Half Day", "Absent", "On Leave"];
+        const parsed: any[] = [];
+        const errors: { row: number; message: string }[] = [];
+
+        rows.forEach((row, idx) => {
+          const rowNum = idx + 2; // header is row 1
+          const employeeId = String(row["Employee ID"] || "").trim();
+          const dateStr    = String(row["Date (YYYY-MM-DD)"] || "").trim();
+          const status     = String(row["Status"] || "").trim();
+          const clockIn    = String(row["Clock In (HH:MM)"] || "").trim();
+          const clockOut   = String(row["Clock Out (HH:MM)"] || "").trim();
+          const wfh        = String(row["WFH (Yes/No)"] || "No").trim().toLowerCase();
+          const notes      = String(row["Notes"] || "").trim();
+
+          if (!employeeId) { errors.push({ row: rowNum, message: "Missing Employee ID" }); return; }
+          if (!dateStr)    { errors.push({ row: rowNum, message: "Missing Date" }); return; }
+          if (status && !validStatuses.includes(status)) {
+            errors.push({ row: rowNum, message: `Invalid status "${status}". Must be one of: ${validStatuses.join(", ")}` });
+            return;
+          }
+
+          // Build ISO timestamps
+          const isAbsent = status === "Absent" || status === "On Leave";
+          const clockInISO  = (!isAbsent && clockIn)  ? new Date(`${dateStr}T${clockIn}:00`).toISOString()  : undefined;
+          const clockOutISO = (!isAbsent && clockOut) ? new Date(`${dateStr}T${clockOut}:00`).toISOString() : null;
+
+          parsed.push({
+            employeeId,
+            employeeName: String(row["Employee Name"] || "").trim(),
+            date:         dateStr,
+            status:       status || "Present",
+            clockIn:      clockInISO,
+            clockOut:     clockOutISO,
+            workFromHome: wfh === "yes",
+            notes,
+          });
+        });
+
+        setImportRows(parsed);
+        setImportErrors(errors);
+        setImportStep("preview");
+      } catch (err: any) {
+        setImportErrors([{ row: 0, message: `Failed to parse file: ${err?.message}` }]);
+        setImportStep("upload");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  /** Confirm and submit the import */
+  const handleConfirmImport = async () => {
+    if (!onBulkImportAttendance || importRows.length === 0) return;
+    setImportStep("importing");
+    try {
+      await onBulkImportAttendance(importRows);
+      setShowExcelImportModal(false);
+      setImportStep("download");
+      setImportRows([]);
+      setImportErrors([]);
+      setImportFileName("");
+    } catch (err) {
+      console.error(err);
+      setImportStep("preview");
+    }
+  };
+
   return (
     <div className="space-y-6">
       
@@ -1041,6 +1223,33 @@ export default function AttendanceView({
                 <Plus className="w-4 h-4" />
                 <span>Log Manual Attendance</span>
               </button>
+              {onBulkImportAttendance && (
+                <button
+                  onClick={() => {
+                    // Initialise date range to current month
+                    const now = new Date();
+                    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
+                      .toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+                    const today = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+                    setImportFromDate(firstDay);
+                    setImportToDate(today);
+                    setImportWeekendDays([0]);
+                    setImportExcludedEmployees([]);
+                    setImportDefaultClockIn(timingSettings?.clockInTime || "09:00");
+                    setImportDefaultClockOut(timingSettings?.clockOutTime || "18:00");
+                    setImportStep("download");
+                    setImportRows([]);
+                    setImportErrors([]);
+                    setImportFileName("");
+                    setShowExcelImportModal(true);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  title="Bulk import attendance for all staff via Excel"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Import from Excel</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -2332,6 +2541,539 @@ export default function AttendanceView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          EXCEL BULK IMPORT MODAL (Admin & HR)
+          Step 1: Download template  |  Step 2: Upload  |  Step 3: Preview/Confirm
+      ═══════════════════════════════════════════════════════════════════════ */}
+      {showExcelImportModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] w-full max-w-4xl rounded-2xl shadow-2xl animate-in fade-in duration-200 flex flex-col max-h-[90vh]">
+
+            {/* ── Header ── */}
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#1a1a1a] p-5 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center">
+                  <TableProperties className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-slate-800 dark:text-white text-sm">Bulk Attendance Import via Excel</h4>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">
+                    Download the template → Fill it in Excel → Upload & confirm
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExcelImportModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors cursor-pointer p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* ── Step Progress ── */}
+            <div className="flex items-center gap-0 px-5 pt-4 shrink-0">
+              {["Download Template", "Upload File", "Preview & Confirm"].map((label, i) => {
+                const stepKeys: (typeof importStep)[] = ["download", "upload", "preview"];
+                const stepIdx = stepKeys.indexOf(importStep === "importing" ? "preview" : importStep);
+                const isDone   = i < stepIdx;
+                const isActive = i === stepIdx;
+                return (
+                  <React.Fragment key={label}>
+                    <div className="flex flex-col items-center">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                        isDone   ? "bg-emerald-500 text-white" :
+                        isActive ? "bg-indigo-600 text-white ring-4 ring-indigo-100 dark:ring-indigo-950" :
+                                   "bg-slate-100 dark:bg-[#1a1a1a] text-slate-400"
+                      }`}>
+                        {isDone ? <Check className="w-4 h-4" /> : i + 1}
+                      </div>
+                      <span className={`text-[10px] font-semibold mt-1 whitespace-nowrap ${
+                        isActive ? "text-indigo-600 dark:text-indigo-400" :
+                        isDone   ? "text-emerald-500" : "text-slate-400"
+                      }`}>{label}</span>
+                    </div>
+                    {i < 2 && (
+                      <div className={`flex-1 h-0.5 mx-1 mt-[-14px] transition-all ${
+                        isDone ? "bg-emerald-400" : "bg-slate-100 dark:bg-[#2a2a2a]"
+                      }`} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* ── Body (scrollable) ── */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+              {/* STEP 1: Download */}
+              {importStep === "download" && (
+                <div className="space-y-5">
+                  {/* Instructions banner */}
+                  <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-xl p-4 flex items-start gap-3">
+                    <Info className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
+                    <div className="text-xs text-indigo-700 dark:text-indigo-300 space-y-1">
+                      <p className="font-bold">How to use this feature</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-indigo-600 dark:text-indigo-400">
+                        <li>Set the <b>date range</b> and <b>weekend days</b> below, then download the template</li>
+                        <li>Fill in the <b>Status</b>, <b>Clock In</b>, <b>Clock Out</b>, and <b>WFH</b> columns</li>
+                        <li>Do <b>not</b> edit the Employee ID, Name, or Date columns</li>
+                        <li>Save and upload the file on Step 2</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* ── Date Range ── */}
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a]/40 rounded-xl border border-slate-100 dark:border-[#1a1a1a] p-4 space-y-3">
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Date Range</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400">From Date</label>
+                        <input
+                          type="date"
+                          value={importFromDate}
+                          onChange={(e) => setImportFromDate(e.target.value)}
+                          className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] p-2.5 rounded-xl text-slate-800 dark:text-white focus:outline-none font-mono text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400">To Date</label>
+                        <input
+                          type="date"
+                          value={importToDate}
+                          min={importFromDate}
+                          onChange={(e) => setImportToDate(e.target.value)}
+                          className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] p-2.5 rounded-xl text-slate-800 dark:text-white focus:outline-none font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                    {/* Live date range summary */}
+                    {importFromDate && importToDate && importFromDate <= importToDate && (() => {
+                      const from = new Date(importFromDate + "T00:00:00");
+                      const to   = new Date(importToDate   + "T00:00:00");
+                      let totalDays = 0, workingDays = 0;
+                      const cur = new Date(from);
+                      while (cur <= to) {
+                        totalDays++;
+                        if (!importWeekendDays.includes(cur.getDay())) workingDays++;
+                        cur.setDate(cur.getDate() + 1);
+                      }
+                      const includedCount = accessibleEmployees.length - importExcludedEmployees.length;
+                      return (
+                        <p className="text-[11px] text-slate-500 dark:text-gray-400">
+                          <span className="font-bold text-slate-700 dark:text-white">{totalDays}</span> total days &nbsp;·&nbsp;
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">{workingDays}</span> working days
+                          &nbsp;·&nbsp;
+                          <span className="font-bold text-slate-700 dark:text-white">{includedCount}</span> employees
+                          &nbsp;→&nbsp;
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{workingDays * includedCount}</span> rows in template
+                        </p>
+                      );
+                    })()}
+                  </div>
+
+                  {/* ── Weekend Days ── */}
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a]/40 rounded-xl border border-slate-100 dark:border-[#1a1a1a] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Weekend Days (will be excluded from template)</p>
+                      <button
+                        type="button"
+                        onClick={() => setImportWeekendDays(importWeekendDays.length === 0 ? [0] : [])}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold cursor-pointer"
+                      >
+                        {importWeekendDays.length === 0 ? "Reset to Sunday" : "Clear all"}
+                      </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { label: "Sun", value: 0 },
+                        { label: "Mon", value: 1 },
+                        { label: "Tue", value: 2 },
+                        { label: "Wed", value: 3 },
+                        { label: "Thu", value: 4 },
+                        { label: "Fri", value: 5 },
+                        { label: "Sat", value: 6 },
+                      ].map(day => {
+                        const isWeekend = importWeekendDays.includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() => {
+                              setImportWeekendDays(prev =>
+                                prev.includes(day.value)
+                                  ? prev.filter(d => d !== day.value)
+                                  : [...prev, day.value]
+                              );
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                              isWeekend
+                                ? "bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                                : "bg-white dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 border-slate-200 dark:border-[#2a2a2a] hover:border-slate-300"
+                            }`}
+                          >
+                            {day.label}
+                            {isWeekend && <span className="ml-1 opacity-70">✕</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {importWeekendDays.length === 7 && (
+                      <p className="text-[10px] text-rose-500 font-semibold">⚠ All days are marked as weekends — template will be empty.</p>
+                    )}
+                    {importWeekendDays.length === 0 && (
+                      <p className="text-[10px] text-amber-500 font-semibold">All days are working days — no weekends excluded.</p>
+                    )}
+                  </div>
+
+                  {/* ── Default Shift Timings ── */}
+                  <div className="bg-slate-50 dark:bg-[#0a0a0a]/40 rounded-xl border border-slate-100 dark:border-[#1a1a1a] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Default Shift Timings</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImportDefaultClockIn(timingSettings?.clockInTime || "09:00");
+                          setImportDefaultClockOut(timingSettings?.clockOutTime || "18:00");
+                        }}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold cursor-pointer"
+                      >
+                        Reset to company default
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      These times will be pre-filled in the template for every working day. HR can still override them per-row in Excel.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400">Clock In Time</label>
+                        <input
+                          type="time"
+                          value={importDefaultClockIn}
+                          onChange={(e) => setImportDefaultClockIn(e.target.value)}
+                          className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] p-2.5 rounded-xl text-slate-800 dark:text-white focus:outline-none font-mono text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 dark:text-gray-400">Clock Out Time</label>
+                        <input
+                          type="time"
+                          value={importDefaultClockOut}
+                          onChange={(e) => setImportDefaultClockOut(e.target.value)}
+                          className="w-full bg-white dark:bg-[#1a1a1a] border border-slate-200 dark:border-[#2a2a2a] p-2.5 rounded-xl text-slate-800 dark:text-white focus:outline-none font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+                    {importDefaultClockIn && importDefaultClockOut && (() => {
+                      const [inH, inM] = importDefaultClockIn.split(":").map(Number);
+                      const [outH, outM] = importDefaultClockOut.split(":").map(Number);
+                      const diffMins = (outH * 60 + outM) - (inH * 60 + inM);
+                      if (diffMins <= 0) return (
+                        <p className="text-[10px] text-rose-500 font-semibold">⚠ Clock-out is before or equal to clock-in.</p>
+                      );
+                      const h = Math.floor(diffMins / 60), m = diffMins % 60;
+                      return (
+                        <p className="text-[10px] text-slate-500 dark:text-gray-400">
+                          Shift duration: <span className="font-bold text-slate-700 dark:text-white">{h}h {m > 0 ? `${m}m` : ""}</span>
+                        </p>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Employee chips — click to exclude/include */}
+                  <div className="bg-white dark:bg-[#0a0a0a]/20 rounded-xl border border-slate-100 dark:border-[#1a1a1a] p-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                        {accessibleEmployees.length - importExcludedEmployees.length} / {accessibleEmployees.length} employees included
+                        {importExcludedEmployees.length > 0 && (
+                          <span className="ml-1.5 text-rose-400">({importExcludedEmployees.length} excluded)</span>
+                        )}
+                      </p>
+                      <div className="flex gap-2">
+                        {importExcludedEmployees.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setImportExcludedEmployees([])}
+                            className="text-[10px] text-emerald-500 hover:text-emerald-700 font-semibold cursor-pointer"
+                          >
+                            Include all
+                          </button>
+                        )}
+                        {importExcludedEmployees.length < accessibleEmployees.length && (
+                          <button
+                            type="button"
+                            onClick={() => setImportExcludedEmployees(accessibleEmployees.map(e => e.id))}
+                            className="text-[10px] text-rose-400 hover:text-rose-600 font-semibold cursor-pointer"
+                          >
+                            Exclude all
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400">Click an employee chip to exclude / re-include them</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {accessibleEmployees.map(emp => {
+                        const isExcluded = importExcludedEmployees.includes(emp.id);
+                        return (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => {
+                              setImportExcludedEmployees(prev =>
+                                prev.includes(emp.id)
+                                  ? prev.filter(id => id !== emp.id)
+                                  : [...prev, emp.id]
+                              );
+                            }}
+                            title={isExcluded ? `Click to include ${emp.fullName}` : `Click to exclude ${emp.fullName}`}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border ${
+                              isExcluded
+                                ? "bg-slate-100 dark:bg-[#1a1a1a] text-slate-300 dark:text-gray-600 border-slate-200 dark:border-[#2a2a2a] line-through opacity-60"
+                                : "bg-slate-50 dark:bg-[#1a1a1a] text-slate-700 dark:text-gray-300 border-slate-200 dark:border-[#2a2a2a] hover:border-rose-300 dark:hover:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 dark:hover:text-rose-400"
+                            }`}
+                          >
+                            {isExcluded ? (
+                              <>
+                                <span>{emp.fullName}</span>
+                                <span className="text-rose-400 opacity-80 no-underline" style={{ textDecoration: "none" }}>✕</span>
+                              </>
+                            ) : emp.fullName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {importExcludedEmployees.length === accessibleEmployees.length && (
+                      <p className="text-[10px] text-rose-500 font-semibold">⚠ All employees are excluded — template will be empty.</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleDownloadTemplate}
+                    disabled={
+                      !importFromDate || !importToDate || importFromDate > importToDate ||
+                      importWeekendDays.length === 7 ||
+                      importExcludedEmployees.length === accessibleEmployees.length
+                    }
+                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-indigo-200 dark:shadow-indigo-950 cursor-pointer"
+                  >
+                    <Download className="w-5 h-5" />
+                    <span>Download Excel Template</span>
+                  </button>
+                </div>
+              )}
+
+              {/* STEP 2: Upload */}
+              {importStep === "upload" && (
+                <div className="space-y-4">
+                  {/* General parse errors */}
+                  {importErrors.length > 0 && (
+                    <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3 space-y-1">
+                      <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                        <AlertOctagon className="w-4 h-4" /> File Errors
+                      </p>
+                      {importErrors.map((err, i) => (
+                        <p key={i} className="text-xs text-rose-500">
+                          {err.row > 0 ? `Row ${err.row}: ` : ""}{err.message}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div
+                    className="border-2 border-dashed border-slate-200 dark:border-[#2a2a2a] hover:border-indigo-400 dark:hover:border-indigo-700 rounded-2xl p-10 text-center transition-all cursor-pointer group"
+                    onClick={() => importFileRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleExcelUpload(file);
+                    }}
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
+                      <Upload className="w-7 h-7 text-indigo-500" />
+                    </div>
+                    <p className="text-sm font-bold text-slate-700 dark:text-white">Click to upload or drag & drop</p>
+                    <p className="text-xs text-slate-400 mt-1">Accepts .xlsx or .xls files</p>
+                    {importFileName && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg px-3 py-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{importFileName}</span>
+                      </div>
+                    )}
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleExcelUpload(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: Preview */}
+              {(importStep === "preview" || importStep === "importing") && (
+                <div className="space-y-4">
+                  {/* Summary banner */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{importRows.length}</p>
+                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mt-0.5">Records to Import</p>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">
+                        {importRows.filter(r => r.status === "Absent" || r.status === "On Leave").length}
+                      </p>
+                      <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mt-0.5">Absent / Leave</p>
+                    </div>
+                    <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono">{importErrors.length}</p>
+                      <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider mt-0.5">Row Errors</p>
+                    </div>
+                  </div>
+
+                  {/* Validation errors list */}
+                  {importErrors.length > 0 && (
+                    <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3 space-y-1 max-h-28 overflow-y-auto">
+                      <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 sticky top-0 bg-rose-50 dark:bg-rose-950/30">
+                        <AlertOctagon className="w-4 h-4" /> Rows with errors (will be skipped)
+                      </p>
+                      {importErrors.map((err, i) => (
+                        <p key={i} className="text-xs text-rose-500">Row {err.row}: {err.message}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Preview table */}
+                  {importRows.length > 0 && (
+                    <div className="rounded-xl border border-slate-100 dark:border-[#1a1a1a] overflow-hidden">
+                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-slate-50 dark:bg-[#0a0a0a] border-b border-slate-100 dark:border-[#1a1a1a]">
+                            <tr>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">Employee</th>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">Date</th>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">Status</th>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">Clock In</th>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">Clock Out</th>
+                              <th className="text-left py-2 px-3 font-bold text-[10px] uppercase tracking-wider text-slate-400">WFH</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 dark:divide-[#1a1a1a]">
+                            {importRows.slice(0, 200).map((row, idx) => {
+                              const statusColor = {
+                                Present:    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+                                Late:       "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
+                                "Half Day": "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400",
+                                Absent:     "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400",
+                                "On Leave": "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
+                              }[row.status] || "bg-slate-50 text-slate-500";
+                              return (
+                                <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#0a0a0a]/30">
+                                  <td className="py-2 px-3 text-slate-700 dark:text-gray-300 font-medium">{row.employeeName || row.employeeId}</td>
+                                  <td className="py-2 px-3 text-slate-500 dark:text-gray-400 font-mono">{row.date}</td>
+                                  <td className="py-2 px-3">
+                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${statusColor}`}>{row.status}</span>
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500 dark:text-gray-400 font-mono">
+                                    {row.clockIn ? new Date(row.clockIn).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500 dark:text-gray-400 font-mono">
+                                    {row.clockOut ? new Date(row.clockOut).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }) : "—"}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    {row.workFromHome
+                                      ? <span className="text-blue-500 font-bold text-[10px]">WFH</span>
+                                      : <span className="text-slate-300 dark:text-gray-600 text-[10px]">Office</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                        {importRows.length > 200 && (
+                          <p className="text-center text-[10px] text-slate-400 py-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+                            Showing first 200 of {importRows.length} rows
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ── Footer Actions ── */}
+            <div className="border-t border-slate-100 dark:border-[#1a1a1a] p-4 shrink-0 flex items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {importStep !== "download" && importStep !== "importing" && (
+                  <button
+                    onClick={() => {
+                      if (importStep === "preview") { setImportStep("upload"); setImportRows([]); setImportErrors([]); }
+                      else if (importStep === "upload") setImportStep("download");
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2 ml-auto">
+                <button
+                  onClick={() => setShowExcelImportModal(false)}
+                  disabled={importStep === "importing"}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-white px-4 py-2.5 rounded-xl border border-slate-200 dark:border-[#2a2a2a] hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all cursor-pointer disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                {importStep === "download" && (
+                  <button
+                    onClick={() => { setImportStep("upload"); setImportErrors([]); }}
+                    className="text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                  >
+                    Next: Upload File →
+                  </button>
+                )}
+
+                {importStep === "upload" && (
+                  <button
+                    disabled
+                    className="text-xs font-semibold bg-slate-200 dark:bg-[#2a2a2a] text-slate-400 px-5 py-2.5 rounded-xl cursor-not-allowed"
+                  >
+                    Upload a file to continue
+                  </button>
+                )}
+
+                {importStep === "preview" && (
+                  <button
+                    onClick={handleConfirmImport}
+                    disabled={importRows.length === 0}
+                    className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    Confirm & Import {importRows.length} Records
+                  </button>
+                )}
+
+                {importStep === "importing" && (
+                  <button
+                    disabled
+                    className="text-xs font-bold bg-emerald-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 opacity-80"
+                  >
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Importing...
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

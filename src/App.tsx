@@ -1092,6 +1092,45 @@ export default function App() {
     }
   };
 
+  // 5f. Bulk import attendance from Excel
+  const handleBulkImportAttendance = async (rows: any[]) => {
+    try {
+      const res = await fetch("/api/attendance/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Merge imported records into local state
+        setAttendance(prev => {
+          let next = [...prev];
+          (data.records || []).forEach((punch: any) => {
+            const idx = next.findIndex(a => a.employeeId === punch.employeeId && a.date === punch.date);
+            if (idx >= 0) {
+              next[idx] = punch;
+            } else {
+              next = [punch, ...next];
+            }
+          });
+          return next;
+        });
+        await refreshDatabase();
+        const errCount = data.errors?.length || 0;
+        if (errCount > 0) {
+          showToast(`Imported ${data.imported} records. ${errCount} row(s) had errors.`, "info");
+        } else {
+          showToast(`Successfully imported ${data.imported} attendance records!`, "success");
+        }
+      } else {
+        showToast(data.error || "Bulk import failed.", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Could not connect to bulk import service.", "error");
+    }
+  };
+
   // 6. Submit leave request
   const handleApplyLeave = async (leaveData: any) => {
     try {
@@ -3434,6 +3473,7 @@ export default function App() {
               onSaveDayPunch={handleSaveDayPunch}
               onClearAllAttendance={handleClearAllAttendance}
               onSaveTimingSettings={handleSaveTimingSettings}
+              onBulkImportAttendance={handleBulkImportAttendance}
             />
           )}
 
