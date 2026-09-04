@@ -1,6 +1,6 @@
 
 import {
-  Employee, Designation, AttendancePunch, LeaveRequest,
+  Employee, Designation, AttendancePunch, AttendanceRequest, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
   SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType, ChecklistItemTemplate,
@@ -11,6 +11,7 @@ export interface AppState {
   designations: Designation[];
   employees: Employee[];
   attendance: AttendancePunch[];
+  attendanceRequests?: AttendanceRequest[];
   leaves: LeaveRequest[];
   holidays: Holiday[];
   policies: Policy[];
@@ -201,6 +202,7 @@ export function getInitialState(): AppState {
     exitChecklistTemplates: initialExitChecklistTemplates,
     grievanceTickets: [],
     performanceRecords: [],
+    attendanceRequests: [],
   };
 }
 

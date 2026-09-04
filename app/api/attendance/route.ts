@@ -39,21 +39,48 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const db = loadDatabase();
-    db.attendance = [];
-    saveDatabase(db);
 
-    if (supabase) {
-      try {
-        await supabase.from("attendance").delete().neq("id", "0");
-      } catch (e) {
-        console.warn("Supabase sync warning:", e);
+    // Support optional branch-scoped deletion via ?employeeIds=id1,id2,...
+    const url = new URL(request.url);
+    const employeeIdsParam = url.searchParams.get("employeeIds");
+
+    if (employeeIdsParam) {
+      // Branch-scoped delete: only remove records for specified employees
+      const idsToDelete = new Set(employeeIdsParam.split(",").map(s => s.trim()).filter(Boolean));
+      const before = db.attendance?.length ?? 0;
+      db.attendance = (db.attendance || []).filter(a => !idsToDelete.has(a.employeeId));
+      const deleted = before - db.attendance.length;
+      saveDatabase(db);
+
+      if (supabase) {
+        try {
+          for (const empId of idsToDelete) {
+            await supabase.from("attendance").delete().eq("employee_id", empId);
+          }
+        } catch (e) {
+          console.warn("Supabase sync warning:", e);
+        }
       }
-    }
 
-    return NextResponse.json({ success: true, message: "Cleared all attendance records." });
+      return NextResponse.json({ success: true, message: `Cleared ${deleted} attendance record(s) for branch.` });
+    } else {
+      // Full delete (admin clearing all branches)
+      db.attendance = [];
+      saveDatabase(db);
+
+      if (supabase) {
+        try {
+          await supabase.from("attendance").delete().neq("id", "0");
+        } catch (e) {
+          console.warn("Supabase sync warning:", e);
+        }
+      }
+
+      return NextResponse.json({ success: true, message: "Cleared all attendance records." });
+    }
   } catch (error) {
     return NextResponse.json({ error: "Failed to clear attendance" }, { status: 500 });
   }

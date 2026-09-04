@@ -9,13 +9,14 @@ import {
 } from "lucide-react";
 
 import {
-  Employee, Designation, AttendancePunch, LeaveRequest,
+  Employee, Designation, AttendancePunch, AttendanceRequest, LeaveRequest,
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
   SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate,
   GrievanceTicket, PerformanceRecord
 } from "./types";
 import { toBranchId, toBranchName } from "./lib/branchUtils";
+import * as XLSX from "xlsx";
 
 // Import Modular Views
 import DashboardView from "./components/DashboardView";
@@ -257,6 +258,7 @@ export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [designations, setDesignations] = useState<Designation[]>([]);
   const [attendance, setAttendance] = useState<AttendancePunch[]>([]);
+  const [attendanceRequests, setAttendanceRequests] = useState<AttendanceRequest[]>([]);
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [policies, setPolicies] = useState<Policy[]>([]);
@@ -518,6 +520,7 @@ export default function App() {
 
         return Array.from(attMap.values());
       });
+      setAttendanceRequests(data.attendanceRequests || []);
       setLeaves(prev => {
         const leaveMap = new Map();
         (data.leaves || []).forEach((l: any) => { if (l.id) leaveMap.set(l.id, l); });
@@ -722,6 +725,7 @@ export default function App() {
     setRoomBookings([]);
     setGrievanceTickets([]);
     setPerformanceRecords([]);
+    setAttendanceRequests([]);
 
     if (typeof window !== "undefined") {
       localStorage.removeItem("snailhr_isLoggedIn");
@@ -1076,16 +1080,133 @@ export default function App() {
   };
 
   // 5e. Clear all attendance punches
-  const handleClearAllAttendance = async () => {
-    if (!confirm("Are you sure you want to clear all attendance records for everyone? This action cannot be undone.")) return;
-    try {
-      setAttendance([]);
-      const res = await fetch("/api/attendance", {
-        method: "DELETE"
+  // ─── Helper: Export attendance to Excel (backup before clearing) ──────────────
+  const exportAttendanceBackup = (recordsToExport: AttendancePunch[], label: string) => {
+    const formatISO = (iso: string | null | undefined) => {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+      } catch { return ""; }
+    };
+
+    const calcHours = (punch: AttendancePunch) => {
+      if (!punch.clockIn) return "";
+      const start = new Date(punch.clockIn);
+      const end = punch.clockOut ? new Date(punch.clockOut) : new Date(punch.clockIn);
+      let breakMs = 0;
+      (punch.breaks || []).forEach(b => {
+        const bs = new Date(b.start);
+        const be = b.end ? new Date(b.end) : bs;
+        breakMs += be.getTime() - bs.getTime();
       });
-      if (res.ok) {
-        await refreshDatabase();
-        showToast("All attendance punch records cleared.", "info");
+      const diffMs = end.getTime() - start.getTime() - breakMs;
+      if (diffMs <= 0) return "0h 0m";
+      const h = Math.floor(diffMs / 3600000);
+      const m = Math.floor((diffMs % 3600000) / 60000);
+      return `${h}h ${m}m`;
+    };
+
+    const clearedByName = currentEmployee?.fullName || "Admin";
+    const clearedByEmail = currentEmployee?.email || "N/A";
+    const clearedById = currentEmployee?.id || "N/A";
+    const clearedByRole = (activeRole || currentEmployee?.role || "admin").toUpperCase();
+    const clearedByTag = `${clearedByName} (${clearedById} - ${clearedByRole})`;
+
+    const rows = recordsToExport
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date) || a.employeeId.localeCompare(b.employeeId))
+      .map(punch => {
+        const emp = employees.find(e => e.id === punch.employeeId);
+        return {
+          "Employee ID":   punch.employeeId,
+          "Employee Name": emp?.fullName || "",
+          "Branch":        toBranchName(emp?.branch || "") || "",
+          "Department":    emp?.department || "",
+          "Date":          punch.date,
+          "Status":        punch.status || "Present",
+          "Clock In":      formatISO(punch.clockIn),
+          "Clock Out":     formatISO(punch.clockOut),
+          "Working Hours": calcHours(punch),
+          "Break Duration":punch.totalBreakDuration || "00h 00m",
+          "WFH":           punch.workFromHome ? "Yes" : "No",
+          "Notes":         punch.notes || "",
+          "Cleared By":    clearedByTag,
+        };
+      });
+
+    if (rows.length === 0) return; // nothing to export
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+      { wch: 16 }, { wch: 26 }, { wch: 18 }, { wch: 16 },
+      { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+      { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 24 },
+      { wch: 32 },
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, "Attendance Records");
+
+    // Summary sheet with logged-in user credentials who initiated the clear
+    const summary = [
+      { "Info": "Branch / Scope",           "Value": label },
+      { "Info": "Exported / Cleared On",    "Value": new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) },
+      { "Info": "Cleared By (Name)",        "Value": clearedByName },
+      { "Info": "Cleared By (Email)",       "Value": clearedByEmail },
+      { "Info": "Cleared By (Employee ID)", "Value": clearedById },
+      { "Info": "Cleared By (Role)",        "Value": clearedByRole },
+      { "Info": "Total Records",            "Value": rows.length },
+      { "Info": "Unique Employees",         "Value": new Set(recordsToExport.map(r => r.employeeId)).size },
+      { "Info": "Date Range (First)",       "Value": rows[0]?.["Date"] || "" },
+      { "Info": "Date Range (Last)",        "Value": rows[rows.length - 1]?.["Date"] || "" },
+    ];
+    const wsSummary = XLSX.utils.json_to_sheet(summary);
+    wsSummary["!cols"] = [{ wch: 26 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+
+    const cleanLabel = label.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const dateTag = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    XLSX.writeFile(wb, `Attendance_Backup_${cleanLabel}_${dateTag}.xlsx`);
+  };
+
+  const handleClearAllAttendance = async () => {
+    const isBranchScoped = effectiveBranch && effectiveBranch !== "All Branches";
+    const branchLabel = isBranchScoped ? `"${effectiveBranch}"` : "all branches";
+    if (!confirm(
+      `This will:\n\n` +
+      `  1. Download an Excel backup of all attendance records for ${branchLabel}\n` +
+      `  2. Permanently clear those records\n\n` +
+      `Only attendance punch data will be removed — all other data (employees, payslips, leaves, etc.) remains intact.\n\n` +
+      `Proceed?`
+    )) return;
+
+    try {
+      if (isBranchScoped) {
+        // Export only the branch's records before clearing
+        const branchEmpIds = new Set(filteredEmployees.map(e => e.id));
+        const branchRecords = attendance.filter(a => branchEmpIds.has(a.employeeId));
+        exportAttendanceBackup(branchRecords, effectiveBranch);
+
+        const idsParam = [...branchEmpIds].join(",");
+        setAttendance(prev => prev.filter(a => !branchEmpIds.has(a.employeeId)));
+        const res = await fetch(`/api/attendance?employeeIds=${encodeURIComponent(idsParam)}`, {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          await refreshDatabase();
+          showToast(`✓ Backup downloaded & attendance cleared for ${effectiveBranch}.`, "info");
+        }
+      } else {
+        // Admin clearing all branches — export everything
+        exportAttendanceBackup(attendance, "All Branches");
+        setAttendance([]);
+        const res = await fetch("/api/attendance", {
+          method: "DELETE"
+        });
+        if (res.ok) {
+          await refreshDatabase();
+          showToast("✓ Backup downloaded & all attendance records cleared.", "info");
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1128,6 +1249,108 @@ export default function App() {
     } catch (err) {
       console.error(err);
       showToast("Could not connect to bulk import service.", "error");
+    }
+  };
+
+  // 5g. Submit travel / out-of-office clock-in request
+  const handleCreateAttendanceRequest = async (reqData: any) => {
+    try {
+      const activeCompanyId = localStorage.getItem("snailhr_companyId") || companyId || "";
+      const payload = {
+        ...reqData,
+        companyId: activeCompanyId,
+        employeeName: reqData.employeeName || currentEmployee?.fullName || reqData.employeeId,
+        branch: reqData.branch || currentEmployee?.branch || "",
+        department: reqData.department || currentEmployee?.department || "",
+      };
+      const res = await fetch("/api/attendance/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.request) {
+        setAttendanceRequests(prev => [data.request, ...prev.filter(r => r.id !== data.request.id)]);
+        await refreshDatabase();
+        showToast("✓ Travel clock-in request submitted to HR for approval.", "success");
+        return { success: true };
+      } else {
+        showToast(data.error || "Failed to submit request", "error");
+        return { success: false, error: data.error };
+      }
+    } catch (err) {
+      console.error("handleCreateAttendanceRequest error:", err);
+      showToast("Error connecting to server", "error");
+      return { success: false, error: "Network error" };
+    }
+  };
+
+  // 5h. Review (Approve / Reject) travel clock-in request
+  const handleReviewAttendanceRequest = async (requestId: string, status: "Approved" | "Rejected", remarks?: string) => {
+    try {
+      const reviewerName = currentEmployee?.fullName || "HR Admin";
+      const reviewerId = currentEmployee?.id || "";
+      const res = await fetch("/api/attendance/requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          status,
+          reviewedBy: reviewerName,
+          reviewedById: reviewerId,
+          reviewRemarks: remarks || ""
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.request) {
+        setAttendanceRequests(prev => prev.map(r => r.id === requestId ? data.request : r));
+        if (status === "Approved" && data.punch) {
+          setAttendance(prev => {
+            const idx = prev.findIndex(a => a.employeeId === data.punch.employeeId && a.date === data.punch.date);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = data.punch;
+              return next;
+            }
+            return [data.punch, ...prev];
+          });
+          showToast(`✓ Request approved! Attendance record created for ${data.request.employeeName}.`, "success");
+        } else {
+          showToast(`Request rejected for ${data.request.employeeName}.`, "info");
+        }
+        await refreshDatabase();
+        return { success: true };
+      } else {
+        showToast(data.error || "Failed to process review", "error");
+        return { success: false, error: data.error };
+      }
+    } catch (err) {
+      console.error("handleReviewAttendanceRequest error:", err);
+      showToast("Error connecting to server", "error");
+      return { success: false, error: "Network error" };
+    }
+  };
+
+  const handleDeleteAttendanceRequest = async (id: string) => {
+    try {
+      setAttendanceRequests(prev => prev.filter(r => r.id !== id));
+      const res = await fetch(`/api/attendance/requests?id=${id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        showToast("Travel request removed successfully.", "info");
+        await refreshDatabase();
+        return true;
+      } else {
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || "Failed to delete request", "error");
+        await refreshDatabase();
+        return false;
+      }
+    } catch (err) {
+      console.error("handleDeleteAttendanceRequest error:", err);
+      showToast("Error deleting request", "error");
+      return false;
     }
   };
 
@@ -3474,6 +3697,15 @@ export default function App() {
               onClearAllAttendance={handleClearAllAttendance}
               onSaveTimingSettings={handleSaveTimingSettings}
               onBulkImportAttendance={handleBulkImportAttendance}
+              attendanceRequests={attendanceRequests.filter(r => {
+                if (activeRole === "employee") {
+                  return r.employeeId === currentEmployeeId;
+                }
+                return isBranchMatched(r.branch);
+              })}
+              onCreateAttendanceRequest={handleCreateAttendanceRequest}
+              onReviewAttendanceRequest={handleReviewAttendanceRequest}
+              onDeleteAttendanceRequest={handleDeleteAttendanceRequest}
             />
           )}
 

@@ -5,10 +5,11 @@ import {
   Play, Square, Pause, RotateCcw, Clock, Calendar as CalendarIcon, CheckCircle2, 
   AlertTriangle, Eye, Sparkles, Coffee, AlertCircle, RefreshCw, Sliders,
   Home, Briefcase, Plus, ChevronRight, ChevronLeft, UserCheck, Check, Edit2, Info,
-  Trash2, X, FileText, User, Loader2, Search, Building2, Upload, Download, TableProperties, CheckCheck, AlertOctagon
+  Trash2, X, FileText, User, Loader2, Search, Building2, Upload, Download, TableProperties, CheckCheck, AlertOctagon,
+  Compass, Navigation, MapPin, Send, CheckCircle, XCircle
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { AttendancePunch, Employee, UserRole, LeaveRequest, Holiday } from "../types";
+import { AttendancePunch, AttendanceRequest, AttendanceRequestType, Employee, UserRole, LeaveRequest, Holiday } from "../types";
 import { toBranchId, toBranchName } from "../lib/branchUtils";
 
 interface AttendanceViewProps {
@@ -24,6 +25,10 @@ interface AttendanceViewProps {
   onSaveDayPunch?: (punchData: any) => void;
   onClearAllAttendance?: () => void;
   onBulkImportAttendance?: (rows: any[]) => Promise<void>;
+  attendanceRequests?: AttendanceRequest[];
+  onCreateAttendanceRequest?: (requestData: any) => Promise<{ success: boolean; error?: string }>;
+  onReviewAttendanceRequest?: (requestId: string, status: "Approved" | "Rejected", remarks?: string) => Promise<{ success: boolean; error?: string }>;
+  onDeleteAttendanceRequest?: (requestId: string) => Promise<boolean | void>;
   timingSettings?: {
     clockInTime: string;
     clockOutTime: string;
@@ -51,6 +56,10 @@ export default function AttendanceView({
   onSaveDayPunch,
   onClearAllAttendance,
   onBulkImportAttendance,
+  attendanceRequests = [],
+  onCreateAttendanceRequest,
+  onReviewAttendanceRequest,
+  onDeleteAttendanceRequest,
   timingSettings,
   branchTimingSettings,
   onSaveTimingSettings,
@@ -59,7 +68,7 @@ export default function AttendanceView({
   customBranches = []
 }: AttendanceViewProps) {
   // Navigation active tab
-  const [activeTab, setActiveTab] = useState<"personal" | "todays-punches" | "roster" | "monthly-view">(
+  const [activeTab, setActiveTab] = useState<"personal" | "todays-punches" | "roster" | "monthly-view" | "travel-requests">(
     role === "employee" ? "personal" : "todays-punches"
   );
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -312,6 +321,112 @@ export default function AttendanceView({
   };
 
   const todayStr = getLocalDateString(currentTime);
+
+  // Travel / Out-of-Office Clock-in state
+  const [showTravelModal, setShowTravelModal] = useState(false);
+  const [travelModalReq, setTravelModalReq] = useState<{
+    date: string;
+    requestType: AttendanceRequestType;
+    clockInTime: string;
+    clockOutTime: string;
+    location: string;
+    reason: string;
+  }>({
+    date: todayStr,
+    requestType: "Travel",
+    clockInTime: "09:30",
+    clockOutTime: "18:00",
+    location: "",
+    reason: ""
+  });
+  const [isSubmittingTravel, setIsSubmittingTravel] = useState(false);
+
+  // Review Modal State (HR / Admin)
+  const [reviewTargetReq, setReviewTargetReq] = useState<AttendanceRequest | null>(null);
+  const [reviewActionType, setReviewActionType] = useState<"Approved" | "Rejected">("Approved");
+  const [reviewRemarksInput, setReviewRemarksInput] = useState("");
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Filter & Search in Travel Requests Tab
+  const [travelStatusFilter, setTravelStatusFilter] = useState<"all" | "Pending" | "Approved" | "Rejected">("all");
+  const [travelSearchQuery, setTravelSearchQuery] = useState("");
+
+  const allTravelRequests = attendanceRequests || [];
+  const pendingTravelCount = allTravelRequests.filter(r => r.status === "Pending").length;
+  const myTravelRequests = allTravelRequests.filter(r => r.employeeId === currentEmployeeId);
+
+  const displayedTravelRequests = allTravelRequests.filter(r => {
+    if (role === "employee" && r.employeeId !== currentEmployeeId) return false;
+    if (travelStatusFilter !== "all" && r.status !== travelStatusFilter) return false;
+    if (travelSearchQuery.trim()) {
+      const q = travelSearchQuery.toLowerCase();
+      const matchName = (r.employeeName || "").toLowerCase().includes(q);
+      const matchId = (r.employeeId || "").toLowerCase().includes(q);
+      const matchLoc = (r.location || "").toLowerCase().includes(q);
+      const matchReason = (r.reason || "").toLowerCase().includes(q);
+      const matchType = (r.requestType || "").toLowerCase().includes(q);
+      if (!matchName && !matchId && !matchLoc && !matchReason && !matchType) return false;
+    }
+    return true;
+  });
+
+  const handleSubmitTravelRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!travelModalReq.location.trim() || !travelModalReq.reason.trim()) {
+      alert("Please provide both destination/location and reason for traveling.");
+      return;
+    }
+    if (!travelModalReq.clockInTime) {
+      alert("Please specify requested clock-in time.");
+      return;
+    }
+
+    setIsSubmittingTravel(true);
+    try {
+      const emp = employees.find(e => e.id === currentEmployeeId);
+      if (onCreateAttendanceRequest) {
+        const res = await onCreateAttendanceRequest({
+          employeeId: currentEmployeeId,
+          employeeName: emp?.fullName || currentEmployeeId,
+          branch: emp?.branch || selectedBranch,
+          department: emp?.department || "",
+          date: travelModalReq.date,
+          requestType: travelModalReq.requestType,
+          clockInTime: travelModalReq.clockInTime,
+          clockOutTime: travelModalReq.clockOutTime || undefined,
+          location: travelModalReq.location.trim(),
+          reason: travelModalReq.reason.trim()
+        });
+        if (res.success) {
+          setShowTravelModal(false);
+          setTravelModalReq({
+            date: todayStr,
+            requestType: "Travel",
+            clockInTime: "09:30",
+            clockOutTime: "18:00",
+            location: "",
+            reason: ""
+          });
+        }
+      }
+    } finally {
+      setIsSubmittingTravel(false);
+    }
+  };
+
+  const handleConfirmReview = async () => {
+    if (!reviewTargetReq) return;
+    setIsSubmittingReview(true);
+    try {
+      if (onReviewAttendanceRequest) {
+        await onReviewAttendanceRequest(reviewTargetReq.id, reviewActionType, reviewRemarksInput.trim());
+      }
+      setReviewTargetReq(null);
+      setReviewRemarksInput("");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const todayPunches = attendance.filter(a => 
     a.employeeId === currentEmployeeId && (
@@ -971,6 +1086,27 @@ export default function AttendanceView({
               </>
             )}
           </div>
+
+          {/* Out of Office / Travel Clock-In Request Trigger */}
+          <div className="pt-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+            <button
+              onClick={() => {
+                setTravelModalReq({
+                  date: todayStr,
+                  requestType: "Travel",
+                  clockInTime: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+                  clockOutTime: timingSettings?.clockOutTime || "18:00",
+                  location: "",
+                  reason: ""
+                });
+                setShowTravelModal(true);
+              }}
+              className="w-full bg-gradient-to-r from-sky-100/90 via-indigo-100/70 to-teal-100/80 hover:from-sky-200/80 hover:to-teal-200/80 dark:from-sky-500/10 dark:via-indigo-500/10 dark:to-teal-500/10 dark:hover:from-sky-500/20 dark:hover:to-teal-500/20 text-sky-900 dark:text-sky-300 border border-sky-300/80 dark:border-sky-800/40 rounded-xl py-2.5 px-3 flex items-center justify-center space-x-2 text-xs font-bold transition-all group cursor-pointer shadow-xs"
+            >
+              <Compass className="w-4 h-4 text-sky-700 dark:text-sky-400 group-hover:rotate-45 transition-transform" />
+              <span>Traveling? Raise Clock-In Request</span>
+            </button>
+          </div>
         </div>
 
         {/* Attendance Summary & Metrics */}
@@ -1045,10 +1181,10 @@ export default function AttendanceView({
             </button>
           )}
 
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-2xl border border-slate-200/50 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#0f0f0f] p-1 rounded-2xl border border-slate-200 dark:border-[#1a1a1a] text-xs font-semibold overflow-x-auto scrollbar-none max-w-full">
             <button 
               onClick={() => setActiveTab("personal")}
-              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "personal" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "personal" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-900 dark:text-white font-bold" : "text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"}`}
             >
               My Punches
             </button>
@@ -1057,7 +1193,7 @@ export default function AttendanceView({
             {role !== "employee" && (
               <button 
                 onClick={() => setActiveTab("todays-punches")}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "todays-punches" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white font-bold text-emerald-600 dark:text-emerald-400" : "text-slate-400 hover:text-slate-600"}`}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "todays-punches" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-emerald-700 dark:text-emerald-400 font-bold" : "text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"}`}
               >
                 Today's Punches
               </button>
@@ -1067,7 +1203,7 @@ export default function AttendanceView({
             {role !== "employee" && (
               <button 
                 onClick={() => setActiveTab("roster")}
-                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "roster" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white" : "text-slate-400 hover:text-slate-600"}`}
+                className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "roster" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-900 dark:text-white font-bold" : "text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"}`}
               >
                 Branch Roster
               </button>
@@ -1076,9 +1212,23 @@ export default function AttendanceView({
             {/* Monthly Matrix Tab: Accessible to ALL roles */}
             <button 
               onClick={() => setActiveTab("monthly-view")}
-              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "monthly-view" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-800 dark:text-white dark:text-emerald-400" : "text-slate-400 hover:text-slate-600"}`}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${activeTab === "monthly-view" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-slate-900 dark:text-emerald-400 font-bold" : "text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"}`}
             >
               Monthly Matrix
+            </button>
+
+            {/* Travel / Out of Office Requests Tab */}
+            <button 
+              onClick={() => setActiveTab("travel-requests")}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${activeTab === "travel-requests" ? "bg-white dark:bg-[#1a1a1a] shadow-xs text-sky-800 dark:text-sky-300 font-bold" : "text-slate-600 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white"}`}
+            >
+              <Compass className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+              <span>Travel / OD Requests</span>
+              {pendingTravelCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] bg-amber-500 text-white rounded-full font-bold">
+                  {pendingTravelCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1179,6 +1329,96 @@ export default function AttendanceView({
                   })}
               </tbody>
             </table>
+          </div>
+
+          {/* Employee's Own Travel / Out of Office Clock-In Requests */}
+          <div className="pt-4 border-t border-slate-100 dark:border-[#1a1a1a] space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Compass className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                <h4 className="font-display font-semibold text-slate-800 dark:text-white text-xs">
+                  My Out-of-Office & Travel Clock-In Requests
+                </h4>
+                {myTravelRequests.length > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-[#1a1a1a] text-slate-600 dark:text-gray-400">
+                    {myTravelRequests.length}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setTravelModalReq({
+                    date: todayStr,
+                    requestType: "Travel",
+                    clockInTime: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+                    clockOutTime: timingSettings?.clockOutTime || "18:00",
+                    location: "",
+                    reason: ""
+                  });
+                  setShowTravelModal(true);
+                }}
+                className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Travel Request</span>
+              </button>
+            </div>
+
+            {myTravelRequests.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-2">
+                No travel or out-of-office requests raised yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {myTravelRequests.map(tr => (
+                  <div
+                    key={tr.id}
+                    className="p-3.5 bg-slate-50 dark:bg-[#151515] border border-slate-200 dark:border-[#222] rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs shadow-2xs"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-900 dark:text-white font-mono">{tr.date}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                          {tr.requestType}
+                        </span>
+                        <span className="text-slate-700 dark:text-gray-300 font-mono text-[11px] font-medium">
+                          Requested: <b className="text-slate-900 dark:text-white">{tr.clockInTime}</b> {tr.clockOutTime ? `→ ${tr.clockOutTime}` : ""}
+                        </span>
+                      </div>
+                      <p className="text-slate-800 dark:text-gray-300 mt-1 flex items-center gap-1 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                        <span><b className="text-slate-900 dark:text-white">{tr.location}</b> — {tr.reason}</span>
+                      </p>
+                      {tr.reviewedBy && (
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 bg-slate-100/80 dark:bg-[#1a1a1a] px-2 py-0.5 rounded-md inline-block">
+                          Reviewed by <b className="text-slate-900 dark:text-gray-200">{tr.reviewedBy}</b> {tr.reviewRemarks ? `• Note: "${tr.reviewRemarks}"` : ""}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0">
+                      {tr.status === "Pending" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                          Pending HR Approval
+                        </span>
+                      )}
+                      {tr.status === "Approved" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
+                          Approved & Saved
+                        </span>
+                      )}
+                      {tr.status === "Rejected" && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-300 dark:border-rose-800">
+                          <X className="w-3 h-3 text-rose-700 dark:text-rose-400" />
+                          Rejected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1989,6 +2229,311 @@ export default function AttendanceView({
                 return [...spacerCells, ...dayCells];
               })()}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: Travel & Out-of-Office Clock-In Requests */}
+      {activeTab === "travel-requests" && (
+        <div className="space-y-5">
+          {/* Header Banner */}
+          <div className="bg-gradient-to-r from-sky-50 via-indigo-50/70 to-emerald-50/50 dark:from-sky-900/30 dark:via-indigo-900/20 dark:to-emerald-950/20 border border-sky-200 dark:border-sky-500/20 rounded-2xl p-5 shadow-xs">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start space-x-3.5">
+                <div className="p-3 bg-sky-100 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-xl text-sky-700 dark:text-sky-400">
+                  <Compass className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2 flex-wrap">
+                    <span>Travel & Out-of-Office Clock-In Requests</span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-500/30 shadow-2xs">
+                      Approval Workflow
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-700 dark:text-gray-300 mt-1 max-w-2xl font-medium leading-relaxed">
+                    When traveling or visiting client sites, employees submit an Out-of-Office clock-in request.
+                    {role !== "employee" 
+                      ? " Review and approve pending requests below. Once approved by HR/Admin, their attendance is officially recorded as Present."
+                      : " Track the status of your travel clock-in requests. Once approved by HR, your attendance will be automatically marked."
+                    }
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setTravelModalReq({
+                      date: todayStr,
+                      requestType: "Travel",
+                      clockInTime: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+                      clockOutTime: timingSettings?.clockOutTime || "18:00",
+                      location: "",
+                      reason: ""
+                    });
+                    setShowTravelModal(true);
+                  }}
+                  className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Raise Travel Clock-In</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Metrics cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 pt-4 border-t border-sky-200 dark:border-sky-500/20">
+              <div className="bg-white/80 dark:bg-[#0a0a0a]/60 border border-slate-200 dark:border-white/5 rounded-xl p-3 shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Total Requests</span>
+                <p className="text-xl font-bold text-slate-900 dark:text-white mt-0.5">{allTravelRequests.length}</p>
+              </div>
+              <div className="bg-amber-50/90 dark:bg-amber-950/20 border border-amber-300/80 dark:border-amber-900/30 rounded-xl p-3 shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-400 flex items-center gap-1">
+                  <span>Pending Action</span>
+                  {pendingTravelCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+                </span>
+                <p className="text-xl font-bold text-amber-950 dark:text-amber-400 mt-0.5">{pendingTravelCount}</p>
+              </div>
+              <div className="bg-emerald-50/90 dark:bg-emerald-950/20 border border-emerald-300/80 dark:border-emerald-900/30 rounded-xl p-3 shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-400">Approved & Recorded</span>
+                <p className="text-xl font-bold text-emerald-950 dark:text-emerald-400 mt-0.5">
+                  {allTravelRequests.filter(r => r.status === "Approved").length}
+                </p>
+              </div>
+              <div className="bg-rose-50/90 dark:bg-rose-950/20 border border-rose-300/80 dark:border-rose-900/30 rounded-xl p-3 shadow-2xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-900 dark:text-rose-400">Rejected</span>
+                <p className="text-xl font-bold text-rose-950 dark:text-rose-400 mt-0.5">
+                  {allTravelRequests.filter(r => r.status === "Rejected").length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter & Search Bar */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1 md:pb-0">
+              {(["all", "Pending", "Approved", "Rejected"] as const).map(st => (
+                <button
+                  key={st}
+                  onClick={() => setTravelStatusFilter(st)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                    travelStatusFilter === st
+                      ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs font-bold"
+                      : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-700 hover:text-slate-950 dark:text-gray-400 dark:hover:text-white border border-slate-200/60 dark:border-transparent font-medium"
+                  }`}
+                >
+                  {st === "all" ? "All Requests" : st}
+                  <span className="ml-1.5 opacity-75 font-bold">
+                    ({st === "all" ? allTravelRequests.length : allTravelRequests.filter(r => r.status === st).length})
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[220px]">
+              <Search className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={travelSearchQuery}
+                onChange={e => setTravelSearchQuery(e.target.value)}
+                placeholder="Search employee, site, reason..."
+                className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:border-sky-500 transition-colors font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Requests List */}
+          <div className="space-y-3">
+            {displayedTravelRequests.length === 0 ? (
+              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] rounded-2xl p-12 text-center shadow-xs">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-sky-50 dark:bg-sky-950/30 flex items-center justify-center text-sky-600 dark:text-sky-400 mb-3 border border-sky-200/50">
+                  <Compass className="w-7 h-7" />
+                </div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-gray-200">No Travel Requests Found</h4>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-sm mx-auto font-medium">
+                  {travelStatusFilter !== "all" 
+                    ? `No requests currently marked as "${travelStatusFilter}".`
+                    : "No out-of-office or travel clock-in requests have been submitted."
+                  }
+                </p>
+                <button
+                  onClick={() => setShowTravelModal(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 px-4 py-2 rounded-xl border border-sky-300 dark:border-sky-800 hover:bg-sky-200/70 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Raise a Request Now</span>
+                </button>
+              </div>
+            ) : (
+              displayedTravelRequests.map(req => {
+                const emp = employees.find(e => e.id === req.employeeId);
+                const isPending = req.status === "Pending";
+                const isApproved = req.status === "Approved";
+                const isRejected = req.status === "Rejected";
+
+                return (
+                  <div
+                    key={req.id}
+                    className={`bg-white dark:bg-[#0f0f0f] border rounded-2xl p-5 shadow-xs transition-all ${
+                      isPending
+                        ? "border-amber-300 dark:border-amber-900/40 hover:border-amber-400"
+                        : isApproved
+                        ? "border-emerald-300 dark:border-emerald-900/30"
+                        : "border-slate-200 dark:border-[#1a1a1a]"
+                    }`}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Left: Employee and travel metadata */}
+                      <div className="flex items-start space-x-3.5">
+                        <div className="relative shrink-0">
+                          {emp?.avatarUrl ? (
+                            <img
+                              src={emp.avatarUrl}
+                              alt={req.employeeName}
+                              className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-white/10"
+                            />
+                          ) : (
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                              {req.employeeName?.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${
+                            isApproved ? "bg-emerald-500" : isRejected ? "bg-rose-500" : "bg-amber-500"
+                          }`} />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                              {req.employeeName}
+                            </h4>
+                            <span className="text-[10px] font-mono text-slate-800 dark:text-slate-300 bg-slate-100 dark:bg-[#1a1a1a] border border-slate-200 dark:border-transparent px-2 py-0.5 rounded-md font-bold">
+                              {req.employeeId}
+                            </span>
+                            {req.branch && (
+                              <span className="text-[10px] text-slate-700 dark:text-gray-300 bg-slate-100 dark:bg-[#1a1a1a] border border-slate-200 dark:border-transparent px-2 py-0.5 rounded-md flex items-center gap-1 font-semibold">
+                                <Building2 className="w-3 h-3 text-slate-500" />
+                                {toBranchName(req.branch)}
+                              </span>
+                            )}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-300 dark:border-sky-800">
+                              {req.requestType}
+                            </span>
+                          </div>
+
+                          {/* Location & Purpose */}
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs text-slate-900 dark:text-gray-200 flex items-center gap-1.5 font-medium">
+                              <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                              <span>Destination: <b className="text-slate-950 dark:text-white">{req.location}</b></span>
+                            </p>
+                            <p className="text-xs text-slate-700 dark:text-gray-300 flex items-start gap-1.5 font-medium">
+                              <FileText className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
+                              <span>Purpose: {req.reason}</span>
+                            </p>
+                          </div>
+
+                          {/* Review Details (if approved or rejected) */}
+                          {req.reviewedBy && (
+                            <div className="mt-2 text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-2 flex-wrap bg-slate-100 dark:bg-[#1a1a1a] border border-slate-200 dark:border-white/5 px-2.5 py-1.5 rounded-lg">
+                              <span>Reviewed by: <b className="text-slate-900 dark:text-white font-bold">{req.reviewedBy}</b></span>
+                              {req.reviewedAt && (
+                                <span className="text-slate-600 dark:text-slate-400">on {new Date(req.reviewedAt).toLocaleDateString()} at {new Date(req.reviewedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              )}
+                              {req.reviewRemarks && (
+                                <span className="text-slate-900 dark:text-gray-200 italic font-medium">"{req.reviewRemarks}"</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Date, Timings, Status & Review Actions */}
+                      <div className="flex flex-row lg:flex-col items-end justify-between lg:justify-center gap-3 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-[#1a1a1a] pr-2">
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-slate-900 dark:text-gray-200 flex items-center justify-end gap-1 font-mono">
+                            <CalendarIcon className="w-3.5 h-3.5 text-slate-500" />
+                            <span>{req.date}</span>
+                          </p>
+                          <p className="text-[11px] font-mono text-slate-700 dark:text-gray-300 mt-0.5 flex items-center justify-end gap-1 font-medium">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            <span>In: <b className="text-slate-900 dark:text-white">{req.clockInTime}</b></span>
+                            {req.clockOutTime && <span>• Out: <b className="text-slate-900 dark:text-white">{req.clockOutTime}</b></span>}
+                          </p>
+                          <div className="mt-1.5">
+                            {isPending && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300 dark:border-amber-800">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                                Pending HR Approval
+                              </span>
+                            )}
+                            {isApproved && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
+                                Approved & Attendance Saved
+                              </span>
+                            )}
+                            {isRejected && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-300 dark:border-rose-800">
+                                <X className="w-3 h-3 text-rose-700 dark:text-rose-400" />
+                                Rejected
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action buttons for HR/Admin */}
+                        <div className="flex items-center gap-2">
+                          {isPending && role !== "employee" && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setReviewTargetReq(req);
+                                  setReviewActionType("Approved");
+                                  setReviewRemarksInput("Approved for travel/on-site duty.");
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                title="Approve this travel clock-in and record official attendance"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setReviewTargetReq(req);
+                                  setReviewActionType("Rejected");
+                                  setReviewRemarksInput("");
+                                }}
+                                className="bg-rose-100 hover:bg-rose-200/80 text-rose-900 dark:bg-rose-950/30 dark:text-rose-400 text-xs font-bold px-3 py-1.5 rounded-xl transition-all border border-rose-300 dark:border-rose-800/40 flex items-center gap-1.5 cursor-pointer"
+                                title="Reject this travel clock-in request"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Reject</span>
+                              </button>
+                            </>
+                          )}
+
+                          {/* Delete button (Admin/HR or Employee on own pending request) */}
+                          {((role !== "employee") || (isPending && req.employeeId === currentEmployeeId)) && onDeleteAttendanceRequest && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Delete travel clock-in request for ${req.employeeName} (${req.date})?`)) {
+                                  onDeleteAttendanceRequest(req.id);
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg transition-colors cursor-pointer"
+                              title="Delete request from database"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -3073,6 +3618,287 @@ export default function AttendanceView({
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAISE TRAVEL / OUT OF OFFICE CLOCK-IN REQUEST MODAL */}
+      {showTravelModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl animate-in fade-in duration-200 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2.5 bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 rounded-xl">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-slate-800 dark:text-white text-base">
+                    Raise Travel / Out-of-Office Clock-In
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Submit your clock-in details to HR while traveling
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTravelModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Informational banner */}
+            <div className="p-3 bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800/40 rounded-xl text-xs text-sky-900 dark:text-sky-300 flex items-start gap-2">
+              <Info className="w-4 h-4 text-sky-700 dark:text-sky-400 shrink-0 mt-0.5" />
+              <span className="font-medium">
+                <b>Note:</b> Because you are out of office, this clock-in will be sent directly to HR / Admin for review. Once approved, your attendance will be automatically marked as <b>Present</b> in the official register.
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmitTravelRequest} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Date */}
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 block mb-1">
+                    Travel Date *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={travelModalReq.date}
+                    onChange={e => setTravelModalReq(prev => ({ ...prev, date: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono font-medium focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                {/* Request Type */}
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 block mb-1">
+                    Request Type *
+                  </label>
+                  <select
+                    value={travelModalReq.requestType}
+                    onChange={e => setTravelModalReq(prev => ({ ...prev, requestType: e.target.value as any }))}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-semibold focus:outline-hidden focus:border-sky-500 cursor-pointer"
+                  >
+                    <option value="Travel">Travel / Business Trip</option>
+                    <option value="Client Visit">Client Visit / Meeting</option>
+                    <option value="Field Work">Field Work / Site Inspection</option>
+                    <option value="Out of Office">Out of Office</option>
+                    <option value="Work From Home">Work From Home</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Timings */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300">
+                      Clock In Time *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setTravelModalReq(prev => ({ ...prev, clockInTime: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) }))}
+                      className="text-[10px] text-sky-700 dark:text-sky-400 font-bold hover:underline cursor-pointer"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
+                  <input
+                    type="time"
+                    required
+                    value={travelModalReq.clockInTime}
+                    onChange={e => setTravelModalReq(prev => ({ ...prev, clockInTime: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono font-medium focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300">
+                      Clock Out Time <span className="font-normal text-slate-500 dark:text-slate-400">(Optional)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setTravelModalReq(prev => ({ ...prev, clockOutTime: timingSettings?.clockOutTime || "18:00" }))}
+                      className="text-[10px] text-sky-700 dark:text-sky-400 font-bold hover:underline cursor-pointer"
+                    >
+                      Shift End
+                    </button>
+                  </div>
+                  <input
+                    type="time"
+                    value={travelModalReq.clockOutTime}
+                    onChange={e => setTravelModalReq(prev => ({ ...prev, clockOutTime: e.target.value }))}
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white font-mono font-medium focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              {/* Destination / Location */}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 block mb-1">
+                  Destination / Client Site / Location *
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-slate-500 dark:text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={travelModalReq.location}
+                    onChange={e => setTravelModalReq(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="e.g. DLF Cyber City, Gurugram or Client Head Office"
+                    className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:border-sky-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Reason / Purpose */}
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 block mb-1">
+                  Purpose / Travel Details *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={travelModalReq.reason}
+                  onChange={e => setTravelModalReq(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="Explain the purpose of travel, client agenda, or travel itinerary..."
+                  className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl p-3 text-xs text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:border-sky-500 resize-none font-medium"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+                <button
+                  type="button"
+                  onClick={() => setShowTravelModal(false)}
+                  className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-300 dark:border-[#2a2a2a] text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingTravel}
+                  className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingTravel ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Request to HR</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* HR / ADMIN REVIEW MODAL (APPROVE / REJECT) */}
+      {reviewTargetReq && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200 dark:border-[#1a1a1a] w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl animate-in fade-in duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+              <div className="flex items-center space-x-2.5">
+                <div className={`p-2.5 rounded-xl ${
+                  reviewActionType === "Approved" 
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
+                    : "bg-rose-100 text-rose-800 dark:bg-rose-950/30 dark:text-rose-400"
+                }`}>
+                  {reviewActionType === "Approved" ? <CheckCircle2 className="w-5 h-5" /> : <AlertOctagon className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-slate-900 dark:text-white text-base">
+                    {reviewActionType === "Approved" ? "Approve Travel Clock-In" : "Reject Travel Clock-In"}
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+                    {reviewActionType === "Approved" 
+                      ? "Attendance will be officially recorded as Present." 
+                      : "Request will be declined with your reason."}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewTargetReq(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Request Summary Card */}
+            <div className="p-3.5 bg-slate-100 dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#2a2a2a] space-y-1.5 text-xs">
+              <p className="font-bold text-slate-900 dark:text-white text-sm">
+                {reviewTargetReq.employeeName} <span className="font-mono text-slate-700 dark:text-slate-400 font-normal">({reviewTargetReq.employeeId})</span>
+              </p>
+              <p className="text-slate-700 dark:text-gray-300 font-medium">
+                <b>Date:</b> {reviewTargetReq.date} • <b>Shift:</b> {reviewTargetReq.clockInTime} {reviewTargetReq.clockOutTime ? `→ ${reviewTargetReq.clockOutTime}` : ""}
+              </p>
+              <p className="text-slate-700 dark:text-gray-300 font-medium">
+                <b>Destination:</b> {reviewTargetReq.location}
+              </p>
+              <p className="text-slate-700 dark:text-gray-300 font-medium">
+                <b>Purpose:</b> {reviewTargetReq.reason}
+              </p>
+            </div>
+
+            {/* Remarks Input */}
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-gray-300 block mb-1">
+                {reviewActionType === "Approved" ? "Approval Remarks (Optional)" : "Rejection Reason *"}
+              </label>
+              <textarea
+                rows={2}
+                value={reviewRemarksInput}
+                onChange={e => setReviewRemarksInput(e.target.value)}
+                placeholder={reviewActionType === "Approved" ? "e.g. Approved for client site visit" : "e.g. Travel not authorized / please contact HR"}
+                className="w-full bg-slate-50 dark:bg-[#1a1a1a] border border-slate-300 dark:border-[#2a2a2a] rounded-xl p-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-hidden focus:border-sky-500 resize-none font-medium"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-[#1a1a1a]">
+              <button
+                type="button"
+                onClick={() => setReviewTargetReq(null)}
+                className="text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-300 dark:border-[#2a2a2a] text-slate-700 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingReview || (reviewActionType === "Rejected" && !reviewRemarksInput.trim())}
+                onClick={handleConfirmReview}
+                className={`text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  reviewActionType === "Approved"
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-rose-600 hover:bg-rose-500 text-white"
+                }`}
+              >
+                {isSubmittingReview ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : reviewActionType === "Approved" ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirm Approval & Save Attendance</span>
+                  </>
+                ) : (
+                  <>
+                    <X className="w-3.5 h-3.5" />
+                    <span>Confirm Rejection</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

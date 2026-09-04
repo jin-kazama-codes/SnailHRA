@@ -186,6 +186,30 @@ export interface AttendancePunch {
   totalBreakDuration?: string;
 }
 
+export type AttendanceRequestType = "Travel" | "Client Visit" | "Out of Office" | "Field Work" | "Work From Home";
+export type AttendanceRequestStatus = "Pending" | "Approved" | "Rejected";
+
+export interface AttendanceRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  companyId?: string;
+  branch?: string;
+  department?: string;
+  date: string; // YYYY-MM-DD
+  requestType: AttendanceRequestType;
+  clockInTime: string; // HH:mm format, e.g. "09:30"
+  clockOutTime?: string; // HH:mm format, e.g. "18:00"
+  location: string; // Destination / Client site / City
+  reason: string; // Purpose / travel details
+  status: AttendanceRequestStatus;
+  appliedAt: string; // ISO string
+  reviewedBy?: string; // HR or Admin Name
+  reviewedById?: string; // HR or Admin Employee ID
+  reviewedAt?: string; // ISO string
+  reviewRemarks?: string; // HR approval notes / rejection reason
+}
+
 export interface LeaveRequest {
   id: string;
   employeeId: string;

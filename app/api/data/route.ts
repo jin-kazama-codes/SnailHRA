@@ -53,7 +53,8 @@ export async function GET(request: Request) {
         deptsRes, branchesRes, leaveTypesRes, customLeavesRes, breaksRes, empDocsRes,
         payslipsRes, designationsRes, expenseCategoriesRes, meetingsRes, corporateAllowancesFaqRes,
         seatLayoutsRes, roomsRes, roomBookingsRes, customAmenitiesRes, infractionTypesRes,
-        grievancesRes, performanceRes, checklistTemplatesRes, timingSettingsRes
+        grievancesRes, performanceRes, checklistTemplatesRes, timingSettingsRes,
+        attendanceRequestsRes
       ] = await Promise.race([
         Promise.all([
           // Transactional tables: Filter strictly by companyId if provided
@@ -150,7 +151,14 @@ export async function GET(request: Request) {
           companyId
             ? safeQuery(dbClient.from("checklist_templates").select("*").or(`company_id.eq.${companyId},company_id.is.null`))
             : safeQuery(dbClient.from("checklist_templates").select("*")),
-          safeQuery(dbClient.from("timing_settings").select("*"))
+          safeQuery(dbClient.from("timing_settings").select("*")),
+
+          // Attendance Requests table
+          safeQuery(
+            companyId
+              ? dbClient.from("attendance_requests").select("*").or(`company_id.eq.${companyId},company_id.is.null`)
+              : dbClient.from("attendance_requests").select("*")
+          )
         ]),
         queryTimeout(4500)
       ]);
@@ -1023,6 +1031,29 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         db.performanceRecords = Array.from(perfMap.values());
       }
 
+      if (attendanceRequestsRes && !attendanceRequestsRes.error && Array.isArray(attendanceRequestsRes.data)) {
+        db.attendanceRequests = attendanceRequestsRes.data.map((row: any) => ({
+          id: row.id,
+          employeeId: row.employee_id || row.employeeId,
+          employeeName: capitalizeName(row.employee_name || row.employeeName || ""),
+          companyId: row.company_id || row.companyId,
+          branch: row.branch,
+          department: row.department,
+          date: row.date,
+          requestType: row.request_type || row.requestType || "Travel",
+          clockInTime: row.clock_in_time || row.clockInTime,
+          clockOutTime: row.clock_out_time || row.clockOutTime,
+          location: row.location,
+          reason: row.reason,
+          status: row.status,
+          appliedAt: row.applied_at || row.appliedAt,
+          reviewedBy: row.reviewed_by || row.reviewedBy,
+          reviewedById: row.reviewed_by_id || row.reviewedById,
+          reviewedAt: row.reviewed_at || row.reviewedAt,
+          reviewRemarks: row.review_remarks || row.reviewRemarks,
+        }));
+      }
+
       try {
         if (timingSettingsRes && timingSettingsRes.data && Array.isArray(timingSettingsRes.data)) {
           if (!db.branchTimingSettings) db.branchTimingSettings = {};
@@ -1275,6 +1306,8 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       }
     }
   }
+
+  if (!db.attendanceRequests) db.attendanceRequests = [];
 
   saveDatabase(db);
   return NextResponse.json(db);
