@@ -1042,7 +1042,7 @@ export default function DirectoryView({
         joiningDate, dateOfBirth, salaryBasic, salaryHra,
         salaryTelephone, salaryFuel, salaryProfDev, salaryLta,
         salaryAllowances, salaryPf, salaryTds, salaryEsi,
-        salaryPfMode: onboardIsPfExempt ? "exempt" : "percentage",
+        salaryPfMode: onboardIsPfExempt ? "exempt" : (onboardPayrollConfig?.pfModeDefault === "fixed_1800" ? "fixed_1800" : (onboardPayrollConfig?.pfType === "fixed" ? "fixed_1800" : "percentage")),
         salaryEsiOptIn: !onboardIsEsiExempt,
         onboardIsPfExempt,
         onboardIsEsiExempt,
@@ -1235,15 +1235,15 @@ export default function DirectoryView({
       const updated = {
         ...activeEmployee,
         fullName: editFullName,
-        email: editEmail,
-        phone: editPhone,
+        email: role === "employee" ? (activeEmployee.email || "") : editEmail,
+        phone: role === "employee" ? (activeEmployee.phone || "") : editPhone,
         role: editRole,
         designationId: editDesigId,
         department: editDept,
         branch: editBranch,
         status: editStatus,
         employmentType: editEmploymentType,
-        address: editAddress.trim() ? (editAddress.trim().charAt(0).toUpperCase() + editAddress.trim().slice(1)) : "",
+        address: role === "employee" ? (activeEmployee.address || "") : (editAddress.trim() ? (editAddress.trim().charAt(0).toUpperCase() + editAddress.trim().slice(1)) : ""),
         bio: editBio.trim() ? (editBio.trim().charAt(0).toUpperCase() + editBio.trim().slice(1)) : "",
         avatarUrl: avatarUrl,
         dateOfBirth: editDateOfBirth,
@@ -1260,7 +1260,9 @@ export default function DirectoryView({
           const pfVal = isPfExempt
             ? 0
             : (onboardPayrollConfig
-              ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+              ? (onboardPayrollConfig.pfModeDefault === "fixed_1800"
+                ? (onboardPayrollConfig.pfValue || 1800)
+                : (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue))
               : Math.round(basicVal * 0.12));
           const isEsiExempt = (onboardPayrollConfig?.esiExemptEmployeeIds || []).includes(activeEmployee.id);
           const esiGrossCeiling = onboardPayrollConfig?.esiGrossCeiling ?? 21000;
@@ -1280,7 +1282,11 @@ export default function DirectoryView({
             tdsDeduction: tdsVal,
           };
         })(),
-        bankDetails: {
+        bankDetails: role === "employee" ? (activeEmployee.bankDetails || {
+          accountNumber: "",
+          bankName: "",
+          ifsc: "",
+        }) : {
           accountNumber: editBankAccount,
           bankName: editBankName,
           ifsc: editBankIfsc,
@@ -1292,9 +1298,11 @@ export default function DirectoryView({
         },
         customFields: {
           ...(activeEmployee.customFields || {}),
-          pan: editPan.trim().toUpperCase(),
-          uan: editUan.trim(),
+          pan: role === "employee" ? ((activeEmployee.customFields?.pan as string) || activeEmployee.pan || "") : editPan.trim().toUpperCase(),
+          uan: role === "employee" ? ((activeEmployee.customFields?.uan as string) || activeEmployee.uan || "") : editUan.trim(),
         },
+        pan: role === "employee" ? ((activeEmployee.customFields?.pan as string) || activeEmployee.pan || "") : editPan.trim().toUpperCase(),
+        uan: role === "employee" ? ((activeEmployee.customFields?.uan as string) || activeEmployee.uan || "") : editUan.trim(),
       };
 
       if (editPassword.trim()) {
@@ -2941,7 +2949,15 @@ export default function DirectoryView({
                     {onboardPayrollConfig && (
                       <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-900/40 flex items-center gap-1 shrink-0">
                         <Sparkles className="w-3 h-3 text-emerald-500" />
-                        <span>Tenant Rules Active ({onboardPayrollConfig.hraValue}% HRA, {onboardPayrollConfig.pfValue}% PF)</span>
+                        <span>
+                          Tenant Rules Active (
+                          {onboardPayrollConfig.hraType === "fixed"
+                            ? `₹${Number(onboardPayrollConfig.hraValue || 0).toLocaleString()}`
+                            : `${onboardPayrollConfig.hraValue}%`} HRA,{" "}
+                          {onboardPayrollConfig.pfModeDefault === "fixed_1800" || onboardPayrollConfig.pfType === "fixed"
+                            ? `₹${Number(onboardPayrollConfig.pfValue || 1800).toLocaleString()}`
+                            : `${onboardPayrollConfig.pfValue}%`} PF)
+                        </span>
                       </span>
                     )}
                   </div>
@@ -3407,7 +3423,8 @@ export default function DirectoryView({
                               type="email"
                               value={editEmail}
                               onChange={(e) => setEditEmail(e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              disabled={role === "employee"}
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium`}
                               required
                             />
                           </div>
@@ -3417,7 +3434,8 @@ export default function DirectoryView({
                               type="text"
                               value={editPhone}
                               onChange={(e) => setEditPhone(e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium"
+                              disabled={role === "employee"}
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 font-medium`}
                             />
                           </div>
                           {(role === "admin" || role === "hr") && (
@@ -3617,7 +3635,9 @@ export default function DirectoryView({
                                 const pf = isExempt
                                   ? 0
                                   : (onboardPayrollConfig
-                                    ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+                                    ? (onboardPayrollConfig.pfModeDefault === "fixed_1800"
+                                      ? (onboardPayrollConfig.pfValue || 1800)
+                                      : (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue))
                                     : Math.round(basicVal * 0.12));
                                 const esiGrossCeiling = onboardPayrollConfig?.esiGrossCeiling ?? 21000;
                                 const esi = (onboardPayrollConfig?.esiEnabled !== false && !isEsiExempt && (esiGrossCeiling <= 0 || gross <= esiGrossCeiling))
@@ -3661,7 +3681,8 @@ export default function DirectoryView({
                               type="text"
                               value={editBankAccount}
                               onChange={(e) => setEditBankAccount(e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                              disabled={role === "employee"}
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono`}
                             />
                           </div>
                           <div>
@@ -3670,7 +3691,8 @@ export default function DirectoryView({
                               type="text"
                               value={editBankName}
                               onChange={(e) => setEditBankName(e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]"
+                              disabled={role === "employee"}
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a]`}
                             />
                           </div>
                           <div>
@@ -3679,7 +3701,8 @@ export default function DirectoryView({
                               type="text"
                               value={editBankIfsc}
                               onChange={(e) => setEditBankIfsc(e.target.value)}
-                              className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono"
+                              disabled={role === "employee"}
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] font-mono`}
                             />
                           </div>
                         </div>
@@ -3693,8 +3716,9 @@ export default function DirectoryView({
                           <textarea
                             value={editAddress}
                             onChange={(e) => setEditAddress(e.target.value)}
+                            disabled={role === "employee"}
                             rows={2}
-                            className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500"
+                            className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500`}
                           />
                         </div>
                       </div>
@@ -3752,9 +3776,10 @@ export default function DirectoryView({
                                 setEditPan(e.target.value.toUpperCase().trim());
                                 if (editError) setEditError(null);
                               }}
+                              disabled={role === "employee"}
                               placeholder="e.g. ABCDE1234F"
                               maxLength={10}
-                              className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest uppercase font-medium transition-colors ${
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest uppercase font-medium transition-colors ${
                                 editPan.trim() && !isValidPAN(editPan)
                                   ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
                                   : editPan.trim() && isValidPAN(editPan)
@@ -3785,9 +3810,10 @@ export default function DirectoryView({
                                 setEditUan(e.target.value.replace(/\D/g, ""));
                                 if (editError) setEditError(null);
                               }}
+                              disabled={role === "employee"}
                               placeholder="e.g. 101146669488"
                               maxLength={12}
-                              className={`w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest font-medium transition-colors ${
+                              className={`w-full ${role === "employee" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75" : "bg-slate-50 dark:bg-[#0a0a0a]"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border font-mono tracking-widest font-medium transition-colors ${
                                 editUan.trim() && !isValidUAN(editUan)
                                   ? "border-rose-500 text-rose-600 dark:text-rose-400 focus:border-rose-500 bg-rose-50/20"
                                   : editUan.trim() && isValidUAN(editUan)

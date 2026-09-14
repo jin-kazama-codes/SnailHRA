@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { X, Pencil, Camera, Calculator, Sparkles, RefreshCw, Eye, EyeOff, User, Building, CreditCard, MapPin, PhoneCall, FileText, Mail } from "lucide-react";
+import { X, Pencil, Camera, Calculator, Sparkles, RefreshCw, Eye, EyeOff, User, Building, CreditCard, MapPin, PhoneCall, FileText, Mail, Lock } from "lucide-react";
 import { Employee, Designation } from "../types";
 
 interface EditEmployeeModalProps {
@@ -23,6 +23,7 @@ export default function EditEmployeeModal({
   onClose,
   onSave
 }: EditEmployeeModalProps) {
+  const isEmployee = role === "employee";
   const [isEditing, setIsEditing] = useState(initialMode === "edit");
 
   const [prefix, setPrefix] = useState<"Mr" | "Mrs" | "Miss" | "Ms">(employee.prefix || "Mr");
@@ -135,8 +136,8 @@ export default function EditEmployeeModal({
         prefix,
         fullName: fullName.trim(),
         gender,
-        email: email.trim(),
-        phone: phone.trim(),
+        email: isEmployee ? (employee.email || email.trim()) : email.trim(),
+        phone: isEmployee ? (employee.phone || phone.trim()) : phone.trim(),
         role: roleType,
         status,
         dateOfBirth,
@@ -161,12 +162,16 @@ export default function EditEmployeeModal({
           esiMode,
           esiDeduction: calculatedEsi,
         },
-        bankDetails: {
+        bankDetails: isEmployee ? (employee.bankDetails || {
+          accountNumber: "",
+          bankName: "",
+          ifsc: "",
+        }) : {
           accountNumber: bankAccount.trim(),
           bankName: bankName.trim(),
           ifsc: bankIfsc.trim(),
         },
-        address: address.trim(),
+        address: isEmployee ? (employee.address || "") : address.trim(),
         emergencyContact: {
           name: emergencyName.trim(),
           relation: emergencyRelation.trim(),
@@ -176,9 +181,11 @@ export default function EditEmployeeModal({
         avatarUrl: finalAvatarUrl,
         customFields: {
           ...(employee.customFields || {}),
-          pan: pan.trim(),
-          uan: uan.trim(),
+          pan: isEmployee ? ((employee.customFields?.pan as string) || employee.pan || "") : pan.trim(),
+          uan: isEmployee ? ((employee.customFields?.uan as string) || employee.uan || "") : uan.trim(),
         },
+        pan: isEmployee ? ((employee.customFields?.pan as string) || employee.pan || "") : pan.trim(),
+        uan: isEmployee ? ((employee.customFields?.uan as string) || employee.uan || "") : uan.trim(),
       };
 
       if (password.trim()) {
@@ -610,24 +617,46 @@ export default function EditEmployeeModal({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1">Email Address *</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1 flex items-center justify-between">
+                          <span>Email Address *</span>
+                          {isEmployee && (
+                            <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-amber-500" /> Locked
+                            </span>
+                          )}
+                        </label>
                         <input
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium`}
                           required
                         />
+                        {isEmployee && (
+                          <p className="text-[10px] text-slate-400 mt-1">Contact HR to update registered email address.</p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1">Phone Number</label>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1 flex items-center justify-between">
+                          <span>Phone Number</span>
+                          {isEmployee && (
+                            <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-amber-500" /> Locked
+                            </span>
+                          )}
+                        </label>
                         <input
                           type="text"
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium font-mono"
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium font-mono`}
                         />
+                        {isEmployee && (
+                          <p className="text-[10px] text-slate-400 mt-1">Contact HR to update phone number.</p>
+                        )}
                       </div>
 
                       {(role === "admin" || role === "hr") && (
@@ -987,9 +1016,16 @@ export default function EditEmployeeModal({
 
                   {/* Section: Bank Details */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
-                      <CreditCard className="w-4 h-4 text-emerald-500" />
-                      <span>{++secIdx}. Bank Account Specs</span>
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="w-4 h-4 text-emerald-500" />
+                        <span>{++secIdx}. Bank Account Specs</span>
+                      </div>
+                      {isEmployee && (
+                        <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-amber-500" /> Locked
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -999,7 +1035,8 @@ export default function EditEmployeeModal({
                           type="text"
                           value={bankAccount}
                           onChange={(e) => setBankAccount(e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono"
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono`}
                         />
                       </div>
 
@@ -1009,7 +1046,8 @@ export default function EditEmployeeModal({
                           type="text"
                           value={bankName}
                           onChange={(e) => setBankName(e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222]"
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222]`}
                         />
                       </div>
 
@@ -1019,17 +1057,30 @@ export default function EditEmployeeModal({
                           type="text"
                           value={bankIfsc}
                           onChange={(e) => setBankIfsc(e.target.value)}
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono"
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono`}
                         />
                       </div>
                     </div>
+                    {isEmployee && (
+                      <p className="text-[10px] text-slate-400 italic">
+                        Bank details are locked. To change salary credit accounts, please submit bank proof to HR.
+                      </p>
+                    )}
                   </div>
 
                   {/* Section: Address */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
-                      <MapPin className="w-4 h-4 text-emerald-500" />
-                      <span>{++secIdx}. Contact & Address Details</span>
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-4 h-4 text-emerald-500" />
+                        <span>{++secIdx}. Contact & Address Details</span>
+                      </div>
+                      {isEmployee && (
+                        <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-amber-500" /> Locked
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -1037,9 +1088,13 @@ export default function EditEmployeeModal({
                       <textarea
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
+                        disabled={isEmployee}
                         rows={2}
-                        className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 p-3 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500"
+                        className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} p-3 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500`}
                       />
+                      {isEmployee && (
+                        <p className="text-[10px] text-slate-400 mt-1">Residential address updates require HR verification.</p>
+                      )}
                     </div>
                   </div>
 
@@ -1085,9 +1140,16 @@ export default function EditEmployeeModal({
 
                   {/* Section: Tax & Compliance IDs */}
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
-                      <CreditCard className="w-4 h-4 text-emerald-500" />
-                      <span>{++secIdx}. Tax &amp; Compliance IDs</span>
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-[#1a1a1a] pb-2">
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="w-4 h-4 text-emerald-500" />
+                        <span>{++secIdx}. Tax &amp; Compliance IDs</span>
+                      </div>
+                      {isEmployee && (
+                        <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-amber-500" /> Locked
+                        </span>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
@@ -1096,9 +1158,10 @@ export default function EditEmployeeModal({
                           type="text"
                           value={pan}
                           onChange={(e) => setPan(e.target.value.toUpperCase())}
+                          disabled={isEmployee}
                           maxLength={10}
                           placeholder="e.g. ABCDE1234F"
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono uppercase focus:outline-none focus:border-emerald-500"
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono uppercase focus:outline-none focus:border-emerald-500`}
                         />
                       </div>
                       <div>
@@ -1107,12 +1170,16 @@ export default function EditEmployeeModal({
                           type="text"
                           value={uan}
                           onChange={(e) => setUan(e.target.value)}
+                          disabled={isEmployee}
                           maxLength={12}
                           placeholder="e.g. 101234567890"
-                          className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono focus:outline-none focus:border-emerald-500"
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] font-mono focus:outline-none focus:border-emerald-500`}
                         />
                       </div>
                     </div>
+                    {isEmployee && (
+                      <p className="text-[10px] text-slate-400 mt-1">PAN and UAN statutory identifiers can only be changed by HR or Administrator.</p>
+                    )}
                   </div>
 
                   {/* Section: Biography */}
