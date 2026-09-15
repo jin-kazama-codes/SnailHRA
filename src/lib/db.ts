@@ -184,7 +184,8 @@ export function getInitialState(): AppState {
       clockOutTime: "18:00",
       lateThreshold: "09:30",
       breakStartTime: "13:00",
-      breakEndTime: "14:00"
+      breakEndTime: "14:00",
+      weekendDays: [0]
     },
     wifiRestrictionSettings: {
       enabled: false,

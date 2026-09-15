@@ -65,7 +65,8 @@ export async function POST(request: Request) {
       clockOutTime: settings.clockOutTime || "18:00",
       lateThreshold: settings.lateThreshold || "09:30",
       breakStartTime: settings.breakStartTime || "13:00",
-      breakEndTime: settings.breakEndTime || "14:00"
+      breakEndTime: settings.breakEndTime || "14:00",
+      weekendDays: Array.isArray(settings.weekendDays) ? settings.weekendDays : [0]
     };
 
     const companyId = settings.companyId || "";
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
           late_threshold: timingSettings.lateThreshold,
           break_start_time: timingSettings.breakStartTime,
           break_end_time: timingSettings.breakEndTime,
+          weekend_days: timingSettings.weekendDays ?? [0],
           changed_by: settings.changedBy || "System"
         };
         const { error } = await supabase.from("timing_settings").upsert(payload, { onConflict: "id" });

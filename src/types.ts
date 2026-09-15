@@ -396,6 +396,8 @@ export interface TimingSettings {
   lateThreshold: string;
   breakStartTime: string;
   breakEndTime: string;
+  /** 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat. Defaults to [0] (Sunday only). */
+  weekendDays?: number[];
 }
 
 export interface WifiRestrictionSettings {

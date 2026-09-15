@@ -1065,7 +1065,8 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
               clockOutTime: row.clock_out_time || "18:00",
               lateThreshold: row.late_threshold || "09:30",
               breakStartTime: row.break_start_time || "13:00",
-              breakEndTime: row.break_end_time || "14:00"
+              breakEndTime: row.break_end_time || "14:00",
+              weekendDays: Array.isArray(row.weekend_days) ? row.weekend_days : [0]
             };
             const branchRaw = row.branch || (typeof row.id === "string" && row.id.startsWith("branch-") ? row.id.replace("branch-", "") : "");
             if (branchRaw) {

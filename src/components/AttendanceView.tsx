@@ -35,6 +35,8 @@ interface AttendanceViewProps {
     lateThreshold: string;
     breakStartTime: string;
     breakEndTime: string;
+    /** 0=Sun … 6=Sat; defaults to [0] (Sunday). */
+    weekendDays?: number[];
   };
   branchTimingSettings?: Record<string, any>;
   onSaveTimingSettings?: (settings: any) => void;
@@ -290,6 +292,8 @@ export default function AttendanceView({
   const [settingsLateThreshold, setSettingsLateThreshold] = useState(activeTiming?.lateThreshold || "09:30");
   const [settingsBreakStart, setSettingsBreakStart] = useState(activeTiming?.breakStartTime || "13:00");
   const [settingsBreakEnd, setSettingsBreakEnd] = useState(activeTiming?.breakEndTime || "14:00");
+  // 0=Sun,1=Mon,...,6=Sat — initialised from the branch's saved weekendDays
+  const [settingsWeekendDays, setSettingsWeekendDays] = useState<number[]>(activeTiming?.weekendDays ?? [0]);
 
   useEffect(() => {
     if (activeTiming) {
@@ -300,6 +304,9 @@ export default function AttendanceView({
       setSettingsLateThreshold(activeTiming.lateThreshold || "09:30");
       setSettingsBreakStart(activeTiming.breakStartTime || "13:00");
       setSettingsBreakEnd(activeTiming.breakEndTime || "14:00");
+      setSettingsWeekendDays(activeTiming.weekendDays ?? [0]);
+      // Keep excel import weekend days in sync with branch default
+      setImportWeekendDays(activeTiming.weekendDays ?? [0]);
     }
   }, [activeTiming]);
 
@@ -609,7 +616,7 @@ export default function AttendanceView({
     selectedMonthDays.forEach(day => {
       const dStr = getLocalDateString(day);
       const punch = punches.find(p => p.date === dStr);
-      const isWeekend = day.getDay() === 0;
+      const isWeekend = (activeTiming?.weekendDays ?? [0]).includes(day.getDay());
       const holiday = getHolidayOnDate(dStr);
       const leave = getApprovedLeaveOnDate(empId, dStr);
 
@@ -1152,10 +1159,11 @@ export default function AttendanceView({
                 {role === "hr" && `HR clearance level: Restricted to branch (${userBranch}). Cannot view or modify records of other branches or senior admins.`}
                 {role === "employee" && "Employee clearance level: Confidential read-only attendance matrix. Self punch-in/out and break tracking enabled."}
               </p>
-              <div className="mt-3 pt-3 border-t border-emerald-200/40 dark:border-emerald-800/40 text-[10px] font-mono grid grid-cols-1 sm:grid-cols-3 gap-2 text-emerald-800 dark:text-emerald-300">
+              <div className="mt-3 pt-3 border-t border-emerald-200/40 dark:border-emerald-800/40 text-[10px] font-mono grid grid-cols-1 sm:grid-cols-2 gap-2 text-emerald-800 dark:text-emerald-300">
                 <div>Shift Window: <b>{activeTiming?.clockInTime || "09:00"} - {activeTiming?.clockOutTime || "18:00"}</b></div>
                 <div>Late Buffer: <b>{activeTiming?.lateThreshold || "09:30"}</b></div>
                 <div>Standard Break: <b>{activeTiming?.breakStartTime || "13:00"} - {activeTiming?.breakEndTime || "14:00"}</b></div>
+                <div>Rest Days: <b>{(activeTiming?.weekendDays ?? [0]).length === 0 ? "None" : (activeTiming?.weekendDays ?? [0]).sort().map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]).join(", ")}</b></div>
               </div>
             </div>
           </div>
@@ -2083,7 +2091,7 @@ export default function AttendanceView({
                 const dayCells = days.map((day, idx) => {
                   const dStr = getLocalDateString(day);
                   const punch = attendance.find(p => p.employeeId === selectedEmployeeId && p.date === dStr);
-                  const isWeekend = day.getDay() === 0;
+                  const isWeekend = (activeTiming?.weekendDays ?? [0]).includes(day.getDay());
                   const holiday = getHolidayOnDate(dStr);
                   const approvedLeave = getApprovedLeaveOnDate(selectedEmployeeId, dStr);
 
@@ -2574,7 +2582,7 @@ export default function AttendanceView({
                   const leave = getApprovedLeaveOnDate(selectedDayModal.employeeId, selectedDayModal.date);
                   const holiday = getHolidayOnDate(selectedDayModal.date);
                   const dayObj = new Date(selectedDayModal.date);
-                  const isWeekend = dayObj.getDay() === 0;
+                  const isWeekend = (activeTiming?.weekendDays ?? [0]).includes(dayObj.getDay());
 
                   return (
                     <>
@@ -2970,8 +2978,10 @@ export default function AttendanceView({
       {/* TIMING SETTINGS CONFIGURATION MODAL (Admin & HR) */}
       {showTimingSettingsModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] w-full max-w-md rounded-2xl p-6 space-y-4 shadow-xl animate-in fade-in duration-200">
-            <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] w-full max-w-md rounded-2xl shadow-xl animate-in fade-in duration-200 flex flex-col max-h-[90vh]">
+
+            {/* ── Sticky Header ── */}
+            <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#1a1a1a] px-6 py-4 shrink-0">
               <div className="flex items-center space-x-2">
                 <Sliders className="w-5 h-5 text-emerald-500" />
                 <h4 className="font-display font-semibold text-slate-800 dark:text-white">Configure Roster Timings</h4>
@@ -2987,11 +2997,9 @@ export default function AttendanceView({
               </button>
             </div>
 
-            <p className="text-[11px] text-slate-500 dark:text-gray-400">
-              Shift window and late buffer settings configured here will be saved for <span className="font-bold text-emerald-600 dark:text-emerald-400">{selectedBranch !== "All Branches" ? `${selectedBranch} Branch` : "All Branches (Global)"}</span> under {companyName}.
-            </p>
-
+            {/* ── Scrollable Body ── */}
             <form 
+              id="timing-settings-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (onSaveTimingSettings) {
@@ -3001,13 +3009,18 @@ export default function AttendanceView({
                     lateThreshold: settingsLateThreshold,
                     breakStartTime: settingsBreakStart,
                     breakEndTime: settingsBreakEnd,
+                    weekendDays: settingsWeekendDays,
                     branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
                   });
                 }
                 setShowTimingSettingsModal(false);
-              }} 
-              className="space-y-4 text-xs font-semibold"
+              }}
+              className="overflow-y-auto flex-1 px-6 py-4 space-y-4 text-xs font-semibold"
             >
+              <p className="text-[11px] text-slate-500 dark:text-gray-400">
+                Shift window and late buffer settings configured here will be saved for <span className="font-bold text-emerald-600 dark:text-emerald-400">{selectedBranch !== "All Branches" ? `${selectedBranch} Branch` : "All Branches (Global)"}</span> under {companyName}.
+              </p>
+
               <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/30 p-3.5 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] space-y-3">
                 <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Shift Start / End & Late Policy</p>
                 
@@ -3070,22 +3083,84 @@ export default function AttendanceView({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-50 dark:border-[#1a1a1a] flex justify-end space-x-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowTimingSettingsModal(false)}
-                  className="bg-slate-50 dark:bg-[#1a1a1a] text-slate-500 hover:text-slate-800 hover:dark:text-white px-4 py-2.5 rounded-xl transition-all border border-slate-100 dark:border-[#2a2a2a] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer"
-                >
-                  Save Timing Configuration
-                </button>
+              {/* ── Weekend / Rest Days ── */}
+              <div className="bg-slate-50/50 dark:bg-[#0a0a0a]/30 p-3.5 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Weekend / Rest Days</p>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsWeekendDays(settingsWeekendDays.length === 0 ? [0] : [])}
+                    className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold cursor-pointer"
+                  >
+                    {settingsWeekendDays.length === 0 ? "Reset to Sunday" : "Clear all"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 dark:text-gray-500">
+                  Selected days will be marked as rest days in calendars, stats &amp; absence tracking for <span className="font-semibold text-slate-600 dark:text-gray-300">{selectedBranch !== "All Branches" ? `${selectedBranch} Branch` : "All Branches"}</span>.
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { label: "Sun", value: 0 },
+                    { label: "Mon", value: 1 },
+                    { label: "Tue", value: 2 },
+                    { label: "Wed", value: 3 },
+                    { label: "Thu", value: 4 },
+                    { label: "Fri", value: 5 },
+                    { label: "Sat", value: 6 },
+                  ].map(day => {
+                    const isRest = settingsWeekendDays.includes(day.value);
+                    return (
+                      <button
+                        key={day.value}
+                        type="button"
+                        onClick={() =>
+                          setSettingsWeekendDays(prev =>
+                            prev.includes(day.value)
+                              ? prev.filter(d => d !== day.value)
+                              : [...prev, day.value]
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                          isRest
+                            ? "bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                            : "bg-white dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 border-slate-200 dark:border-[#2a2a2a] hover:border-slate-300"
+                        }`}
+                      >
+                        {day.label}
+                        {isRest && <span className="ml-1 opacity-70">✕</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {settingsWeekendDays.length === 7 && (
+                  <p className="text-[10px] text-rose-500 font-semibold">⚠ All days are marked as weekends — no working days will be tracked.</p>
+                )}
+                {settingsWeekendDays.length === 0 && (
+                  <p className="text-[10px] text-amber-500 font-semibold">All days are working days — no rest days configured.</p>
+                )}
               </div>
-            </form>
+
+            </form>{/* end scrollable form body */}
+
+            {/* ── Sticky Footer ── */}
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-[#1a1a1a] flex justify-end space-x-2.5 shrink-0 bg-white dark:bg-[#0f0f0f] rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowTimingSettingsModal(false)}
+                className="bg-slate-50 dark:bg-[#1a1a1a] text-slate-500 hover:text-slate-800 hover:dark:text-white px-4 py-2.5 rounded-xl transition-all border border-slate-100 dark:border-[#2a2a2a] cursor-pointer text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="timing-settings-form"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer text-xs"
+              >
+                Save Timing Configuration
+              </button>
+            </div>
+
+
           </div>
         </div>
       )}

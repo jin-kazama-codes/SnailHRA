@@ -153,7 +153,8 @@ const initialData: AppState = {
     clockOutTime: "18:00",
     lateThreshold: "09:30",
     breakStartTime: "13:00",
-    breakEndTime: "14:00"
+    breakEndTime: "14:00",
+    weekendDays: [0]
   },
   companies: [
     {
@@ -229,8 +230,11 @@ function readDatabaseLocal(): AppState {
           clockOutTime: "18:00",
           lateThreshold: "09:30",
           breakStartTime: "13:00",
-          breakEndTime: "14:00"
+          breakEndTime: "14:00",
+          weekendDays: [0]
         };
+      } else if (!state.branchTimingSettings["Shashtri Nagar"].weekendDays) {
+        state.branchTimingSettings["Shashtri Nagar"].weekendDays = [0];
       }
       if (!state.branchTimingSettings["Noida"]) {
         state.branchTimingSettings["Noida"] = {
@@ -238,8 +242,11 @@ function readDatabaseLocal(): AppState {
           clockOutTime: "18:30",
           lateThreshold: "10:00",
           breakStartTime: "13:30",
-          breakEndTime: "14:30"
+          breakEndTime: "14:30",
+          weekendDays: [0]
         };
+      } else if (!state.branchTimingSettings["Noida"].weekendDays) {
+        state.branchTimingSettings["Noida"].weekendDays = [0];
       }
 
       // Ensure policies exist for both Shashtri Nagar and Noida
@@ -1812,7 +1819,8 @@ async function startServer() {
       clockOutTime: settings.clockOutTime || "18:00",
       lateThreshold: settings.lateThreshold || "09:30",
       breakStartTime: settings.breakStartTime || "13:00",
-      breakEndTime: settings.breakEndTime || "14:00"
+      breakEndTime: settings.breakEndTime || "14:00",
+      weekendDays: Array.isArray(settings.weekendDays) ? settings.weekendDays : [0]
     };
     const companyId = settings.companyId || "";
     const branchName = settings.branch || "";
@@ -1842,6 +1850,7 @@ async function startServer() {
           late_threshold: timingSettings.lateThreshold,
           break_start_time: timingSettings.breakStartTime,
           break_end_time: timingSettings.breakEndTime,
+          weekend_days: timingSettings.weekendDays ?? [0],
           changed_by: settings.changedBy || "System"
         }, { onConflict: "id" });
       } catch (e) {

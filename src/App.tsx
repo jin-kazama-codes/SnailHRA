@@ -168,6 +168,7 @@ export default function App() {
     lateThreshold: string;
     breakStartTime: string;
     breakEndTime: string;
+    weekendDays?: number[];
   }>>({}); 
 
   // Per-branch configurations collections
@@ -297,12 +298,14 @@ export default function App() {
     lateThreshold: string;
     breakStartTime: string;
     breakEndTime: string;
+    weekendDays?: number[];
   }>({
     clockInTime: "09:00",
     clockOutTime: "18:00",
     lateThreshold: "09:30",
     breakStartTime: "13:00",
-    breakEndTime: "14:00"
+    breakEndTime: "14:00",
+    weekendDays: [0]
   });
 
   const [wifiRestrictionSettings, setWifiRestrictionSettings] = useState<{
