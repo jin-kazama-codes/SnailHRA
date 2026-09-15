@@ -96,6 +96,7 @@ interface ConfigurationViewProps {
     lateThreshold: string;
     breakStartTime: string;
     breakEndTime: string;
+    weekendDays?: number[];
   };
   branchTimingSettings?: Record<string, {
     clockInTime: string;
@@ -103,6 +104,7 @@ interface ConfigurationViewProps {
     lateThreshold: string;
     breakStartTime: string;
     breakEndTime: string;
+    weekendDays?: number[];
   }>;
   onSaveTimingSettings?: (settings: any) => void;
   empCodePrefix?: string;
@@ -313,6 +315,7 @@ export default function ConfigurationView({
   const [lateThresholdInput, setLateThresholdInput] = useState(timingSettings?.lateThreshold || "09:30");
   const [breakStartInput, setBreakStartInput] = useState(timingSettings?.breakStartTime || "13:00");
   const [breakEndInput, setBreakEndInput] = useState(timingSettings?.breakEndTime || "14:00");
+  const [weekendDaysInput, setWeekendDaysInput] = useState<number[]>(timingSettings?.weekendDays ?? [0]);
   const [timingSaving, setTimingSaving] = useState(false);
   const [timingSavedNotice, setTimingSavedNotice] = useState(false);
 
@@ -323,6 +326,7 @@ export default function ConfigurationView({
       setLateThresholdInput(timingSettings.lateThreshold || "09:30");
       setBreakStartInput(timingSettings.breakStartTime || "13:00");
       setBreakEndInput(timingSettings.breakEndTime || "14:00");
+      setWeekendDaysInput(timingSettings.weekendDays ?? [0]);
     }
   }, [timingSettings, selectedBranch]);
 
@@ -337,6 +341,7 @@ export default function ConfigurationView({
         lateThreshold: lateThresholdInput,
         breakStartTime: breakStartInput,
         breakEndTime: breakEndInput,
+        weekendDays: weekendDaysInput,
         branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
       });
       setTimingSavedNotice(true);
@@ -766,6 +771,9 @@ export default function ConfigurationView({
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 truncate">
                   Shift: {clockInInput} - {clockOutInput} · Grace: {lateThresholdInput} · Lunch: {breakStartInput} - {breakEndInput}
+                  {weekendDaysInput.length > 0 && (
+                    <> · Rest: <span className="text-rose-400 font-semibold">{weekendDaysInput.sort().map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]).join(", ")}</span></>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2.5 shrink-0">
@@ -882,6 +890,60 @@ export default function ConfigurationView({
                         required
                       />
                     </div>
+                  </div>
+
+                  {/* Weekend / Rest Days Picker */}
+                  <div className="pt-3 border-t border-slate-100 dark:border-[#1a1a1a] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-bold text-rose-400 uppercase tracking-wider">Weekend / Rest Days</label>
+                      <button
+                        type="button"
+                        onClick={() => setWeekendDaysInput(weekendDaysInput.length === 0 ? [0] : [])}
+                        className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold cursor-pointer"
+                      >
+                        {weekendDaysInput.length === 0 ? "Reset to Sunday" : "Clear all"}
+                      </button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        { label: "Sun", value: 0 },
+                        { label: "Mon", value: 1 },
+                        { label: "Tue", value: 2 },
+                        { label: "Wed", value: 3 },
+                        { label: "Thu", value: 4 },
+                        { label: "Fri", value: 5 },
+                        { label: "Sat", value: 6 },
+                      ].map(day => {
+                        const isRest = weekendDaysInput.includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            onClick={() =>
+                              setWeekendDaysInput(prev =>
+                                prev.includes(day.value)
+                                  ? prev.filter(d => d !== day.value)
+                                  : [...prev, day.value]
+                              )
+                            }
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                              isRest
+                                ? "bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800"
+                                : "bg-slate-50 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 border-slate-200 dark:border-[#2a2a2a] hover:border-slate-300"
+                            }`}
+                          >
+                            {day.label}
+                            {isRest && <span className="ml-1 opacity-70">✕</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {weekendDaysInput.length === 7 && (
+                      <p className="text-[10px] text-rose-500 font-semibold">⚠ All days marked as weekends — no working days will be tracked.</p>
+                    )}
+                    {weekendDaysInput.length === 0 && (
+                      <p className="text-[10px] text-amber-500 font-semibold">No rest days — all days are working days.</p>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-3 pt-2">
