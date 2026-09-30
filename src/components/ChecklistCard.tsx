@@ -5,7 +5,7 @@ import {
   FileText, Upload, CheckCircle2, XCircle, Clock, ShieldCheck, Eye, Trash2,
   AlertCircle, LogOut, Check, X, FileUp, Sparkles, AlertTriangle, ArrowRight, Plus, Download, Maximize2, Minimize2, Loader2
 } from "lucide-react";
-import { Employee, ChecklistItemTemplate, EmployeeChecklistItem, UserRole } from "../types";
+import { Employee, ChecklistItemTemplate, EmployeeChecklistItem, UserRole, ResignationRequest } from "../types";
 
 export interface ChecklistCardProps {
   type: "onboarding" | "exit";
@@ -19,6 +19,9 @@ export interface ChecklistCardProps {
   onDeleteTemplate?: (templateId: string) => Promise<void> | void;
   onGrantExitClearance?: (employeeId: string) => Promise<void> | void;
   onInitiateResignation?: (employeeId: string) => Promise<void> | void;
+  resignationRequest?: ResignationRequest;
+  onOpenResignationModal?: () => void;
+  onWithdrawResignation?: (resignationId: string) => Promise<void> | void;
 }
 
 export default function ChecklistCard({
@@ -32,7 +35,10 @@ export default function ChecklistCard({
   onCreateTemplate,
   onDeleteTemplate,
   onGrantExitClearance,
-  onInitiateResignation
+  onInitiateResignation,
+  resignationRequest,
+  onOpenResignationModal,
+  onWithdrawResignation
 }: ChecklistCardProps) {
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [reviewingItemId, setReviewingItemId] = useState<string | null>(null);
@@ -264,6 +270,111 @@ export default function ChecklistCard({
   };
 
   if (type === "exit" && employee.status !== "Resigned" && !canManage) {
+    if (resignationRequest && resignationRequest.status === "Pending") {
+      return (
+        <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300 dark:border-amber-900/60 rounded-2xl p-5 shadow-xs text-left space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs animate-pulse">
+                <LogOut className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-gray-200">
+                  Resignation Request Submitted
+                </h4>
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                  Under formal review by Branch HR &amp; Admin
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300">
+              Pending Approval
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs bg-white/70 dark:bg-[#141414] p-3 rounded-xl border border-amber-200/60 dark:border-[#222]">
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">Resignation Date</span>
+              <span className="font-bold text-slate-700 dark:text-gray-300 font-mono text-[11px]">
+                {resignationRequest.resignationDate}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">Proposed Last Day</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400 font-mono text-[11px]">
+                {resignationRequest.lastWorkingDate}
+              </span>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] text-slate-400 block font-semibold">Notice Duration</span>
+              <span className="font-bold text-slate-700 dark:text-gray-300 font-mono text-[11px]">
+                {resignationRequest.noticePeriodDays || 30} Days
+              </span>
+            </div>
+          </div>
+
+          <div className="text-xs space-y-1 bg-white/70 dark:bg-[#141414] p-3 rounded-xl border border-amber-200/60 dark:border-[#222]">
+            <p className="font-semibold text-slate-700 dark:text-gray-300">
+              <span className="text-slate-400 font-normal">Reason:</span> {resignationRequest.reason}
+            </p>
+            {resignationRequest.remarks && (
+              <p className="text-slate-600 dark:text-gray-400 text-[11px] leading-relaxed">
+                <span className="text-slate-400">Remarks:</span> {resignationRequest.remarks}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <p className="text-[11px] text-slate-400 dark:text-gray-500">
+              The exit clearance checklist will activate once your resignation is officially approved.
+            </p>
+            {isSelf && onWithdrawResignation && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("Are you sure you want to withdraw your resignation request?")) {
+                    onWithdrawResignation(resignationRequest.id);
+                  }
+                }}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#202020] dark:hover:bg-[#2a2a2a] text-slate-700 dark:text-gray-300 text-xs font-bold rounded-xl transition-all cursor-pointer"
+              >
+                Withdraw Resignation
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (resignationRequest && resignationRequest.status === "Rejected") {
+      return (
+        <div className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-5 text-center space-y-3">
+          <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+            <XCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800 dark:text-gray-200">
+              Resignation Request Retained / Not Approved
+            </h4>
+            {resignationRequest.reviewRemarks && (
+              <p className="text-xs text-rose-700 dark:text-rose-300 mt-1 max-w-md mx-auto">
+                HR Remarks: "{resignationRequest.reviewRemarks}"
+              </p>
+            )}
+          </div>
+          {isSelf && (
+            <button
+              onClick={() => onOpenResignationModal ? onOpenResignationModal() : onInitiateResignation?.(employee.id)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center space-x-1.5"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Submit New Resignation Request</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="bg-slate-50 dark:bg-[#0c0c0c] border border-slate-200 dark:border-[#222] rounded-2xl p-5 text-center">
         <LogOut className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -271,9 +382,9 @@ export default function ChecklistCard({
         <p className="text-xs text-slate-400 dark:text-gray-500 mt-1 mb-3">
           This checklist activates automatically when an employee resigns or separation is initiated.
         </p>
-        {isSelf && onInitiateResignation && (
+        {isSelf && (
           <button
-            onClick={() => onInitiateResignation(employee.id)}
+            onClick={() => onOpenResignationModal ? onOpenResignationModal() : onInitiateResignation?.(employee.id)}
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer inline-flex items-center space-x-1.5"
           >
             <LogOut className="w-3.5 h-3.5" />
@@ -400,6 +511,34 @@ export default function ChecklistCard({
           />
         </div>
       </div>
+
+      {/* Approved Resignation Context Banner */}
+      {type === "exit" && resignationRequest && (
+        <div className="mb-4 p-3.5 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between flex-wrap gap-1">
+            <span className="font-extrabold text-amber-900 dark:text-amber-200 flex items-center space-x-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>Resignation Status: {resignationRequest.status}</span>
+            </span>
+            <span className="text-[11px] font-mono text-slate-500 dark:text-gray-400">
+              Official Last Day: <strong className="text-amber-700 dark:text-amber-300 font-bold">{resignationRequest.approvedLastWorkingDate || resignationRequest.lastWorkingDate}</strong>
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-gray-300 flex-wrap gap-1">
+            <span>Primary Reason: <strong>{resignationRequest.reason}</strong></span>
+            {resignationRequest.reviewedBy && (
+              <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                Approved by {resignationRequest.reviewedBy}
+              </span>
+            )}
+          </div>
+          {resignationRequest.reviewRemarks && (
+            <p className="text-[10px] text-slate-500 dark:text-gray-400 italic border-t border-amber-200/50 dark:border-amber-900/30 pt-1">
+              HR Notes: "{resignationRequest.reviewRemarks}"
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Checklist Items List */}
       <div className="space-y-3.5 max-h-[480px] overflow-y-auto pr-1.5 custom-scrollbar">

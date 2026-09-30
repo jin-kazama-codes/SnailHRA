@@ -4,10 +4,12 @@ import React, { useState, useEffect } from "react";
 import {
   Calendar, Gift, Heart, CloudSun, ShieldAlert, Sparkles, Clock, Play, Square,
   CheckCircle2, Users, FileText, AlertCircle, IndianRupee, Package, Briefcase, Home,
-  Award, ChevronRight, Activity, TrendingUp, Cake, LogOut, ShieldCheck, Eye, EyeOff
+  Award, ChevronRight, Activity, TrendingUp, Cake, LogOut, ShieldCheck, Eye, EyeOff, Lock
 } from "lucide-react";
-import { Employee, Designation, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine, ChecklistItemTemplate } from "../types";
+import { Employee, Designation, Holiday, LeaveRequest, Payslip, AttendancePunch, ExpenseClaim, InventoryItem, Fine, ChecklistItemTemplate, ResignationRequest } from "../types";
 import ChecklistCard from "./ChecklistCard";
+import ResignationModal from "./ResignationModal";
+import ResignationReviewModal from "./ResignationReviewModal";
 import { toBranchName, toBranchId } from "../lib/branchUtils";
 
 interface DashboardViewProps {
@@ -42,10 +44,14 @@ interface DashboardViewProps {
   }>;
   onboardingChecklistTemplates?: ChecklistItemTemplate[];
   exitChecklistTemplates?: ChecklistItemTemplate[];
+  resignationRequests?: ResignationRequest[];
+  onSubmitResignation?: (req: Partial<ResignationRequest>) => Promise<void> | void;
+  onReviewResignation?: (reqId: string, status: "Approved" | "Rejected", adminRemarks?: string, approvedLastWorkingDate?: string) => Promise<void> | void;
+  onWithdrawResignation?: (reqId: string) => Promise<void> | void;
   onPunchAction?: (employeeId: string, type: "clockin" | "clockout" | "breakstart" | "breakend") => Promise<void> | void;
   onUploadChecklistDocument?: (employeeId: string, itemId: string, file: File, category?: string) => Promise<void> | void;
   onReviewChecklistItem?: (employeeId: string, itemId: string, action: "approve" | "reject", comments?: string) => Promise<void> | void;
-  onCreateChecklistTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => Promise<void> | void;
+  onCreateChecklistTemplate?: (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit"; branch?: string }) => Promise<void> | void;
   onDeleteChecklistTemplate?: (templateId: string) => Promise<void> | void;
   onGrantExitClearance?: (employeeId: string) => Promise<void> | void;
   onInitiateResignation?: (employeeId: string) => Promise<void> | void;
@@ -72,6 +78,10 @@ export default function DashboardView({
   branchTimingSettings,
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
+  resignationRequests = [],
+  onSubmitResignation,
+  onReviewResignation,
+  onWithdrawResignation,
   onPunchAction,
   onUploadChecklistDocument,
   onReviewChecklistItem,
@@ -84,6 +94,8 @@ export default function DashboardView({
   const [time, setTime] = useState<Date | null>(null);
   const [dashboardChecklistTab, setDashboardChecklistTab] = useState<"onboarding" | "exit">("onboarding");
   const [showNetPay, setShowNetPay] = useState<boolean>(false);
+  const [showResignationModal, setShowResignationModal] = useState<boolean>(false);
+  const [reviewingResignation, setReviewingResignation] = useState<ResignationRequest | null>(null);
 
   useEffect(() => {
     setTime(new Date());
@@ -140,6 +152,24 @@ export default function DashboardView({
   const hrBranchWfhToday = attendance.filter(a => a.date === todayStr && a.workFromHome && branchEmployees.some(e => e.id === a.employeeId)).length;
   const hrBranchPendingLeaves = leaves.filter(l => l.status === "Pending" && branchEmployees.some(e => e.id === l.employeeId)).length;
   const hrBranchPendingExpenses = expenses.filter(exp => exp.status === "Pending" && branchEmployees.some(emp => emp.id === exp.employeeId)).length;
+
+  // Resignation requests filtered branch-wise
+  const branchResignations = resignationRequests.filter(r => {
+    if (!r) return false;
+    if (selectedBranch && selectedBranch !== "All Branches") {
+      return toBranchName(r.branch).toLowerCase() === toBranchName(selectedBranch).toLowerCase();
+    }
+    if (role === "hr") {
+      return toBranchName(r.branch).toLowerCase() === toBranchName(userBranch).toLowerCase();
+    }
+    return true;
+  });
+  const pendingBranchResignations = branchResignations.filter(r => r.status === "Pending");
+
+  // Current Employee's resignation request (if any)
+  const myResignationRequest = currentEmployee
+    ? resignationRequests.find(r => r.employeeId === currentEmployee.id && r.status !== "Withdrawn")
+    : undefined;
 
   // 3. Employee Metrics (Personal only)
   const myTodayPunch = currentEmployee ? attendance.find(a => a.employeeId === currentEmployee.id && a.date === todayStr) : undefined;
@@ -482,6 +512,29 @@ export default function DashboardView({
               <p className="text-3xl font-extrabold text-indigo-500 font-mono">{adminTotalAssetsAssigned}</p>
               <p className="text-xs text-slate-400 mt-1">Hardware inventory items</p>
             </div>
+
+            {/* Admin Resignation Requests Widget */}
+            <div
+              onClick={() => setCurrentView?.("directory")}
+              className={`rounded-2xl p-5 shadow-xs border transition-all cursor-pointer group ${
+                pendingBranchResignations.length > 0
+                  ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 hover:border-amber-500 shadow-md"
+                  : "bg-white dark:bg-[#0f0f0f] border-slate-100 dark:border-[#1a1a1a] hover:border-slate-300"
+              }`}
+            >
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  Resignations ({selectedBranch !== "All Branches" ? selectedBranch : "All"})
+                </span>
+                <LogOut className={`w-4 h-4 ${pendingBranchResignations.length > 0 ? "text-amber-600 animate-pulse" : "text-slate-400"} group-hover:scale-110 transition-transform`} />
+              </div>
+              <p className={`text-3xl font-extrabold font-mono ${pendingBranchResignations.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-800 dark:text-white"}`}>
+                {pendingBranchResignations.length}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {pendingBranchResignations.length > 0 ? "Pending review & approval" : "No pending resignations"}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -537,6 +590,29 @@ export default function DashboardView({
               </div>
               <p className="text-3xl font-extrabold text-teal-600 font-mono">{hrBranchPendingExpenses}</p>
               <p className="text-xs text-slate-400 mt-1">Claims submitted</p>
+            </div>
+
+            {/* HR Branch Resignations */}
+            <div
+              onClick={() => setCurrentView?.("directory")}
+              className={`rounded-2xl p-5 shadow-xs border transition-all cursor-pointer group ${
+                pendingBranchResignations.length > 0
+                  ? "bg-amber-50/60 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800 hover:border-amber-500"
+                  : "bg-white dark:bg-[#0f0f0f] border-slate-100 dark:border-[#1a1a1a] hover:border-slate-300"
+              }`}
+            >
+              <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span className="font-bold uppercase tracking-wider group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  Branch Resignations
+                </span>
+                <LogOut className={`w-4 h-4 ${pendingBranchResignations.length > 0 ? "text-amber-600 animate-pulse" : "text-slate-400"} group-hover:scale-110 transition-transform`} />
+              </div>
+              <p className={`text-3xl font-extrabold font-mono ${pendingBranchResignations.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-800 dark:text-white"}`}>
+                {pendingBranchResignations.length}
+              </p>
+              <p className="text-xs text-slate-400 mt-1">
+                {pendingBranchResignations.length > 0 ? "Pending review for " + userBranch : "All clear in " + userBranch}
+              </p>
             </div>
           </div>
         </div>
@@ -1137,6 +1213,9 @@ export default function DashboardView({
                     templates={getBranchFilteredTemplates(exitChecklistTemplates)}
                     currentUserRole={role}
                     currentUserId={currentEmployee.id}
+                    resignationRequest={myResignationRequest}
+                    onOpenResignationModal={() => setShowResignationModal(true)}
+                    onWithdrawResignation={onWithdrawResignation}
                     onCreateTemplate={onCreateChecklistTemplate}
                     onDeleteTemplate={onDeleteChecklistTemplate}
                     onUploadDocument={async (empId, itemId, file, category) => {
@@ -1149,82 +1228,173 @@ export default function DashboardView({
                       if (onGrantExitClearance) await onGrantExitClearance(empId);
                     }}
                     onInitiateResignation={async (empId) => {
-                      if (onInitiateResignation) await onInitiateResignation(empId);
+                      setShowResignationModal(true);
                     }}
                   />
 
-                  {/* Exit Vault Card */}
-                  <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
-                        <div className="flex items-start space-x-3 min-w-0 flex-1">
-                          <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
-                            <FileText className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
-                              Employee Exit &amp; Separation Clearance Checklist
-                            </h3>
-                            <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
-                              Resignation copy, no-dues certificate, asset handover &amp; exit logs
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                  {/* Exit Vault Card — Only active if employee is officially Resigned or approved */}
+                  {(() => {
+                    const isExitSeparationActive = currentEmployee?.status === "Resigned" || (myResignationRequest && myResignationRequest.status === "Approved") || role === "admin" || role === "hr";
 
-                      <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
-                        <div className="grid grid-cols-1 gap-3">
-                          {exitDocs.map((doc: any) => {
-                            const cleanName = (doc.name || "").replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
-                            const matchingItem = ((currentEmployee?.onboardingChecklist as any[]) || [])
-                              .concat((currentEmployee?.exitChecklist as any[]) || [])
-                              .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
-                            const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
-                            const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
-
-                            return (
-                              <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-amber-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800 transition-all hover:shadow-xs">
-                                <div className="flex items-center space-x-3 min-w-0 flex-1">
-                                  <div className="p-2.5 bg-amber-100/80 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 rounded-xl shrink-0">
-                                    <FileText className="w-4.5 h-4.5" />
+                    if (!isExitSeparationActive) {
+                      if (myResignationRequest && myResignationRequest.status === "Pending") {
+                        return (
+                          <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
+                                <div className="flex items-start space-x-3 min-w-0 flex-1">
+                                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                                    <Clock className="w-5 h-5 animate-pulse" />
                                   </div>
-                                  <div className="min-w-0 flex-1 space-y-1">
-                                    <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
-                                      {cleanName}
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                                      Exit Clearance Checklist &amp; Vault Locked
+                                    </h3>
+                                    <p className="text-xs text-amber-700 dark:text-amber-400 font-semibold truncate">
+                                      Awaiting Approval by Branch HR &amp; Administrator
                                     </p>
-                                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 inline-block whitespace-nowrap">
-                                        Approved Exit Clearance
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
-                                      {uploadDate && (
-                                        <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
-                                          <Clock className="w-3 h-3 text-blue-500 shrink-0" />
-                                          <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
-                                        </span>
-                                      )}
-                                      {approveDate && (
-                                        <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                                          <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
-                                          <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
-                                        </span>
-                                      )}
-                                    </div>
                                   </div>
                                 </div>
+                                <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 shrink-0">
+                                  Pending Approval
+                                </span>
                               </div>
-                            );
-                          })}
-                          {exitDocs.length === 0 && (
-                            <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-amber-200/60 dark:border-amber-950">
-                              No uploaded exit &amp; separation clearance documents yet.
-                            </p>
-                          )}
+
+                              <div className="py-10 px-4 text-center space-y-3 bg-white/60 dark:bg-[#0a0a0a]/40 rounded-xl border border-dashed border-amber-200/80 dark:border-amber-900/50">
+                                <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-300 flex items-center justify-center mx-auto">
+                                  <Clock className="w-6 h-6 animate-pulse" />
+                                </div>
+                                <div className="space-y-1 max-w-sm mx-auto">
+                                  <h4 className="font-bold text-slate-800 dark:text-white text-sm">
+                                    Resignation Request Submitted
+                                  </h4>
+                                  <p className="text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                                    Your request has been forwarded to Branch HR and Administration for review. Once approved, your <strong>Employee Exit &amp; Separation Clearance Checklist</strong> will activate here.
+                                  </p>
+                                </div>
+                                <div className="inline-flex items-center space-x-2 text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-3 py-1.5 rounded-lg border border-amber-200 font-medium">
+                                  <span>Proposed Last Working Day: <strong className="font-mono">{myResignationRequest.lastWorkingDate}</strong></span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="bg-slate-50/80 dark:bg-[#0c0c0c] border border-slate-200 dark:border-[#222] rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-4 border-b border-slate-100 dark:border-[#1a1a1a] pb-3 gap-2">
+                              <div className="flex items-start space-x-3 min-w-0 flex-1">
+                                <div className="p-2.5 bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-slate-400 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                                  <Lock className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                                    Exit Clearance Checklist &amp; Vault
+                                  </h3>
+                                  <p className="text-xs text-slate-400 dark:text-gray-500 truncate">
+                                    Activates upon formal resignation approval
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-[#1a1a1a] dark:text-slate-400 shrink-0">
+                                Not Initiated
+                              </span>
+                            </div>
+
+                            <div className="py-10 px-4 text-center space-y-3 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-xl border border-dashed border-slate-200 dark:border-[#222]">
+                              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-[#161616] text-slate-400 flex items-center justify-center mx-auto">
+                                <Lock className="w-6 h-6" />
+                              </div>
+                              <div className="space-y-1 max-w-sm mx-auto">
+                                <h4 className="font-bold text-slate-700 dark:text-gray-300 text-sm">
+                                  Exit Checklist &amp; Vault Currently Locked
+                                </h4>
+                                <p className="text-xs text-slate-400 dark:text-gray-500 leading-relaxed">
+                                  Submit your formal resignation request using the button on the left. Once reviewed and approved by HR &amp; Administrator, your full Exit &amp; Separation Clearance Checklist will unlock.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-gradient-to-br from-amber-500/10 via-white to-orange-500/10 dark:from-[#1f1508] dark:via-[#0f0f0f] dark:to-[#1a0f05] border border-amber-300/80 dark:border-amber-900/60 rounded-2xl p-5 shadow-md dark:shadow-black/40 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between mb-4 border-b border-amber-100 dark:border-amber-950/60 pb-3 gap-2">
+                            <div className="flex items-start space-x-3 min-w-0 flex-1">
+                              <div className="p-2.5 bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 rounded-xl shrink-0 mt-0.5 shadow-2xs">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-display font-semibold text-slate-800 dark:text-white text-base truncate">
+                                  Employee Exit &amp; Separation Clearance Checklist
+                                </h3>
+                                <p className="text-xs text-slate-500 dark:text-gray-400 truncate">
+                                  Resignation copy, no-dues certificate, asset handover &amp; exit logs
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                            <div className="grid grid-cols-1 gap-3">
+                              {exitDocs.map((doc: any) => {
+                                const cleanName = (doc.name || "").replace(/\s*\(Onboarding\)/gi, "").replace(/\s*\(Exit\)/gi, "");
+                                const matchingItem = ((currentEmployee?.onboardingChecklist as any[]) || [])
+                                  .concat((currentEmployee?.exitChecklist as any[]) || [])
+                                  .find(i => (i.title && i.title.trim().toLowerCase() === cleanName.trim().toLowerCase()) || i.id === doc.id);
+                                const uploadDate = doc.uploadedAt || matchingItem?.uploadedAt;
+                                const approveDate = doc.approvedAt || matchingItem?.reviewedAt;
+
+                                return (
+                                  <div key={doc.id} className="p-3.5 bg-white/90 dark:bg-[#0a0a0a]/90 border border-amber-100 dark:border-[#1a1a1a] rounded-2xl flex items-center justify-between text-xs space-x-3 shadow-2xs hover:border-amber-300 dark:hover:border-amber-800 transition-all hover:shadow-xs">
+                                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                                      <div className="p-2.5 bg-amber-100/80 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 rounded-xl shrink-0">
+                                        <FileText className="w-4.5 h-4.5" />
+                                      </div>
+                                      <div className="min-w-0 flex-1 space-y-1">
+                                        <p className="font-extrabold text-slate-800 dark:text-gray-200 truncate text-xs sm:text-sm" title={cleanName}>
+                                          {cleanName}
+                                        </p>
+                                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40 inline-block whitespace-nowrap">
+                                            Approved Exit Clearance
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 text-[11px] font-medium text-slate-500 dark:text-gray-400 pt-0.5">
+                                          {uploadDate && (
+                                            <span className="inline-flex items-center space-x-1 text-slate-600 dark:text-gray-300">
+                                              <Clock className="w-3 h-3 text-blue-500 shrink-0" />
+                                              <span>Uploaded: {uploadDate.includes("T") ? new Date(uploadDate).toLocaleDateString() : uploadDate}</span>
+                                            </span>
+                                          )}
+                                          {approveDate && (
+                                            <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                              <span>Approved: {approveDate.includes("T") ? new Date(approveDate).toLocaleDateString() : approveDate}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {exitDocs.length === 0 && (
+                                <p className="col-span-full text-xs text-slate-400 dark:text-gray-500 text-center py-8 bg-white/40 dark:bg-[#0a0a0a]/30 rounded-2xl border border-dashed border-amber-200/60 dark:border-amber-950">
+                                  No uploaded exit &amp; separation clearance documents yet.
+                                </p>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -1379,6 +1549,32 @@ export default function DashboardView({
           </table>
         </div>
       </div>
+
+      {/* Resignation Submission Modal (for employee) */}
+      {showResignationModal && currentEmployee && (
+        <ResignationModal
+          employee={currentEmployee}
+          isOpen={showResignationModal}
+          onClose={() => setShowResignationModal(false)}
+          onSubmit={async (data) => {
+            if (onSubmitResignation) await onSubmitResignation(data);
+            setShowResignationModal(false);
+          }}
+        />
+      )}
+
+      {/* Resignation Review Modal (for admin/hr) */}
+      {reviewingResignation && (
+        <ResignationReviewModal
+          request={reviewingResignation}
+          isOpen={!!reviewingResignation}
+          onClose={() => setReviewingResignation(null)}
+          onReview={async ({ id, status, reviewRemarks, approvedLastWorkingDate }) => {
+            if (onReviewResignation) await onReviewResignation(id, status, reviewRemarks, approvedLastWorkingDate);
+            setReviewingResignation(null);
+          }}
+        />
+      )}
     </div>
   );
 }

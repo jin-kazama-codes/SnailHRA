@@ -24,8 +24,9 @@ import bcrypt from "bcryptjs";
 import { 
   Employee, Designation, AttendancePunch, LeaveRequest, 
   Holiday, Policy, ExpenseClaim, InventoryItem, 
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, ExcelUploadRecord, Company, ExpenseCategory, Meeting,
-  GrievanceTicket, PerformanceRecord, PayrollConfig, InfractionType, CorporateAllowanceFaq, ChecklistItemTemplate
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, EmployeeDocument, TimingSettings, Company, ExpenseCategory, Meeting,
+  GrievanceTicket, PerformanceRecord, PayrollConfig, InfractionType, CorporateAllowanceFaq, ChecklistItemTemplate,
+  ResignationRequest, ResignationStatus
 } from "./src/types";
 import { toBranchId, toBranchName } from "./src/lib/branchUtils.js";
 import { computeMonthlyTDSFromEmployee } from "./src/lib/taxEngine.js";
@@ -68,12 +69,15 @@ interface AppState {
   branchAmenities?: Record<string, string[]>; // keyed by branch name
   branchLeaveCountVisibility?: Record<string, boolean>; // keyed by branch name
   showLeaveCount?: boolean;
+  branchCodePrefixes?: Record<string, string>;
+  empCodePrefix?: string;
+  branchEmployeeSelfEdit?: Record<string, boolean>;
+  employeeSelfEdit?: boolean;
   timingSettings: TimingSettings;
   companyTimingSettings?: Record<string, TimingSettings>;
   branchTimingSettings?: Record<string, TimingSettings>; // keyed by branch name
   wifiRestrictionSettings?: { enabled: boolean; allowedIps: string[]; allowedIp?: string };
   branchWifiSettings?: Record<string, { enabled: boolean; allowedIps: string[]; allowedIp?: string }>;
-  excelUploads?: ExcelUploadRecord[];
 
   infractionTypes?: InfractionType[];
   corporateAllowancesFaqs?: CorporateAllowanceFaq[];
@@ -83,6 +87,7 @@ interface AppState {
   companies: Company[];
   grievanceTickets?: GrievanceTicket[];
   performanceRecords?: PerformanceRecord[];
+  resignationRequests?: ResignationRequest[];
   payrollConfig?: PayrollConfig;
   payrollConfigs?: Record<string, PayrollConfig>;
 }
@@ -409,53 +414,6 @@ async function fetchLeavesFromSupabase(): Promise<LeaveRequest[] | null> {
   return null;
 }
 
-async function syncExcelUploadToSupabase(record: ExcelUploadRecord) {
-  if (supabase) {
-    try {
-      const payload = {
-        id: record.id,
-        filename: record.filename,
-        uploaded_at: record.uploadedAt,
-        uploaded_by_name: record.uploadedByName,
-        uploaded_by_id: record.uploadedById,
-        record_count: record.recordCount,
-        detected_custom_fields: record.detectedCustomFields,
-        status: record.status,
-        file_data: record.fileData
-      };
-      await supabase.from("excel_uploads").upsert(payload, { onConflict: "id" });
-    } catch (err) {
-      console.warn("Supabase excel_uploads upsert warning:", err);
-    }
-  }
-}
-
-async function fetchExcelUploadsFromSupabase(): Promise<ExcelUploadRecord[]> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase.from("excel_uploads").select("*").order("uploaded_at", { ascending: false });
-      if (!error && data) {
-        db.excelUploads = data.map((row: any) => ({
-          id: row.id,
-          filename: row.filename,
-          uploadedAt: row.uploaded_at || row.uploadedAt,
-          uploadedByName: row.uploaded_by_name || row.uploadedByName || "Admin User",
-          uploadedById: row.uploaded_by_id || row.uploadedById || "",
-          recordCount: Number(row.record_count ?? row.recordCount ?? 0),
-          detectedCustomFields: typeof row.detected_custom_fields === "string" 
-            ? JSON.parse(row.detected_custom_fields) 
-            : (row.detected_custom_fields || []),
-          status: row.status || "Success",
-          fileData: row.file_data || row.fileData || ""
-        }));
-        return db.excelUploads;
-      }
-    } catch (err) {
-      console.warn("Error fetching excel_uploads from Supabase:", err);
-    }
-  }
-  return db.excelUploads || [];
-}
 
 async function fetchAllFromSupabase(): Promise<AppState> {
   if (!supabase) return db;
@@ -798,7 +756,13 @@ async function startServer() {
         branchAmenities: db.branchAmenities || {},
         branchLeaveCountVisibility: db.branchLeaveCountVisibility || {},
         branchWifiSettings: db.branchWifiSettings || {},
+        branchCodePrefixes: db.branchCodePrefixes || {},
+        branchEmployeeSelfEdit: db.branchEmployeeSelfEdit || {},
+        employeeSelfEdit: db.employeeSelfEdit ?? false,
         showLeaveCount: db.showLeaveCount ?? true,
+        onboardingChecklistTemplates: (db.onboardingChecklistTemplates || []).filter(t => !t.companyId || t.companyId === reqCompanyId),
+        exitChecklistTemplates: (db.exitChecklistTemplates || []).filter(t => !t.companyId || t.companyId === reqCompanyId),
+        resignationRequests: (db.resignationRequests || []).filter(r => !r.companyId || r.companyId === reqCompanyId),
       };
 
       res.json(filteredData);
@@ -1352,163 +1316,7 @@ async function startServer() {
     res.status(201).json(newEmp);
   });
 
-  // 4b. Bulk Onboard Employees via Excel Spreadsheet Upload
-  app.post("/api/employees/bulk", async (req, res) => {
-    try {
-      const { employees: incomingEmployees, filename, fileData, uploadedByName, uploadedById } = req.body;
 
-      if (!Array.isArray(incomingEmployees) || incomingEmployees.length === 0) {
-        return res.status(400).json({ error: "No employee records provided in bulk request" });
-      }
-
-      if (!db.excelUploads) {
-        db.excelUploads = [];
-      }
-
-      const createdEmployees: Employee[] = [];
-      const customFieldsSet = new Set<string>();
-
-      const salt = bcrypt.genSaltSync(10);
-      const defaultHashedPassword = bcrypt.hashSync("Pass@1234", salt);
-
-      for (let i = 0; i < incomingEmployees.length; i++) {
-        const empData = incomingEmployees[i];
-        const newEmpId = await generateGuaranteedUniqueEmployeeId(db.employees, supabase);
-
-        const targetCompanyId = req.body.companyId || empData.companyId || empData.company_id || MGM_COMPANY_ID;
-        // Find designation match if title is provided
-        let desigId = "des-4";
-        if (empData.designationTitle) {
-          const match = db.designations.find(d =>
-            d.title.toLowerCase().trim() === String(empData.designationTitle).toLowerCase().trim() &&
-            (d.companyId || (d as any).company_id || MGM_COMPANY_ID) === targetCompanyId
-          );
-          if (match) desigId = match.id;
-        }
-
-        // Hash custom password if provided, else use default
-        let empPassword = defaultHashedPassword;
-        if (empData.password) {
-          empPassword = bcrypt.hashSync(String(empData.password), salt);
-        }
-
-        // Collect custom fields
-        if (empData.customFields && typeof empData.customFields === "object") {
-          Object.keys(empData.customFields).forEach(k => customFieldsSet.add(k));
-        }
-
-        const newEmp: Employee = {
-          id: newEmpId,
-          companyId: targetCompanyId,
-          fullName: empData.fullName || `Agent ${newEmpId}`,
-          email: empData.email || `agent.${newEmpId.toLowerCase()}@company.com`,
-          phone: empData.phone || "+91 98765 00000",
-          role: (empData.role?.toLowerCase() === "admin" || empData.role?.toLowerCase() === "hr") ? empData.role.toLowerCase() : "employee",
-          designationId: desigId,
-          department: empData.department || "Loans",
-          branch: empData.branch || "Mumbai Branch",
-          joiningDate: empData.joiningDate || new Date().toISOString().split("T")[0],
-          status: (empData.status === "Active" || empData.status === "Probation" || empData.status === "Suspended") ? empData.status : "Active",
-          salary: {
-            basic: Number(empData.salaryBasic) || 45000,
-            hra: Number(empData.salaryHra) || 18000,
-            allowances: Number(empData.salaryAllowances) || 10000,
-            pfDeduction: Number(empData.salaryPf) || 3200,
-            tdsDeduction: Number(empData.salaryTds) || 0
-          },
-          bankDetails: {
-            accountNumber: empData.bankAccount || "50100234567891",
-            bankName: empData.bankName || "HDFC Bank",
-            ifsc: empData.bankIfsc || "HDFC0001234"
-          },
-          address: empData.address || "Main Branch Office Desk",
-          emergencyContact: {
-            name: empData.emergencyName || "Family Contact",
-            relation: empData.emergencyRelation || "Spouse",
-            phone: empData.emergencyPhone || "+91 98765 99999"
-          },
-          documents: [],
-          onboardingTasks: [
-            { id: `task-auto-${Date.now()}-${i}-1`, taskName: "Verify KYC and Identity proof", completed: false, dueDate: "2026-07-28" },
-            { id: `task-auto-${Date.now()}-${i}-2`, taskName: "Collect Bank Account proof & PAN card", completed: false, dueDate: "2026-07-30" },
-            { id: `task-auto-${Date.now()}-${i}-3`, taskName: "Allocate SnailHR Credentials & Assets", completed: false, dueDate: "2026-08-01" }
-          ],
-          avatarUrl: empData.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=256&auto=format&fit=crop",
-          bio: empData.bio || "NBFC operations agent onboarded via Excel import.",
-          password: empPassword,
-          customFields: empData.customFields || {}
-        };
-
-        db.employees.push(newEmp);
-        createdEmployees.push(newEmp);
-      }
-
-      // Log Excel Upload Record
-      const uploadRecord: ExcelUploadRecord = {
-        id: "xl-upload-" + Date.now(),
-        filename: filename || `Employee_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
-        uploadedAt: new Date().toISOString(),
-        uploadedByName: uploadedByName || "Admin User",
-        uploadedById: uploadedById || "",
-        recordCount: createdEmployees.length,
-        detectedCustomFields: Array.from(customFieldsSet),
-        status: "Success",
-        fileData: fileData || ""
-      };
-
-      db.excelUploads.unshift(uploadRecord);
-      writeDatabase(db);
-
-      // Sync upload record to Supabase
-      await syncExcelUploadToSupabase(uploadRecord);
-
-      // Sync all employees to Supabase Database
-      await syncAllEmployeesToSupabase(db.employees);
-
-      res.status(201).json({
-        success: true,
-        count: createdEmployees.length,
-        uploadRecord,
-        employees: createdEmployees
-      });
-    } catch (err: any) {
-      console.error("Error executing bulk employee upload:", err);
-      res.status(500).json({ error: err.message || "Failed to process bulk upload" });
-    }
-  });
-
-  // 4c. Get Bulk Excel Upload History Logs (Direct from Supabase or memory)
-  app.get("/api/employees/bulk/history", async (req, res) => {
-    const uploads = await fetchExcelUploadsFromSupabase();
-    res.json({ uploads });
-  });
-
-  // 4d. Delete single Excel Upload History Log
-  app.delete("/api/employees/bulk/history/:id", async (req, res) => {
-    const { id } = req.params;
-    db.excelUploads = (db.excelUploads || []).filter(u => u.id !== id);
-    if (supabase) {
-      try {
-        await supabase.from("excel_uploads").delete().eq("id", id);
-      } catch (err) {
-        console.warn("Supabase delete excel_upload record error:", err);
-      }
-    }
-    res.json({ success: true, message: "Upload log record deleted" });
-  });
-
-  // 4e. Clear All Excel Upload History Logs
-  app.delete("/api/employees/bulk/history", async (req, res) => {
-    db.excelUploads = [];
-    if (supabase) {
-      try {
-        await supabase.from("excel_uploads").delete().neq("id", "0");
-      } catch (err) {
-        console.warn("Supabase clear excel_uploads error:", err);
-      }
-    }
-    res.json({ success: true, message: "All upload log records cleared" });
-  });
 
   // 5. Update Employee Status / Bio
   app.put("/api/employees/:id", async (req, res) => {
@@ -2593,6 +2401,20 @@ async function startServer() {
     res.json({ success: true, showLeaveCount: Boolean(showLeaveCount), branch: branchName || "global" });
   });
 
+  // 25b-2. Toggle Employee Self-Edit Profile Permission (supports per-branch)
+  app.post("/api/config/employee-self-edit", (req, res) => {
+    const { employeeSelfEdit, branch } = req.body;
+    const branchName = branch && branch !== "All Branches" ? branch : "";
+    if (branchName) {
+      if (!db.branchEmployeeSelfEdit) db.branchEmployeeSelfEdit = {};
+      db.branchEmployeeSelfEdit[branchName] = Boolean(employeeSelfEdit);
+    } else {
+      db.employeeSelfEdit = Boolean(employeeSelfEdit);
+    }
+    writeDatabase(db);
+    res.json({ success: true, employeeSelfEdit: Boolean(employeeSelfEdit), branch: branchName || "global" });
+  });
+
   // 25c. Designations Master CRUD (supports companyId and branch)
   app.get("/api/designations", (req, res) => {
     const { companyId, branch } = req.query as Record<string, string>;
@@ -2803,7 +2625,160 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // ─── 26. Support & Grievance ──────────────────────────────────────────────
+  // ─── 25b. Resignation & Separation Requests ───────────────────────────────
+  app.get("/api/resignations", async (req, res) => {
+    const { companyId, employeeId, branch, status } = req.query as Record<string, string>;
+    const cid = companyId || MGM_COMPANY_ID;
+    const dbState = readDatabase();
+    let list = (dbState.resignationRequests || []).filter(r => !r.companyId || r.companyId === cid);
+
+    if (employeeId) {
+      list = list.filter(r => r.employeeId === employeeId);
+    }
+    if (branch && branch !== "All Branches") {
+      const targetBranch = toBranchName(branch).toLowerCase();
+      list = list.filter(r => toBranchName(r.branch).toLowerCase() === targetBranch);
+    }
+    if (status && status !== "All") {
+      list = list.filter(r => r.status === status);
+    }
+    list.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+    res.json({ resignations: list });
+  });
+
+  app.post("/api/resignations", async (req, res) => {
+    try {
+      const { employeeId, resignationDate, lastWorkingDate, noticePeriodDays, reason, remarks, branch: reqBranch } = req.body;
+      if (!employeeId || !resignationDate || !lastWorkingDate || !reason) {
+        return res.status(400).json({ error: "employeeId, resignationDate, lastWorkingDate, and reason are required" });
+      }
+      const dbState = readDatabase();
+      const emp = (dbState.employees || []).find(e => e.id === employeeId);
+      const empName = emp?.fullName || `Employee ${employeeId}`;
+      const empCode = emp?.code || emp?.id || "";
+      const department = emp?.department || "";
+      const des = (dbState.designations || []).find(d => d.id === emp?.designationId);
+      const designation = des?.title || "";
+      const finalBranch = reqBranch || emp?.branch || "Mumbai Branch";
+      const companyId = emp?.companyId || MGM_COMPANY_ID;
+
+      const newResignation: ResignationRequest = {
+        id: `resig-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        companyId,
+        employeeId,
+        employeeName: empName,
+        employeeCode: empCode,
+        department,
+        designation,
+        branch: toBranchName(finalBranch),
+        resignationDate: resignationDate.split("T")[0],
+        lastWorkingDate: lastWorkingDate.split("T")[0],
+        noticePeriodDays: Number(noticePeriodDays) || 30,
+        reason: String(reason).trim(),
+        remarks: remarks ? String(remarks).trim() : "",
+        status: "Pending",
+        appliedAt: new Date().toISOString(),
+      };
+
+      if (!dbState.resignationRequests) dbState.resignationRequests = [];
+      dbState.resignationRequests.unshift(newResignation);
+      writeDatabase(dbState);
+
+      if (supabase) {
+        try {
+          await supabase.from("resignation_requests").upsert({
+            id: newResignation.id,
+            company_id: newResignation.companyId,
+            employee_id: newResignation.employeeId,
+            employee_name: newResignation.employeeName,
+            employee_code: newResignation.employeeCode,
+            department: newResignation.department,
+            designation: newResignation.designation,
+            branch: newResignation.branch,
+            resignation_date: newResignation.resignationDate,
+            last_working_date: newResignation.lastWorkingDate,
+            notice_period_days: newResignation.noticePeriodDays,
+            reason: newResignation.reason,
+            remarks: newResignation.remarks,
+            status: newResignation.status,
+            applied_at: newResignation.appliedAt,
+          }, { onConflict: "id" });
+        } catch (e) { console.warn("Supabase resignation_requests upsert warning:", e); }
+      }
+
+      res.status(201).json({ success: true, resignation: newResignation });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  });
+
+  app.put("/api/resignations/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, reviewRemarks, approvedLastWorkingDate, reviewedBy, reviewedById } = req.body;
+      const dbState = readDatabase();
+      if (!dbState.resignationRequests) dbState.resignationRequests = [];
+      const idx = dbState.resignationRequests.findIndex(r => r.id === id);
+      if (idx === -1) return res.status(404).json({ error: "Resignation not found" });
+
+      const current = dbState.resignationRequests[idx];
+      const updated: ResignationRequest = {
+        ...current,
+        status,
+        ...(reviewRemarks !== undefined ? { reviewRemarks: String(reviewRemarks).trim() } : {}),
+        ...(approvedLastWorkingDate ? { approvedLastWorkingDate: approvedLastWorkingDate.split("T")[0] } : {}),
+        ...(reviewedBy ? { reviewedBy } : {}),
+        ...(reviewedById ? { reviewedById } : {}),
+        reviewedAt: new Date().toISOString(),
+      };
+      dbState.resignationRequests[idx] = updated;
+
+      if (status === "Approved") {
+        const empIdx = (dbState.employees || []).findIndex(e => e.id === current.employeeId);
+        if (empIdx !== -1) {
+          dbState.employees[empIdx].status = "Resigned";
+          if (supabase) {
+            try {
+              await supabase.from("employees").update({ status: "Resigned" }).eq("id", current.employeeId);
+            } catch (e) { console.warn("Supabase employee status update error:", e); }
+          }
+        }
+      } else if (status === "Withdrawn" || status === "Rejected") {
+        const empIdx = (dbState.employees || []).findIndex(e => e.id === current.employeeId);
+        if (empIdx !== -1 && dbState.employees[empIdx].status === "Resigned") {
+          dbState.employees[empIdx].status = "Active";
+          if (supabase) {
+            try {
+              await supabase.from("employees").update({ status: "Active" }).eq("id", current.employeeId);
+            } catch (e) { console.warn("Supabase employee status revert error:", e); }
+          }
+        }
+      }
+
+      writeDatabase(dbState);
+
+      if (supabase) {
+        try {
+          await supabase.from("resignation_requests").upsert({
+            id: updated.id,
+            company_id: updated.companyId,
+            employee_id: updated.employeeId,
+            employee_name: updated.employeeName,
+            status: updated.status,
+            review_remarks: updated.reviewRemarks,
+            approved_last_working_date: updated.approvedLastWorkingDate,
+            reviewed_by: updated.reviewedBy,
+            reviewed_by_id: updated.reviewedById,
+            reviewed_at: updated.reviewedAt,
+          }, { onConflict: "id" });
+        } catch (e) { console.warn("Supabase resignation update error:", e); }
+      }
+
+      res.json({ success: true, resignation: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Internal server error" });
+    }
+  });
 
   // GET /api/grievances — list tickets (all for admin/hr, own for employee)
   app.get("/api/grievances", async (req, res) => {

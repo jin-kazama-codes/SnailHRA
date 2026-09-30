@@ -2,9 +2,9 @@
 import {
   Employee, Designation, AttendancePunch, AttendanceRequest, LeaveRequest,
   Holiday, Policy, ExpenseClaim, InventoryItem,
-  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExcelUploadRecord, ExpenseCategory, Meeting, CorporateAllowanceFaq,
+  InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, TimingSettings, AttendanceBreak, ExpenseCategory, Meeting, CorporateAllowanceFaq,
   SeatLayout, Room, RoomBooking, PayrollConfig, WifiRestrictionSettings, InfractionType, ChecklistItemTemplate,
-  GrievanceTicket, PerformanceRecord
+  GrievanceTicket, PerformanceRecord, ResignationRequest
 } from "../types";
 
 export interface AppState {
@@ -37,11 +37,12 @@ export interface AppState {
   branchLeaveCountVisibility?: Record<string, boolean>;
   branchWifiSettings?: Record<string, WifiRestrictionSettings>;
   branchCodePrefixes?: Record<string, string>;
+  branchEmployeeSelfEdit?: Record<string, boolean>; // keyed by branch name
+  employeeSelfEdit?: boolean; // global default
   empCodePrefix?: string;
   payrollConfigs?: Record<string, PayrollConfig>;
   companySettings?: Record<string, any>;
   attendanceBreaks?: AttendanceBreak[];
-  excelUploads?: ExcelUploadRecord[];
   meetings?: Meeting[];
   seatLayouts?: SeatLayout[];
   rooms?: Room[];
@@ -53,6 +54,7 @@ export interface AppState {
   exitChecklistTemplates?: ChecklistItemTemplate[];
   grievanceTickets?: GrievanceTicket[];
   performanceRecords?: PerformanceRecord[];
+  resignationRequests?: ResignationRequest[];
 }
 
 const initialDesignations: Designation[] = [];
@@ -194,7 +196,6 @@ export function getInitialState(): AppState {
     },
     showLeaveCount: true,
     attendanceBreaks: [],
-    excelUploads: [],
     meetings: [],
     seatLayouts: [],
     rooms: [],
@@ -204,6 +205,7 @@ export function getInitialState(): AppState {
     grievanceTickets: [],
     performanceRecords: [],
     attendanceRequests: [],
+    resignationRequests: [],
   };
 }
 

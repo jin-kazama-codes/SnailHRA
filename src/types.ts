@@ -407,17 +407,6 @@ export interface WifiRestrictionSettings {
   companyId?: string;
 }
 
-export interface ExcelUploadRecord {
-  id: string;
-  filename: string;
-  uploadedAt: string; // ISO timestamp
-  uploadedByName: string;
-  uploadedById: string;
-  recordCount: number;
-  detectedCustomFields: string[];
-  status: "Success" | "Partial" | "Failed";
-  fileData?: string; // base64 or text content of uploaded file
-}
 
 export function capitalizeName(name: string | null | undefined): string {
   if (!name) return "";
@@ -570,4 +559,30 @@ export interface PerformanceRecord {
   createdAt: string;
 }
 
+// ─── Resignations & Separation Management ──────────────────────────────────
 
+export type ResignationStatus = "Pending" | "Approved" | "Rejected" | "Withdrawn";
+
+export interface ResignationRequest {
+  id: string;
+  companyId?: string;
+  employeeId: string;
+  employeeName: string;
+  employeeCode?: string;
+  department?: string;
+  designation?: string;
+  branch: string;
+  resignationDate: string; // YYYY-MM-DD
+  lastWorkingDate: string;  // YYYY-MM-DD (requested / proposed last working day)
+  noticePeriodDays?: number; // e.g. 30, 60, 90
+  reason: string;          // Selected reason
+  remarks: string;         // Detailed employee comments / handover notes
+  status: ResignationStatus;
+  appliedAt: string;       // ISO timestamp
+  reviewedBy?: string;     // HR or Admin Name
+  reviewedById?: string;   // HR or Admin Employee ID
+  reviewedAt?: string;     // ISO timestamp
+  reviewRemarks?: string;  // HR / Admin feedback or approval notes
+  adminRemarks?: string;   // Alias for reviewRemarks
+  approvedLastWorkingDate?: string; // Confirmed final working day
+}

@@ -32,18 +32,20 @@ export async function GET(request: Request) {
     const dbClient = supabaseAdmin || supabase;
 
     // If branch-specific request, fetch per-branch row
-    if (dbClient && branch && branch !== "All Branches" && companyId) {
+    if (dbClient && branch && branch !== "All Branches") {
       try {
         const bName = toBranchName(branch);
         const bId = toBranchId(branch);
         // Query by branch column (try both name and id)
-        const { data: branchRow } = await dbClient
+        let branchQuery = dbClient
           .from("wifi_restriction_settings")
           .select("*")
-          .eq("company_id", companyId)
-          .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${branch}`)
-          .not("branch", "is", null)
-          .maybeSingle();
+          .not("branch", "is", null);
+        if (companyId) {
+          branchQuery = branchQuery.eq("company_id", companyId);
+        }
+        branchQuery = branchQuery.or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${branch},branch.ilike.${bName}`);
+        const { data: branchRow } = await branchQuery.maybeSingle();
         if (branchRow) {
           const parsedIps = parseIps(branchRow.allowed_ip);
           return NextResponse.json({
@@ -100,7 +102,22 @@ export async function GET(request: Request) {
       }
     }
 
-    // Fallback to local DB
+    // Fallback to local DB (check branch-specific first, then global)
+    const rawBranch = (branch && branch !== "All Branches") ? branch : "";
+    if (rawBranch && db.branchWifiSettings) {
+      const bSetting = db.branchWifiSettings[toBranchName(rawBranch)]
+        || db.branchWifiSettings[toBranchId(rawBranch)]
+        || db.branchWifiSettings[rawBranch];
+      if (bSetting) {
+        const parsedIps = parseIps(bSetting.allowedIps || bSetting.allowedIp);
+        return NextResponse.json({
+          ...bSetting,
+          allowedIps: parsedIps,
+          branch: toBranchName(rawBranch)
+        });
+      }
+    }
+
     const settings = db.wifiRestrictionSettings || { enabled: false, allowedIp: "", allowedIps: [] };
     const parsedIps = parseIps(settings.allowedIps || settings.allowedIp);
     return NextResponse.json({

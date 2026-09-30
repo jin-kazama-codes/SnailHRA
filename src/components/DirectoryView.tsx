@@ -7,11 +7,13 @@ import {
   Trash2, Mail, Phone, Briefcase, Calendar, ChevronRight, ChevronDown,
   Eye, EyeOff, FileUp, ShieldCheck, AlertCircle, ShieldAlert, Sparkles, Building, MapPin, Landmark, Pencil,
   Camera, Download, X, RefreshCw, ExternalLink, FileSpreadsheet, Table, Upload, Plus, Layers,
-  ArrowLeft, History, Clock, User, Check, Sliders, UserX, Calculator, LogOut, Maximize2, Minimize2
+  Clock, User, Check, Sliders, UserX, Calculator, LogOut, Maximize2, Minimize2
 } from "lucide-react";
-import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, ExcelUploadRecord, PayrollConfig, ChecklistItemTemplate } from "../types";
+import { Employee, Designation, UserRole, EmployeeDocument, OnboardingTask, PayrollConfig, ChecklistItemTemplate, ResignationRequest } from "../types";
 import { toBranchName, toBranchId } from "../lib/branchUtils";
 import ChecklistCard from "./ChecklistCard";
+import ResignationModal from "./ResignationModal";
+import ResignationReviewModal from "./ResignationReviewModal";
 import { computeIncomeTax } from "./PayrollView";
 
 const isValidPAN = (p: string) => !p.trim() || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(p.trim().toUpperCase());
@@ -51,8 +53,11 @@ interface DirectoryViewProps {
   subscriptionModel?: number;
   onboardingChecklistTemplates?: ChecklistItemTemplate[];
   exitChecklistTemplates?: ChecklistItemTemplate[];
+  resignationRequests?: ResignationRequest[];
+  onSubmitResignation?: (req: Partial<ResignationRequest>) => Promise<void> | void;
+  onReviewResignation?: (reqId: string, status: "Approved" | "Rejected", adminRemarks?: string, approvedLastWorkingDate?: string) => Promise<void> | void;
+  onWithdrawResignation?: (reqId: string) => Promise<void> | void;
   onOnboardEmployee: (empData: any) => void;
-  onBulkOnboardEmployee?: (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => Promise<void> | void;
   onUpdateEmployee: (id: string, updatedData: any) => Promise<void> | void;
   onAddDocument: (empId: string, docData: any) => void;
   onDeleteDocument: (empId: string, docId: string) => void;
@@ -89,8 +94,11 @@ export default function DirectoryView({
   branchCodePrefixes = {},
   onboardingChecklistTemplates = [],
   exitChecklistTemplates = [],
+  resignationRequests = [],
+  onSubmitResignation,
+  onReviewResignation,
+  onWithdrawResignation,
   onOnboardEmployee,
-  onBulkOnboardEmployee,
   onUpdateEmployee,
   onAddDocument,
   onDeleteDocument,
@@ -117,7 +125,8 @@ export default function DirectoryView({
       setSelectedBranch("All");
     }
   }, [globalSelectedBranch]);
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended" | "Resigned">("All");
+
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<"All" | "Active" | "Probation" | "Suspended" | "Resigned" | "Resignations">("All");
   const [activeEmpId, setActiveEmpId] = useState<string | null>(() => currentUserId || employees[0]?.id || null);
   const [activeChecklistTab, setActiveChecklistTab] = useState<"onboarding" | "exit">("onboarding");
   const [showOnboardForm, setShowOnboardForm] = useState(false);
@@ -125,6 +134,8 @@ export default function DirectoryView({
   const [showEditModal, setShowEditModal] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [reviewingResignation, setReviewingResignation] = useState<ResignationRequest | null>(null);
+  const [showEmployeeResignationModal, setShowEmployeeResignationModal] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Manage departments & branches state
@@ -181,301 +192,6 @@ export default function DirectoryView({
   const [docCategory, setDocCategory] = useState<any>("ID Proof");
   const [docFile, setDocFile] = useState<File | null>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
-
-  // View Mode: "roster" (default) or "bulk_upload" (full page hub)
-  const [viewMode, setViewMode] = useState<"roster" | "bulk_upload">("roster");
-
-  // Bulk Upload Excel State
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [rawFileData, setRawFileData] = useState<string>("");
-  const [parsedBulkData, setParsedBulkData] = useState<any[]>([]);
-  const [detectedHeaders, setDetectedHeaders] = useState<string[]>([]);
-  const [customFieldHeaders, setCustomFieldHeaders] = useState<string[]>([]);
-  const [bulkError, setBulkError] = useState<string | null>(null);
-  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
-  const bulkFileInputRef = useRef<HTMLInputElement>(null);
-
-  // Upload History Logs State (Date-wise, newest on top)
-  const [uploadHistory, setUploadHistory] = useState<ExcelUploadRecord[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
-
-  const fetchUploadHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const res = await fetch("/api/employees/bulk/history");
-      if (res.ok) {
-        const json = await res.json();
-        setUploadHistory(json.uploads || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch upload history log:", err);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
-  const deleteSingleUploadHistoryLog = async (id: string) => {
-    try {
-      const res = await fetch(`/api/employees/bulk/history/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setUploadHistory(prev => prev.filter(item => item.id !== id));
-      }
-    } catch (e) {
-      console.error("Failed to delete upload log:", e);
-    }
-  };
-
-  const clearAllUploadHistoryLogs = async () => {
-    if (!window.confirm("Are you sure you want to clear all upload logs?")) return;
-    try {
-      const res = await fetch("/api/employees/bulk/history", { method: "DELETE" });
-      if (res.ok) {
-        setUploadHistory([]);
-      }
-    } catch (e) {
-      console.error("Failed to clear upload logs:", e);
-    }
-  };
-
-  useEffect(() => {
-    if (viewMode === "bulk_upload") {
-      fetchUploadHistory();
-    }
-  }, [viewMode]);
-
-  // Generate & Download Shareable Dummy Sample Excel File with Custom & Unique Headers
-  // Generate & Download Clean Dummy Excel File with fresh distinct employee records
-  const downloadSampleTemplate = () => {
-    const headers = [
-      "Full Name", "Email", "Phone", "Role", "Department", "Branch",
-      "Designation", "Joining Date", "Status", "Basic Salary", "HRA",
-      "Allowances", "PF Deduction", "Bank Name", "Account Number",
-      "IFSC Code", "Address", "Emergency Contact Name", "Emergency Contact Relation",
-      "Emergency Contact Phone", "Password", "Bio"
-    ];
-
-    const sampleRow1 = {
-      "Full Name": "Vikramaditya Rao",
-      "Email": "vikramaditya.rao@company.com",
-      "Phone": "+91 98111 22334",
-      "Role": "employee",
-      "Department": "Loans",
-      "Branch": "Mumbai Branch",
-      "Designation": "Senior Loan Officer",
-      "Joining Date": "2026-08-01",
-      "Status": "Active",
-      "Basic Salary": 58000,
-      "HRA": 23200,
-      "Allowances": 14000,
-      "PF Deduction": 4200,
-      "Bank Name": "Kotak Mahindra Bank",
-      "Account Number": "881900223411",
-      "IFSC Code": "KKBK0000123",
-      "Address": "A-45, Vaishali Nagar, Mumbai, Maharashtra",
-      "Emergency Contact Name": "Pooja Rao",
-      "Emergency Contact Relation": "Spouse",
-      "Emergency Contact Phone": "+91 98111 99999",
-      "Password": "Pass@2026",
-      "Bio": "Senior Credit & Loan Evaluation Specialist."
-    };
-
-    const sampleRow2 = {
-      "Full Name": "Neha Saxena",
-      "Email": "neha.saxena@company.com",
-      "Phone": "+91 97222 33445",
-      "Role": "employee",
-      "Department": "Risk",
-      "Branch": "Noida HQ",
-      "Designation": "Risk Analyst",
-      "Joining Date": "2026-08-05",
-      "Status": "Active",
-      "Basic Salary": 49000,
-      "HRA": 19600,
-      "Allowances": 11000,
-      "PF Deduction": 3500,
-      "Bank Name": "Axis Bank",
-      "Account Number": "91201004567890",
-      "IFSC Code": "UTIB0000567",
-      "Address": "Block B, Sector 62, Noida, UP",
-      "Emergency Contact Name": "Rohan Saxena",
-      "Emergency Contact Relation": "Brother",
-      "Emergency Contact Phone": "+91 97222 88888",
-      "Password": "Pass@2026",
-      "Bio": "Fraud Risk & Portfolio Compliance Officer."
-    };
-
-    const sampleRow3 = {
-      "Full Name": "Tarun Deshmukh",
-      "Email": "tarun.deshmukh@company.com",
-      "Phone": "+91 96333 44556",
-      "Role": "employee",
-      "Department": "Operations",
-      "Branch": "Pune Digital Office",
-      "Designation": "Collections Specialist",
-      "Joining Date": "2026-08-10",
-      "Status": "Active",
-      "Basic Salary": 62000,
-      "HRA": 24800,
-      "Allowances": 15000,
-      "PF Deduction": 4800,
-      "Bank Name": "ICICI Bank",
-      "Account Number": "000401987654",
-      "IFSC Code": "ICIC0000004",
-      "Address": "Plot 12, Baner Road, Pune, Maharashtra",
-      "Emergency Contact Name": "Meenal Deshmukh",
-      "Emergency Contact Relation": "Spouse",
-      "Emergency Contact Phone": "+91 96333 77777",
-      "Password": "Pass@2026",
-      "Bio": "Field Operations & Collections Management Lead."
-    };
-
-    const worksheet = XLSX.utils.json_to_sheet([sampleRow1, sampleRow2, sampleRow3], { header: headers });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Employee Import Template");
-    XLSX.writeFile(workbook, `${companyName ? companyName.replace(/\s+/g, '_') : 'Company'}_Employee_Import_Template.xlsx`);
-  };
-
-  // Download Past Uploaded Excel File
-  const downloadUploadedFile = (record: ExcelUploadRecord) => {
-    if (!record.fileData) return;
-    try {
-      const link = document.createElement("a");
-      const dataUri = record.fileData.startsWith("data:")
-        ? record.fileData
-        : `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${record.fileData}`;
-      link.href = dataUri;
-      link.download = record.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (e) {
-      console.error("Download error:", e);
-    }
-  };
-
-  // Parse Uploaded Excel File & Extract Standard + Dynamic Custom Fields
-  const handleBulkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setBulkFile(file);
-    setBulkError(null);
-    setParsedBulkData([]);
-    setDetectedHeaders([]);
-    setCustomFieldHeaders([]);
-    setRawFileData("");
-
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-
-      // Read file to base64 for archiving
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const b64 = ev.target?.result as string;
-        setRawFileData(b64 || "");
-      };
-      reader.readAsDataURL(file);
-
-      const workbook = XLSX.read(arrayBuffer, { type: "array" });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const rawRows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-
-      if (!rawRows || rawRows.length === 0) {
-        setBulkError("The selected Excel file is empty or invalid.");
-        return;
-      }
-
-      // Collect raw column headers
-      const allHeaders = Object.keys(rawRows[0] || {});
-      setDetectedHeaders(allHeaders);
-
-      // Known standard field mappings (normalized key => internal property)
-      const standardMap: Record<string, string> = {
-        fullname: "fullName", name: "fullName", full_name: "fullName", employeename: "fullName", employee_name: "fullName",
-        email: "email", emailaddress: "email", email_address: "email",
-        phone: "phone", phonenumber: "phone", phone_number: "phone", mobile: "phone", contact: "phone",
-        role: "role", userrole: "role",
-        department: "department", dept: "department",
-        branch: "branch", office: "branch",
-        designation: "designationTitle", designationtitle: "designationTitle", title: "designationTitle", designationid: "designationTitle",
-        joiningdate: "joiningDate", dateofjoining: "joiningDate", joining_date: "joiningDate", doj: "joiningDate",
-        status: "status", employeestatus: "status",
-        basicsalary: "salaryBasic", basic: "salaryBasic", salarybasic: "salaryBasic",
-        hra: "salaryHra", hraallowance: "salaryHra", salaryhra: "salaryHra",
-        allowances: "salaryAllowances", otherallowances: "salaryAllowances", salaryallowances: "salaryAllowances",
-        pfdeduction: "salaryPf", pf: "salaryPf", salarypf: "salaryPf", salarypfdeduction: "salaryPf",
-        tdsdeduction: "salaryTds", tds: "salaryTds", salarytds: "salaryTds", salarytdsdeduction: "salaryTds", taxdeduction: "salaryTds", tax: "salaryTds", salarytax: "salaryTds", tdsprofessiontax: "salaryTds", professiontax: "salaryTds",
-        bankname: "bankName", bank: "bankName",
-        accountnumber: "bankAccount", bankaccount: "bankAccount", bankaccountnumber: "bankAccount",
-        ifsc: "bankIfsc", ifsccode: "bankIfsc", bankifsc: "bankIfsc",
-        address: "address", residentialaddress: "address",
-        emergencycontactname: "emergencyName", emergencyname: "emergencyName", contactperson: "emergencyName",
-        emergencycontactrelation: "emergencyRelation", emergencyrelation: "emergencyRelation", relation: "emergencyRelation",
-        emergencycontactphone: "emergencyPhone", emergencyphone: "emergencyPhone",
-        password: "password", avatarurl: "avatarUrl"
-      };
-
-      const customHeaders: string[] = [];
-      allHeaders.forEach(h => {
-        const cleanKey = h.toLowerCase().replace(/[^a-z0-9]/g, "");
-        if (!standardMap[cleanKey]) {
-          customHeaders.push(h);
-        }
-      });
-      setCustomFieldHeaders(customHeaders);
-
-      // Process each row
-      const processedEmployees = rawRows.map((row: any) => {
-        const emp: any = { customFields: {} };
-
-        Object.keys(row).forEach(header => {
-          const val = row[header];
-          const cleanKey = header.toLowerCase().replace(/[^a-z0-9]/g, "");
-          const stdTarget = standardMap[cleanKey];
-
-          if (stdTarget) {
-            emp[stdTarget] = String(val).trim();
-          } else if (val !== "" && val !== null && val !== undefined) {
-            // Unmapped header -> store as dynamic custom field
-            emp.customFields[header] = typeof val === "number" ? val : String(val).trim();
-          }
-        });
-
-        return emp;
-      });
-
-      setParsedBulkData(processedEmployees);
-    } catch (err: any) {
-      console.error("Excel parse error:", err);
-      setBulkError("Failed to parse Excel file. Please ensure it is a valid .xlsx or .csv document.");
-    }
-  };
-
-  // Submit Bulk Upload
-  const handleExecuteBulkSubmit = async () => {
-    if (!parsedBulkData.length || isProcessingBulk) return;
-    setIsProcessingBulk(true);
-    try {
-      if (onBulkOnboardEmployee) {
-        await onBulkOnboardEmployee({
-          employees: parsedBulkData,
-          filename: bulkFile?.name || `Employee_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
-          fileData: rawFileData
-        });
-      }
-      setShowBulkModal(false);
-      setBulkFile(null);
-      setParsedBulkData([]);
-      setRawFileData("");
-      await fetchUploadHistory();
-    } catch (err) {
-      console.error("Bulk submit execution error:", err);
-    } finally {
-      setIsProcessingBulk(false);
-    }
-  };
 
   // Edit employee state
   const [editFullName, setEditFullName] = useState("");
@@ -591,6 +307,9 @@ export default function DirectoryView({
   const [onboardPayrollConfig, setOnboardPayrollConfig] = useState<PayrollConfig | null>(null);
   const [onboardIsPfExempt, setOnboardIsPfExempt] = useState<boolean>(false);
   const [onboardIsEsiExempt, setOnboardIsEsiExempt] = useState<boolean>(false);
+  const [onboardTdsOptIn, setOnboardTdsOptIn] = useState<boolean>(true);
+  const [onboardTdsMode, setOnboardTdsMode] = useState<"slab" | "custom">("slab");
+  const [onboardCustomTds, setOnboardCustomTds] = useState<string>("");
 
   // Fetch tenant payroll rules when onboarding or editing modal opens
   useEffect(() => {
@@ -671,7 +390,7 @@ export default function DirectoryView({
           ? Math.round(basicVal * (cfg.pfValue / 100))
           : cfg.pfValue));
 
-    const tax = computeIncomeTax(gross, cfg.taxType, cfg.taxValue);
+    const slabTax = computeIncomeTax(gross, cfg.taxType, cfg.taxValue);
 
     const esiGrossCeiling = cfg.esiGrossCeiling ?? 21000;
     const esiRate = cfg.esiRatePercentage ?? 0.75;
@@ -686,7 +405,12 @@ export default function DirectoryView({
     setSalaryLta(String(lta));
     setSalaryAllowances(String(allowances));
     setSalaryPf(String(pf));
-    setSalaryTds(String(tax));
+    // Only update TDS from slab if user hasn't opted out or chosen custom mode
+    setSalaryTds(prev => {
+      if (!onboardTdsOptIn) return "0";
+      if (onboardTdsMode === "custom") return prev; // keep user-entered custom value
+      return String(slabTax);
+    });
     setSalaryEsi(String(esi));
   };
 
@@ -701,24 +425,42 @@ export default function DirectoryView({
       ? employees.filter(e => (e.branch || "Mumbai Branch") === userBranch && e.role !== "admin")
       : employees.filter(e => e.id === currentUserId);
 
+  const isBranchEqual = (b1?: string, b2?: string) => {
+    if (!b1 || !b2) return false;
+    if (b1 === b2) return true;
+    const n1 = toBranchName(b1).trim().toLowerCase();
+    const n2 = toBranchName(b2).trim().toLowerCase();
+    if (n1 === n2) return true;
+    const id1 = toBranchId(b1);
+    const id2 = toBranchId(b2);
+    return Boolean(id1 && id2 && id1 === id2);
+  };
+
+  const isBranchMatch = (itemBranch?: string) => {
+    if (!itemBranch || selectedBranch === "All" || selectedBranch === "All Branches") return true;
+    return isBranchEqual(itemBranch, selectedBranch);
+  };
+
+  // Branch-level active resignation requests visible to this user
+  const branchResignations = (resignationRequests || []).filter(r => {
+    if (r.status === "Withdrawn") return false;
+    return isBranchMatch(r.branch);
+  });
+
+  const pendingResignations = branchResignations.filter(r => r.status === "Pending");
+
   const filteredEmployees = accessibleEmployees
     .filter(emp => {
       const matchesSearch = emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = selectedDept === "All" || emp.department === selectedDept;
-      const isBranchEqual = (b1?: string, b2?: string) => {
-        if (!b1 || !b2) return false;
-        if (b1 === b2) return true;
-        const n1 = toBranchName(b1).trim().toLowerCase();
-        const n2 = toBranchName(b2).trim().toLowerCase();
-        if (n1 === n2) return true;
-        const id1 = toBranchId(b1);
-        const id2 = toBranchId(b2);
-        return Boolean(id1 && id2 && id1 === id2);
-      };
       const matchesBranch = selectedBranch === "All" || selectedBranch === "All Branches" || isBranchEqual(emp.branch, selectedBranch);
-      const matchesStatus = selectedStatusFilter === "All" || (emp.status || "Active") === selectedStatusFilter;
+      const matchesStatus = selectedStatusFilter === "All"
+        ? true
+        : selectedStatusFilter === "Resignations"
+        ? (resignationRequests || []).some(r => r.employeeId === emp.id && r.status !== "Withdrawn")
+        : (emp.status || "Active") === selectedStatusFilter;
       return matchesSearch && matchesDept && matchesBranch && matchesStatus;
     })
     .sort((a, b) => {
@@ -1044,8 +786,12 @@ export default function DirectoryView({
         salaryAllowances, salaryPf, salaryTds, salaryEsi,
         salaryPfMode: onboardIsPfExempt ? "exempt" : (onboardPayrollConfig?.pfModeDefault === "fixed_1800" ? "fixed_1800" : (onboardPayrollConfig?.pfType === "fixed" ? "fixed_1800" : "percentage")),
         salaryEsiOptIn: !onboardIsEsiExempt,
+        salaryTdsOptIn: onboardTdsOptIn,
+        salaryTdsMode: onboardTdsMode,
         onboardIsPfExempt,
         onboardIsEsiExempt,
+        onboardTdsOptIn,
+        onboardTdsMode,
         bankAccount, bankName, bankIfsc,
         address: address.trim() ? (address.trim().charAt(0).toUpperCase() + address.trim().slice(1)) : "",
         bio: bio.trim() ? (bio.trim().charAt(0).toUpperCase() + bio.trim().slice(1)) : "",
@@ -1091,6 +837,9 @@ export default function DirectoryView({
       setUan("");
       setOnboardIsPfExempt(false);
       setOnboardIsEsiExempt(false);
+      setOnboardTdsOptIn(true);
+      setOnboardTdsMode("slab");
+      setOnboardCustomTds("");
 
       setBankAccount("");
       setBankName("");
@@ -1348,353 +1097,7 @@ export default function DirectoryView({
     return profileImagePreview || "";
   };
 
-  if (viewMode === "bulk_upload") {
-    return (
-      <div className="space-y-6 animate-in fade-in duration-200">
-        {/* Full Page Navigation & Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-4 sm:p-5 shadow-xs dark:neon-glow">
-          <div className="flex items-center space-x-3.5">
-            <button
-              onClick={() => setViewMode("roster")}
-              className="p-2 bg-slate-50 dark:bg-[#1a1a1a] hover:bg-slate-100 dark:hover:bg-[#252525] text-slate-700 dark:text-gray-200 rounded-xl transition-all border border-slate-100 dark:border-[#222] cursor-pointer"
-              title="Back to Employee Roster"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <div className="flex items-center space-x-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
-                <h1 className="font-display font-extrabold text-slate-800 dark:text-white text-lg sm:text-xl">
-                  Excel Employee Import & Audit Center
-                </h1>
-              </div>
-              <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
-                Bulk onboard employees, auto-fill non-compulsory fields, detect dynamic columns, and manage date-wise upload history.
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
-            <button
-              onClick={downloadSampleTemplate}
-              className="bg-white dark:bg-[#151515] hover:bg-slate-50 dark:hover:bg-[#1e1e1e] text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs"
-              title="Download dummy Excel file with sample employee records"
-            >
-              <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Download Dummy Excel File</span>
-            </button>
-            <button
-              onClick={() => setViewMode("roster")}
-              className="bg-[#009966] hover:bg-[#008055] text-white font-semibold text-xs px-4 py-2.5 rounded-xl flex items-center space-x-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <span>Back to Roster</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Section 1: Drag-and-Drop Excel Upload & Live Data Preview Workspace */}
-        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 sm:p-6 shadow-xs dark:neon-glow space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-            <div className="flex items-center space-x-2">
-              <Upload className="w-5 h-5 text-teal-500" />
-              <h2 className="font-display font-bold text-slate-800 dark:text-white text-base">
-                Upload New Excel / CSV Spreadsheet
-              </h2>
-            </div>
-            <span className="text-xs text-slate-400 dark:text-gray-500">
-              Supported Formats: .xlsx, .xls, .csv
-            </span>
-          </div>
-
-          {/* Interactive Drag & Drop Area */}
-          <div
-            onClick={() => bulkFileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${bulkFile
-              ? "border-teal-500 bg-teal-50/20 dark:bg-teal-950/10"
-              : "border-slate-200 dark:border-[#222] hover:border-emerald-500 bg-slate-50/50 dark:bg-[#0a0a0a]"
-              }`}
-          >
-            <input
-              ref={bulkFileInputRef}
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              onChange={handleBulkFileChange}
-              className="hidden"
-            />
-
-            <Upload className="w-10 h-10 mx-auto text-slate-400 dark:text-gray-500 mb-2 animate-bounce" />
-
-            {bulkFile ? (
-              <div>
-                <span className="font-bold text-slate-800 dark:text-white text-base block">
-                  {bulkFile.name}
-                </span>
-                <span className="text-xs text-slate-400 dark:text-gray-500 mt-1 block">
-                  {(bulkFile.size / 1024).toFixed(1)} KB • Click to choose a different file
-                </span>
-              </div>
-            ) : (
-              <div>
-                <span className="font-bold text-slate-700 dark:text-gray-300 text-sm block">
-                  Click or Drag & Drop Excel File Here
-                </span>
-                <span className="text-xs text-slate-400 dark:text-gray-500 mt-1 block">
-                  Supports standard fields + any new dynamic fields automatically
-                </span>
-                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-[#222] inline-block" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={downloadSampleTemplate}
-                    className="bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-semibold text-xs px-4 py-2 rounded-xl flex items-center space-x-2 transition-all cursor-pointer shadow-xs mx-auto"
-                  >
-                    <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Download Dummy Excel File</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Parsing Errors */}
-          {bulkError && (
-            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400 flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{bulkError}</span>
-            </div>
-          )}
-
-          {/* Parsed Data Preview Table */}
-          {parsedBulkData.length > 0 && (
-            <div className="space-y-4 pt-2">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-50 dark:bg-[#0a0a0a] p-3.5 rounded-xl border border-slate-100 dark:border-[#1a1a1a]">
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-800 dark:text-white text-xs">
-                    Parsed {parsedBulkData.length} Employee Record{parsedBulkData.length > 1 ? "s" : ""}
-                  </span>
-                  <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
-                    Ready to Onboard
-                  </span>
-                </div>
-
-                {customFieldHeaders.length > 0 && (
-                  <div className="flex items-center space-x-1.5 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 px-3 py-1 rounded-lg text-xs">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span className="font-semibold">
-                      New Dynamic Fields Detected: {customFieldHeaders.join(", ")}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Informational Banner */}
-              <div className="bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 text-xs text-slate-600 dark:text-gray-300">
-                💡 <strong>Smart Fallback Info:</strong> Non-compulsory missing fields (Joining Date, Salary Components, Bank Defaults, Emergency Contacts) will be automatically populated with smart defaults.
-              </div>
-
-              {/* Full Width Table */}
-              <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a]">
-                    <tr>
-                      <th className="p-3 font-bold">#</th>
-                      <th className="p-3 font-bold">Full Name</th>
-                      <th className="p-3 font-bold">Email</th>
-                      <th className="p-3 font-bold">Role / Dept</th>
-                      <th className="p-3 font-bold">Phone</th>
-                      <th className="p-3 font-bold">Branch</th>
-                      {customFieldHeaders.map(ch => (
-                        <th key={ch} className="p-3 font-bold text-teal-600 dark:text-teal-400">
-                          {ch} ⭐
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
-                    {parsedBulkData.map((emp, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
-                        <td className="p-3 font-mono text-[11px] text-slate-400">{idx + 1}</td>
-                        <td className="p-3 font-bold text-slate-800 dark:text-white">
-                          {emp.fullName || emp.name || `Employee ${idx + 1}`}
-                        </td>
-                        <td className="p-3 text-slate-500 dark:text-gray-400 font-mono text-[11px]">
-                          {emp.email || "(Auto-generated)"}
-                        </td>
-                        <td className="p-3">
-                          {emp.role || "employee"} • {emp.department || "Loans"}
-                        </td>
-                        <td className="p-3 font-mono text-[11px]">
-                          {emp.phone || "+91 99999 00000"}
-                        </td>
-                        <td className="p-3">
-                          {emp.branch || "Mumbai Branch"}
-                        </td>
-                        {customFieldHeaders.map(ch => (
-                          <td key={ch} className="p-3 font-mono text-teal-600 dark:text-teal-300 font-bold text-[11px]">
-                            {String(emp.customFields?.[ch] ?? "-")}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="button"
-                  disabled={!parsedBulkData.length || isProcessingBulk}
-                  onClick={handleExecuteBulkSubmit}
-                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-6 py-3 rounded-xl flex items-center space-x-2 transition-all shadow-md cursor-pointer"
-                >
-                  {isProcessingBulk ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Processing & Saving Upload Log...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      <span>Onboard {parsedBulkData.length} Employees & Save XL Log</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Section 2: Upload History & Audit Log Table (Date-wise, Newest on Top) */}
-        <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 sm:p-6 shadow-xs dark:neon-glow space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-            <div className="flex items-center space-x-2.5">
-              <History className="w-5 h-5 text-emerald-500" />
-              <div>
-                <h2 className="font-display font-bold text-slate-800 dark:text-white text-base">
-                  Uploaded Excel Files Archive (Newest On Top)
-                </h2>
-                <p className="text-xs text-slate-400 dark:text-gray-500">
-                  Audit log of all uploaded spreadsheets, dates, uploader details, and imported counts.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {uploadHistory.length > 0 && (
-                <button
-                  onClick={clearAllUploadHistoryLogs}
-                  className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-400 text-xs flex items-center gap-1 cursor-pointer hover:underline"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Clear History</span>
-                </button>
-              )}
-              <button
-                onClick={fetchUploadHistory}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-gray-300 text-xs flex items-center gap-1 cursor-pointer hover:underline"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Refresh Log</span>
-              </button>
-            </div>
-          </div>
-
-          {loadingHistory ? (
-            <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />
-              <span>Loading upload history logs...</span>
-            </div>
-          ) : uploadHistory.length === 0 ? (
-            <div className="py-10 text-center space-y-2">
-              <FileSpreadsheet className="w-8 h-8 text-slate-300 dark:text-gray-600 mx-auto" />
-              <p className="text-xs text-slate-400 dark:text-gray-500">No Excel file uploads recorded yet in database.</p>
-            </div>
-          ) : (
-            <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a]">
-                  <tr>
-                    <th className="p-3 font-bold">Upload Date & Time</th>
-                    <th className="p-3 font-bold">Filename</th>
-                    <th className="p-3 font-bold">Uploaded By</th>
-                    <th className="p-3 font-bold">Employees Imported</th>
-                    <th className="p-3 font-bold">Dynamic Custom Fields</th>
-                    <th className="p-3 font-bold">Status</th>
-                    <th className="p-3 font-bold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
-                  {uploadHistory.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
-                      <td className="p-3 font-mono text-[11px] text-slate-500 dark:text-gray-400">
-                        <div className="flex items-center space-x-1.5">
-                          <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{new Date(item.uploadedAt).toLocaleString()}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 font-bold text-slate-800 dark:text-white">
-                        <div className="flex items-center space-x-2">
-                          <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>{item.filename}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-600 dark:text-gray-300">
-                        <div className="flex items-center space-x-1.5">
-                          <User className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{item.uploadedByName}</span>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full text-[11px]">
-                          +{item.recordCount} Employees
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        {item.detectedCustomFields && item.detectedCustomFields.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {item.detectedCustomFields.map(f => (
-                              <span key={f} className="bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-semibold px-2 py-0.5 rounded-md text-[10px] border border-teal-100 dark:border-teal-900/30">
-                                {f}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">Standard Fields Only</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] px-2.5 py-0.5 rounded-full border border-emerald-200/50 dark:border-emerald-800/40">
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          {item.fileData && (
-                            <button
-                              onClick={() => downloadUploadedFile(item)}
-                              className="text-emerald-600 hover:text-emerald-700 font-semibold text-[11px] flex items-center space-x-1 cursor-pointer"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download XL</span>
-                            </button>
-                          )}
-                          <button
-                            onClick={() => deleteSingleUploadHistoryLog(item.id)}
-                            className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-md transition-colors cursor-pointer"
-                            title="Delete Log Record"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   const getBranchFilteredTemplates = (tmpls: ChecklistItemTemplate[] = []) => {
     const targetBranch = activeEmployee?.branch || (selectedBranch !== "All" && selectedBranch !== "All Branches" ? selectedBranch : (globalSelectedBranch !== "All Branches" ? globalSelectedBranch : ""));
@@ -1760,6 +1163,8 @@ export default function DirectoryView({
                 <option value="Active">Active</option>
                 <option value="Probation">Probation</option>
                 <option value="Suspended">Suspended</option>
+                <option value="Resigned">Resigned</option>
+                <option value="Resignations">Resignations {branchResignations.length > 0 ? `(${branchResignations.length})` : ""}</option>
               </select>
             )}
           </div>
@@ -1780,6 +1185,65 @@ export default function DirectoryView({
           </div>
         )}
       </div>
+
+      {/* Prominent Resignations Notification Banner for Admin & HR */}
+      {pendingResignations.length > 0 && (role === "admin" || role === "hr") && (
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-300 dark:border-amber-700/60 shadow-md shadow-amber-500/5 animate-in fade-in duration-300">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center space-x-3.5">
+              <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-2xl shadow-md shadow-amber-500/25 shrink-0">
+                <LogOut className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
+                  <h4 className="font-display font-black text-slate-800 dark:text-white text-base">
+                    {pendingResignations.length} Pending Resignation {pendingResignations.length === 1 ? "Request" : "Requests"} Submitted
+                  </h4>
+                  <span className="px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-full bg-amber-500 text-white shadow-2xs animate-pulse">
+                    Action Required
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-gray-300 mt-1">
+                  Employees have submitted formal resignation and exit clearance requests directly through the portal awaiting your review and decision.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Review Cards */}
+            <div className="flex flex-wrap items-center gap-2">
+              {pendingResignations.map((req) => (
+                <div
+                  key={req.id}
+                  className="p-2 sm:px-3 sm:py-2 bg-white dark:bg-[#181818] border border-amber-300/80 dark:border-amber-700/80 rounded-xl shadow-xs flex items-center space-x-2.5"
+                >
+                  <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold flex items-center justify-center text-xs shrink-0 border border-amber-300/50">
+                    {req.employeeName ? req.employeeName.substring(0, 2).toUpperCase() : "EM"}
+                  </div>
+                  <div className="text-left min-w-0 pr-1">
+                    <p className="font-bold text-xs text-slate-800 dark:text-white truncate max-w-[130px] sm:max-w-[170px]">
+                      {req.employeeName}
+                    </p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold truncate max-w-[130px] sm:max-w-[170px]">
+                      {req.reason}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveEmpId(req.employeeId);
+                      setReviewingResignation(req);
+                    }}
+                    className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold text-[11px] rounded-lg shadow-2xs transition-all cursor-pointer flex items-center space-x-1 shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Review &amp; Decide</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Grid: Directory List and Detail Profile Pane */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1849,8 +1313,8 @@ export default function DirectoryView({
 
           {/* Segmented Status Filter Tabs */}
           {(role === "admin" || role === "hr") && (
-            <div className="grid grid-cols-5 gap-1 p-1 bg-slate-100/90 dark:bg-[#141414] rounded-xl mb-3.5 border border-slate-200/60 dark:border-[#222] w-full box-border overflow-hidden">
-              {(["All", "Active", "Probation", "Suspended", "Resigned"] as const).map((st) => {
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-[#141414] rounded-xl mb-3.5 border border-slate-200/60 dark:border-[#222] w-full overflow-x-auto scrollbar-none">
+              {(["All", "Active", "Probation", "Suspended", "Resigned", "Resignations"] as const).map((st) => {
                 const isSelected = selectedStatusFilter === st;
                 const count = accessibleEmployees.filter(e => {
                   const matchesSearch = e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1858,7 +1322,11 @@ export default function DirectoryView({
                     e.id.toLowerCase().includes(searchTerm.toLowerCase());
                   const matchesDept = selectedDept === "All" || e.department === selectedDept;
                   const matchesBranch = selectedBranch === "All" || (e.branch || "Mumbai Branch") === selectedBranch;
-                  const matchesStatus = st === "All" || (e.status || "Active") === st;
+                  const matchesStatus = st === "All"
+                    ? true
+                    : st === "Resignations"
+                    ? (resignationRequests || []).some(r => r.employeeId === e.id && r.status !== "Withdrawn")
+                    : (e.status || "Active") === st;
                   return matchesSearch && matchesDept && matchesBranch && matchesStatus;
                 }).length;
 
@@ -1868,6 +1336,7 @@ export default function DirectoryView({
                   Probation: "bg-amber-500",
                   Suspended: "bg-rose-500",
                   Resigned: "bg-purple-500",
+                  Resignations: "bg-orange-500",
                 };
 
                 const activeStyles = {
@@ -1876,24 +1345,43 @@ export default function DirectoryView({
                   Probation: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/50 shadow-xs font-bold",
                   Suspended: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/50 shadow-xs font-bold",
                   Resigned: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200/80 dark:border-purple-800/50 shadow-xs font-bold",
+                  Resignations: "bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200/80 dark:border-orange-800/50 shadow-xs font-bold",
                 };
 
                 return (
                   <button
                     key={st}
                     onClick={() => setSelectedStatusFilter(st)}
-                    className={`w-full flex items-center justify-center space-x-0.5 sm:space-x-1 py-1.5 px-0.5 sm:px-1 rounded-lg text-[10px] xl:text-[11px] transition-all cursor-pointer border whitespace-nowrap overflow-hidden ${
+                    className={`flex items-center space-x-1.5 py-1.5 px-3 rounded-lg text-xs transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
                       isSelected
                         ? activeStyles[st]
                         : "border-transparent text-slate-500 dark:text-gray-400 hover:text-slate-700 dark:hover:text-gray-200 hover:bg-white/40 dark:hover:bg-[#1a1a1a]"
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColors[st]}`}></span>
-                    <span className="font-semibold">{st}</span>
-                    <span className="text-[9px] sm:text-[10px] opacity-80 font-mono">({count})</span>
+                    <span className="font-semibold whitespace-nowrap">{st}</span>
+                    <span className="text-[10px] opacity-80 font-mono">({count})</span>
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {/* Branch Resignation Queue Summary when Resigned or Resignations filter is active */}
+          {(selectedStatusFilter === "Resigned" || selectedStatusFilter === "Resignations") && (
+            <div className="mb-3 p-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/30 rounded-xl border border-orange-200 dark:border-orange-900/60 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-orange-900 dark:text-orange-200 flex items-center gap-1.5">
+                  <LogOut className="w-3.5 h-3.5 text-orange-600" />
+                  Branch Resignation &amp; Exit Queue
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-200 text-orange-800 dark:bg-orange-900/80 dark:text-orange-300">
+                  {selectedBranch !== "All" ? selectedBranch : "All Branches"}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-gray-400">
+                Staff submitted formal resignations with notice periods, reasons, and exit handover status.
+              </p>
             </div>
           )}
 
@@ -1902,12 +1390,18 @@ export default function DirectoryView({
               const isActive = activeEmployee?.id === emp.id;
               const isSelf = emp.id === currentUserId;
               const empStatus = emp.status || "Active";
+              const empResignation = (resignationRequests || []).find(
+                r => r.employeeId === emp.id && r.status !== "Withdrawn"
+              );
+
               return (
                 <div
                   key={emp.id}
                   onClick={() => setActiveEmpId(emp.id)}
                   className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center space-x-3 ${isActive
                     ? "bg-emerald-50/75 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800/80 shadow-xs"
+                    : empResignation?.status === "Pending"
+                    ? "bg-amber-50/40 dark:bg-amber-950/15 hover:bg-amber-50/70 dark:hover:bg-amber-950/25 border-amber-200/80 dark:border-amber-800/40"
                     : "bg-slate-50/50 dark:bg-[#0a0a0a]/50 hover:bg-slate-50 dark:hover:bg-[#1a1a1a]/80 border-slate-100/50 dark:border-[#1a1a1a]"
                     }`}
                 >
@@ -1918,17 +1412,37 @@ export default function DirectoryView({
                       className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-gray-700"
                     />
                     <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-[#0f0f0f] ${
-                      empStatus === "Active" ? "bg-emerald-500" : empStatus === "Suspended" ? "bg-rose-500" : "bg-amber-500"
+                      empResignation?.status === "Pending"
+                        ? "bg-amber-500 animate-pulse"
+                        : empStatus === "Active"
+                        ? "bg-emerald-500"
+                        : empStatus === "Suspended"
+                        ? "bg-rose-500"
+                        : "bg-amber-500"
                     }`}></span>
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-1.5 min-w-0">
-                        <p className="font-semibold text-slate-700 dark:text-gray-300 text-xs truncate">
-                          {emp.fullName} {isSelf && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 font-bold px-1.5 py-0.2 rounded">Me</span>}
+                        <p className="font-semibold text-slate-700 dark:text-gray-300 text-xs truncate flex items-center gap-1.5">
+                          <span className="truncate">{emp.fullName}</span>
+                          <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-[#1a1a1a] px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-gray-700/80 shrink-0">
+                            {getEmployeeCode(emp)}
+                          </span>
+                          {isSelf && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-400 font-bold px-1.5 py-0.2 rounded shrink-0">Me</span>}
                         </p>
-                        {empStatus !== "Active" && (
+                        {empResignation?.status === "Pending" ? (
+                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white flex items-center gap-1 shadow-2xs animate-pulse shrink-0">
+                            <LogOut className="w-2.5 h-2.5" />
+                            RESIGNATION PENDING
+                          </span>
+                        ) : empResignation?.status === "Approved" ? (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40 flex items-center gap-1 shrink-0">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            EXIT CLEARANCE
+                          </span>
+                        ) : empStatus !== "Active" ? (
                           <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase tracking-wider shrink-0 ${
                             empStatus === "Suspended"
                               ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40"
@@ -1936,7 +1450,7 @@ export default function DirectoryView({
                           }`}>
                             {empStatus}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 font-sans ${
                         emp.role === "admin"
@@ -1979,6 +1493,9 @@ export default function DirectoryView({
                     <div>
                       <h2 className="text-xl font-bold font-display text-slate-800 dark:text-white flex items-center space-x-2">
                         <span>{activeEmployee.fullName}</span>
+                        <span className="text-xs font-mono font-bold text-slate-500 dark:text-gray-400 bg-slate-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg border border-slate-200/60 dark:border-gray-700/60">
+                          {getEmployeeCode(activeEmployee)}
+                        </span>
                         <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide ${activeEmployee.status === "Active"
                           ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
                           : "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400"
@@ -2005,6 +1522,25 @@ export default function DirectoryView({
                         <Pencil className="w-4.5 h-4.5" />
                       </button>
                     )}
+                    {(() => {
+                      const empResignation = (resignationRequests || []).find(
+                        r => r.employeeId === activeEmployee.id && r.status !== "Withdrawn"
+                      );
+                      if (!empResignation) return null;
+                      return (
+                        <button
+                          onClick={() => setReviewingResignation(empResignation)}
+                          className={`p-2 rounded-lg transition-all cursor-pointer ${
+                            empResignation.status === "Pending"
+                              ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 hover:bg-amber-200"
+                              : "hover:bg-white dark:hover:bg-[#1a1a1a] text-slate-500 dark:text-gray-400 hover:text-amber-500"
+                          }`}
+                          title={`Resignation Request: ${empResignation.status}`}
+                        >
+                          <LogOut className="w-4.5 h-4.5" />
+                        </button>
+                      );
+                    })()}
                     <a href={`mailto:${activeEmployee.email}`} className="p-2 hover:bg-white dark:hover:bg-[#1a1a1a] rounded-lg text-slate-500 dark:text-gray-400 hover:text-emerald-500 transition-all">
                       <Mail className="w-4.5 h-4.5" />
                     </a>
@@ -2013,6 +1549,100 @@ export default function DirectoryView({
                     </a>
                   </div>
                 </div>
+
+                {/* Resignation Status Alert Card */}
+                {(() => {
+                  const empResignation = (resignationRequests || []).find(
+                    r => r.employeeId === activeEmployee.id && r.status !== "Withdrawn"
+                  );
+                  if (!empResignation) return null;
+
+                  return (
+                    <div className={`mt-4 p-4 rounded-xl border ${
+                      empResignation.status === "Approved"
+                        ? "bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800"
+                        : empResignation.status === "Pending"
+                        ? "bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"
+                        : "bg-rose-50/70 dark:bg-rose-950/20 border-rose-300 dark:border-rose-800"
+                    }`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 dark:border-white/5 pb-2.5 mb-2.5">
+                        <div className="flex items-center space-x-2">
+                          <LogOut className={`w-4 h-4 ${
+                            empResignation.status === "Approved"
+                              ? "text-emerald-600"
+                              : empResignation.status === "Pending"
+                              ? "text-amber-600"
+                              : "text-rose-600"
+                          }`} />
+                          <h4 className="font-bold text-xs text-slate-800 dark:text-white">
+                            Resignation Request Status: <span className="uppercase">{empResignation.status}</span>
+                          </h4>
+                        </div>
+
+                        {(role === "admin" || role === "hr") && (
+                          <div className="flex items-center space-x-2">
+                            {empResignation.status === "Pending" ? (
+                              <button
+                                type="button"
+                                onClick={() => setReviewingResignation(empResignation)}
+                                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-extrabold rounded-lg text-xs cursor-pointer shadow-xs transition-all flex items-center space-x-1.5 self-start sm:self-auto"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Review &amp; Decide</span>
+                              </button>
+                            ) : empResignation.status === "Approved" ? (
+                              <button
+                                type="button"
+                                onClick={() => setReviewingResignation(empResignation)}
+                                className="px-3 py-1 bg-white hover:bg-slate-50 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-gray-300 font-bold rounded-lg text-xs cursor-pointer transition-all flex items-center space-x-1 self-start sm:self-auto"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Adjust Decision</span>
+                              </button>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block">Resignation Date</span>
+                          <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">{empResignation.resignationDate}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Last Working Date</span>
+                          <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">
+                            {empResignation.approvedLastWorkingDate || empResignation.lastWorkingDate}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Notice Period</span>
+                          <span className="font-semibold text-slate-700 dark:text-gray-300 font-mono">{empResignation.noticePeriodDays} Days</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Branch</span>
+                          <span className="font-semibold text-slate-700 dark:text-gray-300">{empResignation.branch}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 text-[11px] space-y-1">
+                        <p className="text-slate-600 dark:text-gray-300">
+                          <strong className="text-slate-700 dark:text-gray-200">Reason:</strong> {empResignation.reason}
+                        </p>
+                        {empResignation.remarks && (
+                          <p className="text-slate-500 dark:text-gray-400">
+                            <strong>Remarks:</strong> {empResignation.remarks}
+                          </p>
+                        )}
+                        {empResignation.adminRemarks && (
+                          <p className="text-amber-800 dark:text-amber-300 font-medium">
+                            <strong>HR/Admin Note:</strong> {empResignation.adminRemarks}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Biography */}
                 {activeEmployee.bio && (
@@ -2268,6 +1898,9 @@ export default function DirectoryView({
                         templates={getBranchFilteredTemplates(onboardingChecklistTemplates)}
                         currentUserRole={role}
                         currentUserId={currentUserId}
+                        resignationRequest={(resignationRequests || []).find(r => r.employeeId === activeEmployee.id && r.status !== "Withdrawn")}
+                        onOpenResignationModal={() => setShowEmployeeResignationModal(true)}
+                        onWithdrawResignation={onWithdrawResignation}
                         onCreateTemplate={onCreateChecklistTemplate}
                         onDeleteTemplate={onDeleteChecklistTemplate}
                         onUploadDocument={async (empId, itemId, file, category) => {
@@ -2392,6 +2025,9 @@ export default function DirectoryView({
                         templates={getBranchFilteredTemplates(exitChecklistTemplates)}
                         currentUserRole={role}
                         currentUserId={currentUserId}
+                        resignationRequest={(resignationRequests || []).find(r => r.employeeId === activeEmployee.id && r.status !== "Withdrawn")}
+                        onOpenResignationModal={() => setShowEmployeeResignationModal(true)}
+                        onWithdrawResignation={onWithdrawResignation}
                         onCreateTemplate={onCreateChecklistTemplate}
                         onDeleteTemplate={onDeleteChecklistTemplate}
                         onUploadDocument={async (empId, itemId, file, category) => {
@@ -2410,9 +2046,7 @@ export default function DirectoryView({
                           }
                         }}
                         onInitiateResignation={async (empId) => {
-                          if (onInitiateResignation) {
-                            await onInitiateResignation(empId);
-                          }
+                          setShowEmployeeResignationModal(true);
                         }}
                       />
 
@@ -3037,6 +2671,105 @@ export default function DirectoryView({
                           </span>
                         )}
                       </div>
+                    </div>
+
+                    {/* TDS Configuration Toggle */}
+                    <div className="p-3 bg-white dark:bg-[#1a1a1a] rounded-xl border border-slate-200 dark:border-[#252525] shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center space-x-2.5 cursor-pointer text-xs font-bold text-slate-700 dark:text-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={onboardTdsOptIn}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setOnboardTdsOptIn(checked);
+                              if (!checked) {
+                                setSalaryTds("0");
+                              } else {
+                                if (onboardTdsMode === "slab") {
+                                  recomputeOnboardSalaryComponents(salaryBasic, onboardIsPfExempt, onboardIsEsiExempt);
+                                } else {
+                                  setSalaryTds(onboardCustomTds || "0");
+                                }
+                              }
+                            }}
+                            className="w-4 h-4 accent-violet-500 rounded cursor-pointer"
+                          />
+                          <span>Enable TDS / Income Tax Deduction</span>
+                        </label>
+                        {!onboardTdsOptIn ? (
+                          <span className="text-[10px] font-extrabold bg-violet-500 text-white px-2 py-0.5 rounded-full shadow-xs">
+                            EXEMPTED (₹0 TDS)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            TDS Active
+                          </span>
+                        )}
+                      </div>
+
+                      {onboardTdsOptIn && (
+                        <div className="space-y-2 pt-1 border-t border-slate-100 dark:border-[#252525]">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">TDS Calculation Mode</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOnboardTdsMode("slab");
+                                recomputeOnboardSalaryComponents(salaryBasic, onboardIsPfExempt, onboardIsEsiExempt);
+                              }}
+                              className={`py-2 text-[11px] font-semibold rounded-xl border transition-colors cursor-pointer ${
+                                onboardTdsMode === "slab"
+                                  ? "bg-violet-500 text-white border-violet-500"
+                                  : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-500 dark:text-gray-400 border-slate-200 dark:border-[#252525] hover:border-violet-300"
+                              }`}
+                            >
+                              📊 Slab-Based (Auto)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOnboardTdsMode("custom");
+                                setSalaryTds(onboardCustomTds || "0");
+                              }}
+                              className={`py-2 text-[11px] font-semibold rounded-xl border transition-colors cursor-pointer ${
+                                onboardTdsMode === "custom"
+                                  ? "bg-violet-500 text-white border-violet-500"
+                                  : "bg-slate-50 dark:bg-[#0a0a0a] text-slate-500 dark:text-gray-400 border-slate-200 dark:border-[#252525] hover:border-violet-300"
+                              }`}
+                            >
+                              ✏️ Fixed Custom Amount
+                            </button>
+                          </div>
+
+                          {onboardTdsMode === "slab" && (
+                            <p className="text-[10px] text-slate-400">
+                              Auto-computed from annual gross via income tax slabs (per payroll config).
+                            </p>
+                          )}
+
+                          {onboardTdsMode === "custom" && (
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 dark:text-gray-400 mb-1">Monthly TDS Amount (INR)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">₹</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={onboardCustomTds}
+                                  onChange={e => {
+                                    setOnboardCustomTds(e.target.value);
+                                    setSalaryTds(e.target.value || "0");
+                                  }}
+                                  placeholder="e.g. 5000"
+                                  className="w-full bg-slate-50 dark:bg-[#0a0a0a] text-slate-700 dark:text-gray-200 pl-7 pr-3 py-2 text-xs rounded-xl border border-violet-300 dark:border-violet-700 focus:outline-none focus:border-violet-500 font-mono font-bold"
+                                />
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-1">This fixed monthly amount will override the auto-slab calculation.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -4208,205 +3941,7 @@ export default function DirectoryView({
           </div>
         </div>
       )}
-      {/* Bulk Upload Excel Modal */}
-      {showBulkModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200 my-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-teal-50 dark:bg-teal-950/40 rounded-2xl flex items-center justify-center text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-900/30">
-                  <FileSpreadsheet className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-display font-bold text-slate-800 dark:text-white text-base sm:text-lg">
-                    Bulk Onboard Employees
-                  </h2>
-                  <p className="text-xs text-slate-400 dark:text-gray-500">
-                    Upload an Excel (.xlsx / .xls / .csv) file to add multiple employees at once.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowBulkModal(false);
-                  setBulkFile(null);
-                  setParsedBulkData([]);
-                  setBulkError(null);
-                }}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 rounded-xl hover:bg-slate-50 dark:hover:bg-[#1a1a1a] transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-
-
-            {/* File Upload Zone */}
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-gray-300">
-                Select or Drop Excel / CSV File:
-              </label>
-
-              <div
-                onClick={() => bulkFileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${bulkFile
-                  ? "border-teal-500 bg-teal-50/20 dark:bg-teal-950/10"
-                  : "border-slate-200 dark:border-[#222] hover:border-emerald-500 bg-slate-50/50 dark:bg-[#0a0a0a]"
-                  }`}
-              >
-                <input
-                  ref={bulkFileInputRef}
-                  type="file"
-                  accept=".xlsx, .xls, .csv"
-                  onChange={handleBulkFileChange}
-                  className="hidden"
-                />
-
-                <Upload className="w-8 h-8 mx-auto text-slate-400 dark:text-gray-500 mb-2" />
-
-                {bulkFile ? (
-                  <div>
-                    <span className="font-bold text-slate-800 dark:text-white text-sm block">
-                      {bulkFile.name}
-                    </span>
-                    <span className="text-xs text-slate-400 dark:text-gray-500">
-                      {(bulkFile.size / 1024).toFixed(1)} KB • Click to change file
-                    </span>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="font-semibold text-slate-700 dark:text-gray-300 text-xs block">
-                      Click to browse or drag & drop .xlsx / .csv file here
-                    </span>
-                    <span className="text-[11px] text-slate-400 dark:text-gray-500 mt-1 block">
-                      Supports standard columns + any new dynamic columns
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Parsing Errors */}
-            {bulkError && (
-              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-xl p-3 text-xs text-rose-600 dark:text-rose-400 flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{bulkError}</span>
-              </div>
-            )}
-
-            {/* Parsed Data Preview Section */}
-            {parsedBulkData.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-slate-800 dark:text-white text-xs">
-                      Parsed {parsedBulkData.length} Employee{parsedBulkData.length > 1 ? "s" : ""}
-                    </span>
-                    <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      Ready to Import
-                    </span>
-                  </div>
-
-                  {customFieldHeaders.length > 0 && (
-                    <div className="flex items-center space-x-1.5 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 px-2.5 py-1 rounded-lg text-[11px]">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span className="font-semibold">
-                        New Dynamic Fields Detected: {customFieldHeaders.join(", ")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Information Callout */}
-                <div className="bg-slate-50 dark:bg-[#0a0a0a] border border-slate-100 dark:border-[#1a1a1a] rounded-xl p-2.5 text-[11px] text-slate-500 dark:text-gray-400 flex items-center justify-between">
-                  <span>
-                    💡 <strong>Smart Defaults:</strong> Missing optional fields (joining date, bank details, emergency contacts, salary structure) will be auto-populated automatically.
-                  </span>
-                </div>
-
-                {/* Preview Table */}
-                <div className="border border-slate-100 dark:border-[#1a1a1a] rounded-xl overflow-hidden max-h-48 overflow-y-auto custom-scrollbar">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-[#121212] text-slate-600 dark:text-gray-300 border-b border-slate-100 dark:border-[#1a1a1a] sticky top-0">
-                      <tr>
-                        <th className="p-2.5 font-bold">#</th>
-                        <th className="p-2.5 font-bold">Full Name</th>
-                        <th className="p-2.5 font-bold">Email</th>
-                        <th className="p-2.5 font-bold">Role / Dept</th>
-                        <th className="p-2.5 font-bold">Phone</th>
-                        {customFieldHeaders.map(ch => (
-                          <th key={ch} className="p-2.5 font-bold text-teal-600 dark:text-teal-400">
-                            {ch.toLowerCase() === "pan" ? "PAN Number" : ch.toLowerCase() === "uan" ? "UAN Number" : ch.toUpperCase()} ⭐
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-[#1a1a1a] text-slate-700 dark:text-gray-300 font-medium">
-                      {parsedBulkData.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151515]">
-                          <td className="p-2.5 font-mono text-[11px] text-slate-400">{idx + 1}</td>
-                          <td className="p-2.5 font-bold text-slate-800 dark:text-white">
-                            {emp.fullName || emp.name || `Employee ${idx + 1}`}
-                          </td>
-                          <td className="p-2.5 text-slate-500 dark:text-gray-400 font-mono text-[11px]">
-                            {emp.email || "(Auto-generated)"}
-                          </td>
-                          <td className="p-2.5">
-                            {emp.role || "employee"} • {emp.department || "Loans"}
-                          </td>
-                          <td className="p-2.5 font-mono text-[11px]">
-                            {emp.phone || "+91 99999 00000"}
-                          </td>
-                          {customFieldHeaders.map(ch => (
-                            <td key={ch} className="p-2.5 font-mono text-teal-600 dark:text-teal-300 font-bold text-[11px]">
-                              {String(emp.customFields?.[ch] ?? "-")}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100 dark:border-[#1a1a1a]">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowBulkModal(false);
-                  setBulkFile(null);
-                  setParsedBulkData([]);
-                }}
-                className="px-4 py-2 text-xs font-bold text-slate-500 dark:text-gray-400 hover:bg-slate-50 dark:hover:bg-[#1a1a1a] rounded-xl transition-all cursor-pointer"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                disabled={!parsedBulkData.length || isProcessingBulk}
-                onClick={handleExecuteBulkSubmit}
-                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all shadow-md cursor-pointer"
-              >
-                {isProcessingBulk ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Adding Employees...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4" />
-                    <span>Add {parsedBulkData.length || ""} Employees</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── MANAGE DEPARTMENTS & BRANCHES MODAL ── */}
       {showManageCollections && role === "admin" && (
@@ -4525,6 +4060,32 @@ export default function DirectoryView({
 
           </div>
         </div>
+      )}
+
+      {/* Resignation Review Modal */}
+      {reviewingResignation && (
+        <ResignationReviewModal
+          request={reviewingResignation}
+          isOpen={!!reviewingResignation}
+          onClose={() => setReviewingResignation(null)}
+          onReview={async ({ id, status, reviewRemarks, approvedLastWorkingDate }) => {
+            if (onReviewResignation) await onReviewResignation(id, status, reviewRemarks, approvedLastWorkingDate);
+            setReviewingResignation(null);
+          }}
+        />
+      )}
+
+      {/* Employee Resignation Submission Modal */}
+      {showEmployeeResignationModal && activeEmployee && (
+        <ResignationModal
+          employee={activeEmployee}
+          isOpen={showEmployeeResignationModal}
+          onClose={() => setShowEmployeeResignationModal(false)}
+          onSubmit={async (data) => {
+            if (onSubmitResignation) await onSubmitResignation(data);
+            setShowEmployeeResignationModal(false);
+          }}
+        />
       )}
     </div>
   );

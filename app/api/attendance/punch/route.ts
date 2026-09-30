@@ -5,6 +5,7 @@ import { supabase, syncPunchToSupabase, syncFineToSupabase, getCompanyIdForEmplo
 
 import os from "os";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
+import { toBranchName, toBranchId } from "@/src/lib/branchUtils";
 
 // Helper: extract and normalize client IP from request headers
 function getClientIp(request: Request): string {
@@ -12,8 +13,10 @@ function getClientIp(request: Request): string {
   const realIp = request.headers.get("x-real-ip");
   const cfIp = request.headers.get("cf-connecting-ip");
   const vercelIp = request.headers.get("x-vercel-forwarded-for");
+  const clientIpHeader = request.headers.get("x-client-ip");
+  const trueClientIp = request.headers.get("true-client-ip");
 
-  let raw = cfIp || vercelIp || (forwarded ? forwarded.split(",")[0].trim() : (realIp || ""));
+  let raw = cfIp || vercelIp || trueClientIp || clientIpHeader || (forwarded ? forwarded.split(",")[0].trim() : (realIp || ""));
   if (!raw) {
     raw = "127.0.0.1";
   }
@@ -30,6 +33,20 @@ function normalizeIp(ip: string): string {
     clean = "127.0.0.1";
   }
   return clean;
+}
+
+function isPrivateIp(ip: string): boolean {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") return true;
+  if (ip.startsWith("10.")) return true;
+  if (ip.startsWith("192.168.")) return true;
+  if (ip.startsWith("172.")) {
+    const parts = ip.split(".");
+    if (parts.length >= 2) {
+      const second = parseInt(parts[1], 10);
+      if (second >= 16 && second <= 31) return true;
+    }
+  }
+  return false;
 }
 
 function getLocalMachineIps(): string[] {
@@ -51,11 +68,18 @@ function getLocalMachineIps(): string[] {
 
 /**
  * Checks whether a given IPv4 address falls within a CIDR subnet.
- * e.g. isIpInCidr("223.233.66.140", "223.233.66.0/24") => true
+ * e.g. isIpInCidr("223.233.72.151", "223.233.72.0/24") => true
  */
 function isIpInCidr(ip: string, cidr: string): boolean {
   try {
+    if (!ip || !cidr) return false;
+    const ipClean = ip.trim();
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ipClean)) return false;
+
     const [network, prefixStr] = cidr.split("/");
+    const netClean = (network || "").trim();
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(netClean)) return false;
+
     const prefix = parseInt(prefixStr, 10);
     if (isNaN(prefix) || prefix < 0 || prefix > 32) return false;
 
@@ -64,7 +88,7 @@ function isIpInCidr(ip: string, cidr: string): boolean {
     };
 
     const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
-    return (ipToInt(ip) & mask) === (ipToInt(network) & mask);
+    return (ipToInt(ipClean) & mask) === (ipToInt(netClean) & mask);
   } catch {
     return false;
   }
@@ -78,11 +102,11 @@ function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
     const normalized = normalizeIp(entry);
     if (!normalized) continue;
 
-    // CIDR range match (e.g. 223.233.66.0/24)
+    // CIDR range match (e.g. 223.233.72.0/24)
     if (normalized.includes("/")) {
       if (isIpInCidr(clientIp, normalized)) return true;
-      // Also check all local machine IPs for localhost scenario
-      if (clientIp === "127.0.0.1") {
+      // If client is on 127.0.0.1, check local machine IPs ONLY if the allowed entry is also private
+      if (clientIp === "127.0.0.1" && isPrivateIp(normalized.split("/")[0])) {
         const machineIps = getLocalMachineIps();
         if (machineIps.some(mIp => isIpInCidr(mIp, normalized))) return true;
       }
@@ -90,8 +114,8 @@ function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
       // 1. Exact match
       if (normalized === clientIp) return true;
 
-      // 2. Localhost: check machine IPs against exact allowed entry
-      if (clientIp === "127.0.0.1" && getLocalMachineIps().includes(normalized)) return true;
+      // 2. Localhost: check machine IPs ONLY if the allowed entry is also private
+      if (clientIp === "127.0.0.1" && isPrivateIp(normalized) && getLocalMachineIps().includes(normalized)) return true;
     }
   }
 
@@ -117,45 +141,154 @@ export async function POST(request: Request) {
     const companyId = await getCompanyIdForEmployee(employeeId);
     const dbClient = supabaseAdmin || supabase;
 
-    // ─── WiFi Restriction Check ───────────────────────────────────────────────
-    let enabled = db.wifiRestrictionSettings?.enabled ?? false;
-    let allowedIpsList: string[] = db.wifiRestrictionSettings?.allowedIps && db.wifiRestrictionSettings.allowedIps.length > 0
-      ? db.wifiRestrictionSettings.allowedIps
-      : (db.wifiRestrictionSettings?.allowedIp ? db.wifiRestrictionSettings.allowedIp.split(",").map(s => s.trim()).filter(Boolean) : []);
-
-    // Always query dynamic WiFi restriction settings directly from Supabase DB first
-    if (dbClient) {
+    // ─── 1. Determine Employee & Employee Branch ──────────────────────────────
+    let emp = (db.employees || []).find((e: any) => String(e.id || "").toLowerCase() === String(employeeId || "").toLowerCase());
+    if (!emp && dbClient) {
       try {
-        let wifiData = null;
-        if (companyId) {
-          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("company_id", companyId).maybeSingle();
-          if (data) wifiData = data;
+        const { data: sbEmp } = await dbClient
+          .from("employees")
+          .select("*")
+          .ilike("id", employeeId)
+          .maybeSingle();
+        if (sbEmp) {
+          emp = {
+            ...sbEmp,
+            fullName: sbEmp.full_name || sbEmp.fullName,
+            branch: sbEmp.branch
+          };
         }
-        if (!wifiData) {
-          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("id", "default").maybeSingle();
-          if (data) wifiData = data;
-        }
-        if (wifiData) {
-          enabled = wifiData.enabled ?? false;
-          const rawStr = wifiData.allowed_ip || "";
-          allowedIpsList = rawStr.split(",").map((s: string) => s.trim()).filter(Boolean);
-        }
-      } catch (e) {
-        console.warn("Error reading wifi_restriction_settings from Supabase:", e);
+      } catch (err) {
+        console.warn("Error fetching employee in punch route:", err);
       }
     }
 
+    const empBranch = emp?.branch ? toBranchName(emp.branch) : "";
+    const empBranchId = emp?.branch ? toBranchId(emp.branch) : "";
+
+    // ─── 2. Resolve WiFi Restriction Settings (Branch-Specific Priority) ───────
+    let enabled = false;
+    let allowedIpsList: string[] = [];
+    let restrictionBranchName = empBranch || "";
+
+    // A. Query Supabase for Branch-Specific settings first
+    if (dbClient && (empBranch || empBranchId)) {
+      try {
+        const bName = toBranchName(empBranch);
+        const bId = toBranchId(empBranch);
+        let bQuery = dbClient
+          .from("wifi_restriction_settings")
+          .select("*")
+          .not("branch", "is", null);
+        if (companyId) {
+          bQuery = bQuery.eq("company_id", companyId);
+        }
+        bQuery = bQuery.or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${empBranch},branch.ilike.${bName}`);
+        const { data: bData } = await bQuery.maybeSingle();
+        if (bData) {
+          enabled = bData.enabled ?? false;
+          const rawStr = bData.allowed_ip || "";
+          allowedIpsList = rawStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+          restrictionBranchName = bName;
+        }
+      } catch (e) {
+        console.warn("Error reading branch wifi_restriction_settings from Supabase in punch:", e);
+      }
+    }
+
+    // B. Check in-memory db.branchWifiSettings if not resolved from Supabase
+    if (!allowedIpsList.length && (empBranch || empBranchId) && db.branchWifiSettings) {
+      const bSetting = db.branchWifiSettings[empBranch]
+        || db.branchWifiSettings[toBranchName(empBranch)]
+        || db.branchWifiSettings[toBranchId(empBranch)]
+        || (emp?.branch ? db.branchWifiSettings[emp.branch] : null);
+      if (bSetting) {
+        enabled = bSetting.enabled ?? false;
+        allowedIpsList = (bSetting.allowedIps && bSetting.allowedIps.length > 0)
+          ? bSetting.allowedIps
+          : (bSetting.allowedIp ? bSetting.allowedIp.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
+        restrictionBranchName = empBranch;
+      }
+    }
+
+    // C. Fallback to Company-Level / Global settings if no branch settings exist
+    if (!allowedIpsList.length) {
+      if (dbClient) {
+        try {
+          let globalData = null;
+          if (companyId) {
+            const { data: cData } = await dbClient
+              .from("wifi_restriction_settings")
+              .select("*")
+              .eq("company_id", companyId)
+              .is("branch", null)
+              .maybeSingle();
+            if (cData) globalData = cData;
+          }
+          if (!globalData) {
+            const { data: defData } = await dbClient
+              .from("wifi_restriction_settings")
+              .select("*")
+              .eq("id", "default")
+              .maybeSingle();
+            if (defData) globalData = defData;
+          }
+          if (globalData) {
+            enabled = globalData.enabled ?? false;
+            const rawStr = globalData.allowed_ip || "";
+            allowedIpsList = rawStr.split(",").map((s: string) => s.trim()).filter(Boolean);
+            restrictionBranchName = "Office";
+          }
+        } catch (e) {
+          console.warn("Error reading global wifi_restriction_settings in punch:", e);
+        }
+      }
+
+      if (!allowedIpsList.length && db.wifiRestrictionSettings) {
+        enabled = db.wifiRestrictionSettings.enabled ?? false;
+        allowedIpsList = (db.wifiRestrictionSettings.allowedIps && db.wifiRestrictionSettings.allowedIps.length > 0)
+          ? db.wifiRestrictionSettings.allowedIps
+          : (db.wifiRestrictionSettings?.allowedIp ? db.wifiRestrictionSettings.allowedIp.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
+        restrictionBranchName = "Office";
+      }
+    }
+
+    // ─── 3. Enforce WiFi Restriction If Enabled ───────────────────────────────
     if (enabled && allowedIpsList.length > 0) {
-      const clientIp = getClientIp(request);
-      const isAllowed = isIpMatched(clientIp, allowedIpsList);
+      const serverDetectedIp = getClientIp(request);
+      const clientReportedIp = normalizeIp(body.clientIp || "");
+
+      const serverIsPublic = serverDetectedIp && !isPrivateIp(serverDetectedIp);
+      const clientIsPublic = clientReportedIp && !isPrivateIp(clientReportedIp);
+
+      let isAllowed = false;
+      let evaluatedIp = serverDetectedIp;
+
+      if (serverIsPublic) {
+        isAllowed = isIpMatched(serverDetectedIp, allowedIpsList);
+        evaluatedIp = serverDetectedIp;
+        // If client also reported public IP and it is not matched, reject
+        if (isAllowed && clientIsPublic && !isIpMatched(clientReportedIp, allowedIpsList)) {
+          isAllowed = false;
+          evaluatedIp = clientReportedIp;
+        }
+      } else if (clientIsPublic) {
+        isAllowed = isIpMatched(clientReportedIp, allowedIpsList);
+        evaluatedIp = clientReportedIp;
+      } else {
+        // Both are private/localhost
+        isAllowed = isIpMatched(serverDetectedIp, allowedIpsList);
+        evaluatedIp = serverDetectedIp;
+      }
 
       if (!isAllowed) {
+        const branchNotice = restrictionBranchName ? ` (${restrictionBranchName})` : "";
         return NextResponse.json(
           {
-            error: `WiFi Restriction: You must be connected to authorized office WiFi network. (Your current IP: ${clientIp})`,
+            error: `📶 WiFi Attendance Restriction${branchNotice}: You must be connected to authorized office WiFi to punch attendance. (Detected IP: ${evaluatedIp || "Unrecognized"})`,
             wifiRestricted: true,
             allowedIps: allowedIpsList,
-            yourIp: clientIp
+            yourIp: evaluatedIp,
+            branch: restrictionBranchName
           },
           { status: 403 }
         );

@@ -13,7 +13,7 @@ import {
   Holiday, Policy, ExpenseClaim, ExpenseCategory, InventoryItem,
   InventoryRequest, Fine, Reimbursement, Payslip, SimulatedEmail, UserRole, Meeting, CorporateAllowanceFaq,
   SeatLayout, Room, RoomBooking, InfractionType, ChecklistItemTemplate,
-  GrievanceTicket, PerformanceRecord
+  GrievanceTicket, PerformanceRecord, ResignationRequest
 } from "./types";
 import { toBranchId, toBranchName } from "./lib/branchUtils";
 import * as XLSX from "xlsx";
@@ -287,6 +287,7 @@ export default function App() {
   const [corporateAllowancesFaqs, setCorporateAllowancesFaqs] = useState<CorporateAllowanceFaq[]>([]);
   const [onboardingChecklistTemplates, setOnboardingChecklistTemplates] = useState<ChecklistItemTemplate[]>([]);
   const [exitChecklistTemplates, setExitChecklistTemplates] = useState<ChecklistItemTemplate[]>([]);
+  const [resignationRequests, setResignationRequests] = useState<ResignationRequest[]>([]);
   const [supabaseStatus, setSupabaseStatus] = useState<{ connected: boolean; synced: boolean; error?: string }>({
     connected: false,
     synced: false
@@ -320,6 +321,22 @@ export default function App() {
   });
 
   const [showLeaveCount, setShowLeaveCount] = useState<boolean>(true);
+  const [employeeSelfEdit, setEmployeeSelfEdit] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("snailhr_employeeSelfEdit");
+      if (saved !== null) return saved === "true";
+    }
+    return false;
+  });
+  const [branchEmployeeSelfEdit, setBranchEmployeeSelfEdit] = useState<Record<string, boolean>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("snailhr_branchEmployeeSelfEdit");
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {};
+  });
 
   // Global Toast State
   const [toast, setToast] = useState<{ id: string; message: string; type: "success" | "error" | "info" } | null>(null);
@@ -466,6 +483,7 @@ export default function App() {
       setDesignations(data.designations || []);
       setOnboardingChecklistTemplates(data.onboardingChecklistTemplates || []);
       setExitChecklistTemplates(data.exitChecklistTemplates || []);
+      setResignationRequests(data.resignationRequests || []);
       if (data.timingSettings) {
         setTimingSettings(data.timingSettings);
       }
@@ -604,6 +622,18 @@ export default function App() {
       if (data.branchWifiSettings) setBranchWifiSettings(data.branchWifiSettings);
       if (data.branchCodePrefixes) setBranchCodePrefixes(data.branchCodePrefixes);
       if (data.empCodePrefix) setEmpCodePrefix(data.empCodePrefix);
+      if (data.branchEmployeeSelfEdit) {
+        setBranchEmployeeSelfEdit(data.branchEmployeeSelfEdit);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("snailhr_branchEmployeeSelfEdit", JSON.stringify(data.branchEmployeeSelfEdit));
+        }
+      }
+      if (data.employeeSelfEdit !== undefined) {
+        setEmployeeSelfEdit(data.employeeSelfEdit);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("snailhr_employeeSelfEdit", String(data.employeeSelfEdit));
+        }
+      }
       setExpenseCategories(data.expenseCategories || []);
       setInfractionTypes(data.infractionTypes || []);
       setCorporateAllowancesFaqs(data.corporateAllowancesFaqs || []);
@@ -766,39 +796,6 @@ export default function App() {
     }
   };
 
-  // 1b. Bulk Onboard employees with upload history tracking
-  const handleBulkOnboardEmployee = async (payload: { employees: any[]; filename?: string; fileData?: string } | any[]) => {
-    try {
-      const employeesList = Array.isArray(payload) ? payload : payload.employees;
-      const filename = Array.isArray(payload) ? undefined : payload.filename;
-      const fileData = Array.isArray(payload) ? undefined : payload.fileData;
-
-      showToast(`Processing bulk upload of ${employeesList.length} employees...`, "info");
-      const res = await fetch("/api/employees/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employees: employeesList,
-          filename: filename || `Employees_Import_${new Date().toISOString().slice(0, 10)}.xlsx`,
-          fileData: fileData || "",
-          uploadedByName: currentEmployee?.fullName || "Admin User",
-          uploadedById: currentEmployee?.id || "",
-          companyId
-        })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        await refreshDatabase();
-        showToast(`Successfully onboarded ${json.count || employeesList.length} employees and archived upload record!`, "success");
-      } else {
-        const errJson = await res.json();
-        showToast(`Bulk upload failed: ${errJson.error || "Server error"}`, "error");
-      }
-    } catch (err: any) {
-      console.error(err);
-      showToast(`Error uploading bulk employees: ${err?.message || err}`, "error");
-    }
-  };
 
   // 2. Toggle onboarding tasks
   const handleToggleOnboardingTask = async (empId: string, taskId: string, completed: boolean) => {
@@ -983,10 +980,34 @@ export default function App() {
       };
 
       const clientDate = getLocalDateString(new Date());
+
+      // Quickly attempt client public IP detection (timeout 1200ms so punch is instantaneous)
+      let detectedClientIp = "";
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const [ipifyRes, localIpRes] = await Promise.allSettled([
+          fetch("https://api.ipify.org?format=json", { signal: controller.signal }).then(r => r.json()).catch(() => null),
+          fetch("/api/get-my-ip", { signal: controller.signal }).then(r => r.json()).catch(() => null)
+        ]);
+        clearTimeout(timeoutId);
+
+        const ipifyIp = (ipifyRes.status === "fulfilled" && ipifyRes.value?.ip) ? String(ipifyRes.value.ip).trim() : "";
+        const localPubIp = (localIpRes.status === "fulfilled" && (localIpRes.value?.publicIp || localIpRes.value?.ip)) ? String(localIpRes.value.publicIp || localIpRes.value.ip).trim() : "";
+        detectedClientIp = ipifyIp || localPubIp || "";
+      } catch (e) {
+        // Silently continue if detection fails or times out
+      }
+
       const res = await fetch("/api/attendance/punch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, type, date: clientDate })
+        body: JSON.stringify({ 
+          employeeId, 
+          type, 
+          date: clientDate,
+          clientIp: detectedClientIp || undefined
+        })
       });
 
       let data: any = {};
@@ -1958,9 +1979,94 @@ export default function App() {
     }
   };
 
-  const handleCreateChecklistTemplate = async (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit" }) => {
+  const handleSubmitResignation = async (resignationData: Partial<ResignationRequest>) => {
     try {
-      const branchToAssign = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+      showToast("Submitting formal resignation request...", "info");
+      const branchToAssign = resignationData.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
+      const res = await fetch("/api/resignations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...resignationData,
+          companyId,
+          branch: branchToAssign
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.resignation) {
+        setResignationRequests(prev => [data.resignation, ...prev.filter(r => r.id !== data.resignation.id)]);
+        showToast("Formal resignation submitted successfully! HR & Admin have been notified.", "success");
+        await refreshDatabase();
+      } else {
+        showToast(data.error || "Failed to submit resignation request", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Failed to submit resignation", "error");
+    }
+  };
+
+  const handleReviewResignation = async (
+    reqId: string,
+    status: "Approved" | "Rejected",
+    adminRemarks?: string,
+    approvedLastWorkingDate?: string
+  ) => {
+    try {
+      const reviewer = currentEmployee ? `${currentEmployee.fullName} (${currentEmployee.id})` : "HR Admin";
+      showToast(`${status === "Approved" ? "Approving" : "Rejecting"} resignation...`, "info");
+      const res = await fetch("/api/resignations", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: reqId,
+          status,
+          adminRemarks,
+          approvedLastWorkingDate,
+          reviewedBy: reviewer
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.resignation) {
+        setResignationRequests(prev => prev.map(r => r.id === reqId ? data.resignation : r));
+        showToast(
+          status === "Approved"
+            ? "Resignation approved! Employee status marked as Resigned and Exit Checklist unlocked."
+            : "Resignation request rejected / employee retained.",
+          "success"
+        );
+        await refreshDatabase();
+      } else {
+        showToast(data.error || "Failed to review resignation", "error");
+      }
+    } catch (err: any) {
+      showToast(err?.message || "Error reviewing resignation", "error");
+    }
+  };
+
+  const handleWithdrawResignation = async (reqId: string) => {
+    try {
+      showToast("Withdrawing resignation request...", "info");
+      const res = await fetch("/api/resignations", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: reqId, status: "Withdrawn" })
+      });
+      const data = await res.json();
+      if (res.ok && data.resignation) {
+        setResignationRequests(prev => prev.map(r => r.id === reqId ? data.resignation : r));
+        showToast("Resignation request withdrawn.", "info");
+        await refreshDatabase();
+      } else {
+        showToast(data.error || "Failed to withdraw resignation", "error");
+      }
+    } catch (err: any) {
+      showToast("Failed to withdraw resignation", "error");
+    }
+  };
+
+  const handleCreateChecklistTemplate = async (template: { title: string; description: string; category: string; required: boolean; type: "onboarding" | "exit"; branch?: string }) => {
+    try {
+      const branchToAssign = template.branch || (selectedBranch !== "All Branches" ? selectedBranch : undefined);
       const res = await fetch("/api/checklist-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2366,6 +2472,41 @@ export default function App() {
     } catch (err) {
       console.error("Failed to save leave count visibility setting:", err);
       showToast("Failed to save leave count visibility setting.", "error");
+    }
+  };
+
+  const handleToggleEmployeeSelfEdit = async (val: boolean) => {
+    const branchToSave = selectedBranch !== "All Branches" ? selectedBranch : undefined;
+    if (branchToSave) {
+      setBranchEmployeeSelfEdit(prev => {
+        const updated = { ...prev, [branchToSave]: val };
+        if (typeof window !== "undefined") {
+          localStorage.setItem("snailhr_branchEmployeeSelfEdit", JSON.stringify(updated));
+        }
+        return updated;
+      });
+    } else {
+      setEmployeeSelfEdit(val);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("snailhr_employeeSelfEdit", String(val));
+      }
+    }
+    try {
+      const activeCompanyId = (typeof window !== "undefined" && localStorage.getItem("snailhr_companyId")) || companyId;
+      const res = await fetch("/api/config/employee-self-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeSelfEdit: val, companyId: activeCompanyId, branch: branchToSave })
+      });
+      if (res.ok) {
+        showToast(val ? `Employee profile editing ENABLED${branchToSave ? ` (${branchToSave})` : ""}` : `Employee profile editing DISABLED${branchToSave ? ` (${branchToSave})` : ""}`, "success");
+        await refreshDatabase();
+      } else {
+        showToast("Failed to update employee self-edit setting.", "error");
+      }
+    } catch (err) {
+      console.error("Failed to save employee self-edit setting:", err);
+      showToast("Failed to save employee self-edit setting.", "error");
     }
   };
 
@@ -3193,6 +3334,16 @@ export default function App() {
     ? branchWifiSettings[effectiveBranch]
     : wifiRestrictionSettings;
 
+  // For employee role: check their specific branch's setting; fallback to global
+  const employeeBranch = currentEmployee?.branch || "";
+  const effectiveEmployeeSelfEdit = activeRole === "employee"
+    ? (employeeBranch && branchEmployeeSelfEdit[employeeBranch] !== undefined
+        ? branchEmployeeSelfEdit[employeeBranch]
+        : employeeSelfEdit)
+    : ((effectiveBranch !== "All Branches" && branchEmployeeSelfEdit[effectiveBranch] !== undefined)
+        ? branchEmployeeSelfEdit[effectiveBranch]
+        : employeeSelfEdit);
+
   const filteredDesignations = effectiveBranch === "All Branches"
     ? designations
     : designations.filter(d => !d.branch || d.branch === "All Branches" || isBranchMatched(d.branch));
@@ -3619,6 +3770,10 @@ export default function App() {
               branchTimingSettings={branchTimingSettings}
               onboardingChecklistTemplates={onboardingChecklistTemplates}
               exitChecklistTemplates={exitChecklistTemplates}
+              resignationRequests={resignationRequests}
+              onSubmitResignation={handleSubmitResignation}
+              onReviewResignation={handleReviewResignation}
+              onWithdrawResignation={handleWithdrawResignation}
               onPunchAction={handlePunchAction}
               onUploadChecklistDocument={handleUploadChecklistDocument}
               onReviewChecklistItem={handleReviewChecklistItem}
@@ -3646,8 +3801,11 @@ export default function App() {
               branchCodePrefixes={branchCodePrefixes}
               onboardingChecklistTemplates={onboardingChecklistTemplates}
               exitChecklistTemplates={exitChecklistTemplates}
+              resignationRequests={resignationRequests}
+              onSubmitResignation={handleSubmitResignation}
+              onReviewResignation={handleReviewResignation}
+              onWithdrawResignation={handleWithdrawResignation}
               onOnboardEmployee={handleOnboardEmployee}
-              onBulkOnboardEmployee={handleBulkOnboardEmployee}
               onUpdateEmployee={async (id, updatedData) => {
                 showToast("Saving employee information...", "info");
                 try {
@@ -3936,6 +4094,8 @@ export default function App() {
               empCodePrefix={empCodePrefix}
               branchCodePrefixes={branchCodePrefixes}
               onSaveEmpCodePrefix={handleSaveEmpCodePrefix}
+              employeeSelfEdit={effectiveEmployeeSelfEdit}
+              onToggleEmployeeSelfEdit={handleToggleEmployeeSelfEdit}
             />
           )}
 
@@ -3984,6 +4144,7 @@ export default function App() {
           customDepartments={customDepartments}
           customBranches={customBranches}
           role={activeRole}
+          allowSelfEdit={effectiveEmployeeSelfEdit}
           onClose={() => setShowMyProfileModal(false)}
           onSave={async (id, updatedData) => {
             showToast("Saving profile information...", "info");

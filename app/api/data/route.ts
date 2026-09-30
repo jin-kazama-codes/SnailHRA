@@ -3,6 +3,7 @@ import { loadDatabase, saveDatabase, initialOnboardingChecklistTemplates, initia
 import { supabase, syncFineToSupabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { toBranchId, toBranchName, encodeBranchPrefix, extractBranchPrefix } from "@/src/lib/branchUtils";
+import { ResignationStatus } from "@/src/types";
 
 export const dynamic = "force-dynamic";
 
@@ -185,29 +186,33 @@ export async function GET(request: Request) {
           db.onboardingChecklistTemplates = initialOnboardingChecklistTemplates;
           db.exitChecklistTemplates = initialExitChecklistTemplates;
         } else {
+          const parseTmplRow = (r: any) => {
+            let title = r.title || "";
+            let branch = r.branch || null;
+            const tagMatch = title.match(/^\[([^\]]+)\]\s*(.+)$/);
+            if (tagMatch) {
+              branch = branch || tagMatch[1];
+              title = tagMatch[2];
+            }
+            return {
+              id: r.id,
+              title,
+              description: r.description || "",
+              category: r.category || (r.type === "onboarding" ? "ID Proof" : "Contract"),
+              required: r.required ?? true,
+              type: r.type as "onboarding" | "exit",
+              companyId: r.company_id || r.companyId || null,
+              branch: branch ? toBranchName(branch) : undefined
+            };
+          };
+
           db.onboardingChecklistTemplates = checklistTemplatesRes.data
             .filter((row: any) => row.type === "onboarding")
-            .map((row: any) => ({
-              id: row.id,
-              title: row.title || "",
-              description: row.description || "",
-              category: row.category || "ID Proof",
-              required: row.required ?? true,
-              type: "onboarding" as const,
-              companyId: row.company_id || row.companyId || null
-            }));
+            .map(parseTmplRow);
 
           db.exitChecklistTemplates = checklistTemplatesRes.data
             .filter((row: any) => row.type === "exit")
-            .map((row: any) => ({
-              id: row.id,
-              title: row.title || "",
-              description: row.description || "",
-              category: row.category || "Contract",
-              required: row.required ?? true,
-              type: "exit" as const,
-              companyId: row.company_id || row.companyId || null
-            }));
+            .map(parseTmplRow);
         }
       }
 
@@ -1090,7 +1095,7 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
       // Load checklist_templates from Supabase
       try {
         let q = dbClient.from("checklist_templates").select("*");
-        if (companyId) q = q.eq("company_id", companyId);
+        if (companyId) q = q.or(`company_id.eq.${companyId},company_id.is.null`);
         const { data: tmplRows, error: tmplErr } = await q;
         if (tmplRows && Array.isArray(tmplRows) && !tmplErr && tmplRows.length > 0) {
           const parseTmpl = (r: any) => {
@@ -1119,11 +1124,54 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         console.warn("Supabase checklist_templates hydration warning:", err);
       }
 
+      // Load resignation_requests from Supabase
+      try {
+        let rq = dbClient.from("resignation_requests").select("*");
+        if (companyId) rq = rq.or(`company_id.eq.${companyId},company_id.is.null`);
+        const { data: resigRows, error: resigErr } = await rq;
+        if (resigRows && Array.isArray(resigRows) && !resigErr) {
+          const fetchedResigs = resigRows.map((r: any) => ({
+            id: r.id,
+            companyId: r.company_id || r.companyId || companyId,
+            employeeId: r.employee_id || r.employeeId,
+            employeeName: r.employee_name || r.employeeName || "",
+            employeeCode: r.employee_code || r.employeeCode || undefined,
+            department: r.department || undefined,
+            designation: r.designation || undefined,
+            branch: toBranchName(r.branch || "Mumbai Branch"),
+            resignationDate: r.resignation_date || r.resignationDate || "",
+            lastWorkingDate: r.last_working_date || r.lastWorkingDate || "",
+            noticePeriodDays: r.notice_period_days ?? r.noticePeriodDays ?? 30,
+            reason: r.reason || "",
+            remarks: r.remarks || "",
+            status: (r.status || "Pending") as ResignationStatus,
+            appliedAt: r.applied_at || r.appliedAt || new Date().toISOString(),
+            reviewedBy: r.reviewed_by || r.reviewedBy || undefined,
+            reviewedById: r.reviewed_by_id || r.reviewedById || undefined,
+            reviewedAt: r.reviewed_at || r.reviewedAt || undefined,
+            reviewRemarks: r.review_remarks || r.reviewRemarks || undefined,
+            approvedLastWorkingDate: r.approved_last_working_date || r.approvedLastWorkingDate || undefined,
+          }));
+
+          const resigMap = new Map();
+          (db.resignationRequests || []).forEach(item => resigMap.set(item.id, item));
+          fetchedResigs.forEach((item: any) => resigMap.set(item.id, item));
+          db.resignationRequests = Array.from(resigMap.values());
+        }
+      } catch (err) {
+        console.warn("Supabase resignation_requests hydration warning:", err);
+      }
+
       // Load wifi_restriction_settings from Supabase
       try {
         let wifiData = null;
         if (companyId) {
-          const { data } = await dbClient.from("wifi_restriction_settings").select("*").eq("company_id", companyId).maybeSingle();
+          const { data } = await dbClient
+            .from("wifi_restriction_settings")
+            .select("*")
+            .eq("company_id", companyId)
+            .is("branch", null)
+            .maybeSingle();
           if (data) wifiData = data;
         }
         if (!wifiData) {
@@ -1181,27 +1229,29 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
 
       // Load per-branch wifi settings from wifi_restriction_settings with branch column
       try {
+        let branchWifiQ = dbClient
+          .from("wifi_restriction_settings")
+          .select("*")
+          .not("branch", "is", null);
         if (companyId) {
-          const { data: branchWifiRows } = await dbClient
-            .from("wifi_restriction_settings")
-            .select("*")
-            .eq("company_id", companyId)
-            .not("branch", "is", null);
-          if (branchWifiRows && branchWifiRows.length > 0) {
-            if (!db.branchWifiSettings) db.branchWifiSettings = {};
-            for (const row of branchWifiRows) {
-              const branchKey = toBranchName(row.branch);
-              const parsedIps = (row.allowed_ip || "").split(",").map((i: string) => i.trim()).filter(Boolean);
-              const setting = {
-                enabled: row.enabled ?? false,
-                allowedIp: row.allowed_ip || "",
-                allowedIps: parsedIps,
-                companyId: row.company_id || undefined
-              };
-              if (branchKey) {
-                db.branchWifiSettings[branchKey] = setting;
-                db.branchWifiSettings[toBranchId(branchKey)] = setting;
-              }
+          branchWifiQ = branchWifiQ.eq("company_id", companyId);
+        }
+        const { data: branchWifiRows } = await branchWifiQ;
+        if (branchWifiRows && branchWifiRows.length > 0) {
+          if (!db.branchWifiSettings) db.branchWifiSettings = {};
+          for (const row of branchWifiRows) {
+            const branchKey = toBranchName(row.branch);
+            const parsedIps = (row.allowed_ip || "").split(",").map((i: string) => i.trim()).filter(Boolean);
+            const setting = {
+              enabled: row.enabled ?? false,
+              allowedIp: row.allowed_ip || "",
+              allowedIps: parsedIps,
+              companyId: row.company_id || undefined
+            };
+            if (branchKey) {
+              db.branchWifiSettings[branchKey] = setting;
+              db.branchWifiSettings[toBranchId(branchKey)] = setting;
+              db.branchWifiSettings[row.branch] = setting;
             }
           }
         }
@@ -1309,6 +1359,7 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
   }
 
   if (!db.attendanceRequests) db.attendanceRequests = [];
+  if (!db.resignationRequests) db.resignationRequests = [];
 
   saveDatabase(db);
   return NextResponse.json(db);

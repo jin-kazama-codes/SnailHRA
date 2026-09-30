@@ -8,6 +8,7 @@ interface EditEmployeeModalProps {
   customDepartments?: string[];
   customBranches?: string[];
   role: "admin" | "hr" | "employee";
+  allowSelfEdit?: boolean;
   initialMode?: "view" | "edit";
   onClose: () => void;
   onSave: (id: string, updatedData: any) => Promise<void> | void;
@@ -19,6 +20,7 @@ export default function EditEmployeeModal({
   customDepartments = ["Loans", "Insurance", "Risk", "HR", "Operations", "Compliance", "IT", "Sales"],
   customBranches = ["Head Office", "Shashtri Nagar", "Mumbai Branch"],
   role,
+  allowSelfEdit = false,
   initialMode = "view",
   onClose,
   onSave
@@ -241,7 +243,7 @@ export default function EditEmployeeModal({
           </div>
 
           <div className="flex items-center space-x-2">
-            {!isEditing ? (
+            {(!isEmployee || allowSelfEdit) && (!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
@@ -257,7 +259,7 @@ export default function EditEmployeeModal({
                 <User className="w-3.5 h-3.5" />
                 <span>View Profile</span>
               </button>
-            )}
+            ))}
 
             <button
               onClick={onClose}

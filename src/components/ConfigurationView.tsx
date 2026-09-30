@@ -110,6 +110,8 @@ interface ConfigurationViewProps {
   empCodePrefix?: string;
   branchCodePrefixes?: Record<string, string>;
   onSaveEmpCodePrefix?: (prefix: string, branch?: string) => void | Promise<void>;
+  employeeSelfEdit?: boolean;
+  onToggleEmployeeSelfEdit?: (val: boolean) => void;
 }
 
 export default function ConfigurationView({
@@ -147,7 +149,9 @@ export default function ConfigurationView({
   onSaveTimingSettings,
   empCodePrefix: empCodePrefixProp,
   branchCodePrefixes = {},
-  onSaveEmpCodePrefix
+  onSaveEmpCodePrefix,
+  employeeSelfEdit = false,
+  onToggleEmployeeSelfEdit
 }: ConfigurationViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"general" | "designations" | "expenses" | "infractions" | "allowancesFaq" | "checklists">(() => {
     if (typeof window !== "undefined") {
@@ -162,13 +166,22 @@ export default function ConfigurationView({
     }
   }, [activeSubTab]);
 
-  // Local Form States for Checklist Master
-  const [newChecklistTitle, setNewChecklistTitle] = useState("");
-  const [newChecklistDesc, setNewChecklistDesc] = useState("");
-  const [newChecklistCategory, setNewChecklistCategory] = useState("Identity Proof");
-  const [newChecklistType, setNewChecklistType] = useState<"onboarding" | "exit">("onboarding");
-  const [newChecklistRequired, setNewChecklistRequired] = useState(true);
-  const [isSubmittingChecklist, setIsSubmittingChecklist] = useState(false);
+  // Local Form States for Checklist Master (Separated for Onboarding and Exit)
+  const [checklistViewMode, setChecklistViewMode] = useState<"onboarding" | "exit">("onboarding");
+
+  // Onboarding Master State
+  const [onbTitle, setOnbTitle] = useState("");
+  const [onbDesc, setOnbDesc] = useState("");
+  const [onbCategory, setOnbCategory] = useState("Identity Proof (Aadhaar, Passport, Voter ID)");
+  const [onbRequired, setOnbRequired] = useState(true);
+  const [isSubmittingOnb, setIsSubmittingOnb] = useState(false);
+
+  // Exit Clearance Master State
+  const [exitTitle, setExitTitle] = useState("");
+  const [exitDesc, setExitDesc] = useState("");
+  const [exitCategory, setExitCategory] = useState("Clearance Certificate");
+  const [exitRequired, setExitRequired] = useState(true);
+  const [isSubmittingExit, setIsSubmittingExit] = useState(false);
 
   // Local Form States
   const [newDesignationTitle, setNewDesignationTitle] = useState("");
@@ -749,6 +762,72 @@ export default function ConfigurationView({
       {/* Sub Tab 1: General (Departments, Branches, Leave Types, Timings) */}
       {activeSubTab === "general" && (
         <div className="space-y-6">
+
+          {/* ── Employee Profile Self-Edit Permission Card (Prominent at top) ── */}
+          <div className="bg-white dark:bg-[#0f0f0f] border border-slate-200/80 dark:border-[#1a1a1a] rounded-2xl shadow-sm dark:neon-glow overflow-hidden">
+            <div className="w-full flex items-center justify-between gap-4 px-5 py-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`p-2.5 rounded-xl shrink-0 transition-colors ${
+                  employeeSelfEdit ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-400"
+                }`}>
+                  <ToggleRight className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-display font-semibold text-slate-800 dark:text-white text-sm">
+                      Employee Profile Self-Edit
+                    </h3>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      selectedBranch !== "All Branches"
+                        ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"
+                        : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-300"
+                    }`}>
+                      {selectedBranch !== "All Branches" ? `Branch: ${selectedBranch}` : "All Branches (Global)"}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5">
+                    {employeeSelfEdit
+                      ? `Employees in ${selectedBranch !== "All Branches" ? selectedBranch : "all branches"} can view and click the Edit button to update their profile.`
+                      : `The Edit button is hidden on employee logins for ${selectedBranch !== "All Branches" ? selectedBranch : "all branches"}. Only Admin & HR can edit.`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status pill & toggle switch */}
+              <div className="shrink-0 flex items-center gap-3">
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${
+                  employeeSelfEdit
+                    ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                    : "bg-slate-100 dark:bg-[#1a1a1a] text-slate-500 dark:text-gray-400"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    employeeSelfEdit ? "bg-emerald-500 animate-pulse" : "bg-slate-400"
+                  }`} />
+                  {employeeSelfEdit ? "ENABLED" : "DISABLED"}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => onToggleEmployeeSelfEdit?.(!employeeSelfEdit)}
+                  aria-pressed={employeeSelfEdit}
+                  title={employeeSelfEdit ? "Click to disable employee self-edit" : "Click to enable employee self-edit"}
+                  className="relative inline-flex items-center cursor-pointer select-none focus:outline-none"
+                >
+                  <div
+                    className={`w-11 h-6 rounded-full transition-colors duration-200 ${
+                      employeeSelfEdit ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700"
+                    }`}
+                  />
+                  <div
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                      employeeSelfEdit ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+
 
           {/* ── Branch Shift & Roster Timing Settings Card ── */}
           <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
@@ -1453,6 +1532,8 @@ export default function ConfigurationView({
               )}
             </div>
 
+
+
             {/* Leave Types block — Collapsible */}
             <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-xs dark:neon-glow overflow-hidden">
               <button
@@ -1515,6 +1596,7 @@ export default function ConfigurationView({
                       </div>
                     </label>
                   </div>
+
                   <form onSubmit={handleAddLeaveType} className="flex gap-2 mb-4">
                     <input
                       type="text"
@@ -2163,167 +2245,206 @@ export default function ConfigurationView({
       {/* Sub-Tab 6: Checklist Master (Onboarding & Exit Checklists) */}
       {activeSubTab === "checklists" && (
         <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Form Column: Create New Checklist Item */}
-            <div className="lg:col-span-5 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
-              <div className="flex items-center space-x-2 border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
-                <CheckSquare className="w-5 h-5 text-emerald-500" />
-                <div>
-                  <h3 className="font-display font-bold text-slate-800 dark:text-white text-base">Add Checklist Master Item</h3>
-                  <p className="text-xs text-slate-400 dark:text-gray-500">Configure Onboarding or Exit checklist items for employees</p>
-                </div>
+          {/* Master View Mode Switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f0f0f] p-4 rounded-2xl border border-slate-200/80 dark:border-[#1a1a1a] shadow-xs">
+            <div className="flex items-center space-x-3">
+              <div className={`p-2.5 rounded-xl text-white font-bold shrink-0 ${
+                checklistViewMode === "exit"
+                  ? "bg-gradient-to-r from-amber-500 to-orange-600"
+                  : "bg-gradient-to-r from-emerald-500 to-teal-600"
+              }`}>
+                {checklistViewMode === "exit" ? <LogOut className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
               </div>
+              <div>
+                <h3 className="font-display font-black text-slate-800 dark:text-white text-base">
+                  {checklistViewMode === "exit" ? "Exit Clearance Checklist Master" : "Onboarding Document Checklist Master"}
+                </h3>
+                <p className="text-xs text-slate-400 dark:text-gray-500 mt-0.5">
+                  {checklistViewMode === "exit"
+                    ? "Manage exit separation requirements, no-dues forms, and handover documents for resigning staff"
+                    : "Manage mandatory KYC and compliance requirements for newly onboarded employees"}
+                </p>
+              </div>
+            </div>
 
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!newChecklistTitle.trim()) return;
-                  setIsSubmittingChecklist(true);
-                  try {
-                    await onAddChecklistTemplate?.({
-                      title: newChecklistTitle.trim(),
-                      description: newChecklistDesc.trim(),
-                      category: newChecklistCategory,
-                      type: newChecklistType,
-                      required: newChecklistRequired,
-                      branch: selectedBranch !== "All Branches" ? selectedBranch : undefined
-                    });
-                    setNewChecklistTitle("");
-                    setNewChecklistDesc("");
-                  } catch (err) {
-                    console.error("Failed to add checklist item:", err);
-                  } finally {
-                    setIsSubmittingChecklist(false);
-                  }
-                }}
-                className="space-y-3.5 text-xs"
+            {/* Toggle Buttons */}
+            <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-[#161616] rounded-xl border border-slate-200 dark:border-[#262626] shrink-0 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setChecklistViewMode("onboarding")}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
+                  checklistViewMode === "onboarding"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
               >
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Checklist Target Window *</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNewChecklistType("onboarding")}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-                        newChecklistType === "onboarding"
-                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
-                          : "bg-slate-50 dark:bg-[#141414] text-slate-500 border-slate-200 dark:border-[#222]"
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Onboarding Checklist</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewChecklistType("exit")}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
-                        newChecklistType === "exit"
-                          ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-800"
-                          : "bg-slate-50 dark:bg-[#141414] text-slate-500 border-slate-200 dark:border-[#222]"
-                      }`}
-                    >
-                      <LogOut className="w-4 h-4" />
-                      <span>Exit Clearance Checklist</span>
-                    </button>
+                <ShieldCheck className="w-4 h-4" />
+                <span>Onboarding Checklist ({onboardingChecklistTemplates.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setChecklistViewMode("exit")}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
+                  checklistViewMode === "exit"
+                    ? "bg-amber-600 text-white shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Exit Clearance ({exitChecklistTemplates.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Onboarding Checklist Master Panel */}
+          {checklistViewMode === "onboarding" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form: Add Onboarding Master Requirement */}
+              <div className="lg:col-span-5 bg-white dark:bg-[#0f0f0f] border border-emerald-200/60 dark:border-emerald-950/60 rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex items-center space-x-2.5 border-b border-emerald-100 dark:border-emerald-950/60 pb-3">
+                  <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl text-emerald-600 dark:text-emerald-400">
+                    <ShieldCheck className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
+                      Add Onboarding KYC Requirement
+                    </h3>
+                    <p className="text-[11px] text-slate-400 dark:text-gray-500">
+                      Saved separately to Onboarding Checklist Master
+                    </p>
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Document Item Title *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newChecklistTitle}
-                    onChange={(e) => setNewChecklistTitle(e.target.value)}
-                    placeholder="e.g. Aadhaar Card Copy or Asset Return Form"
-                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Document Category</label>
-                  <select
-                    value={newChecklistCategory}
-                    onChange={(e) => setNewChecklistCategory(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
-                  >
-                    <option value="Identity Proof">Identity Proof (Aadhaar, Passport, Voter ID)</option>
-                    <option value="Tax Document">Tax Document (PAN, Form 16, Tax Clearance)</option>
-                    <option value="Educational">Educational (Degree, Certificate, Transcript)</option>
-                    <option value="Contract">Contract & Legal (Offer Letter, Resignation Letter)</option>
-                    <option value="Other">Other Clearances & Forms (Asset Return, No Dues, KT)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">Item Description / Instructions</label>
-                  <textarea
-                    rows={2}
-                    value={newChecklistDesc}
-                    onChange={(e) => setNewChecklistDesc(e.target.value)}
-                    placeholder="Provide guidelines for the employee when uploading this document..."
-                    className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
-                  />
-                </div>
-
-                <div className="flex items-center space-x-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="checklistRequired"
-                    checked={newChecklistRequired}
-                    onChange={(e) => setNewChecklistRequired(e.target.checked)}
-                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300 cursor-pointer"
-                  />
-                  <label htmlFor="checklistRequired" className="font-semibold text-slate-700 dark:text-gray-300 cursor-pointer">
-                    Mandatory Requirement (Employee must upload to complete clearance)
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmittingChecklist || !newChecklistTitle.trim()}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!onbTitle.trim()) return;
+                    setIsSubmittingOnb(true);
+                    try {
+                      await onAddChecklistTemplate?.({
+                        title: onbTitle.trim(),
+                        description: onbDesc.trim(),
+                        category: onbCategory,
+                        type: "onboarding",
+                        required: onbRequired,
+                        branch: selectedBranch !== "All Branches" ? selectedBranch : undefined,
+                      });
+                      setOnbTitle("");
+                      setOnbDesc("");
+                    } catch (err) {
+                      console.error("Failed to add onboarding checklist item:", err);
+                    } finally {
+                      setIsSubmittingOnb(false);
+                    }
+                  }}
+                  className="space-y-3.5 text-xs"
                 >
-                  {isSubmittingChecklist ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  <span>Add to {newChecklistType === "onboarding" ? "Onboarding" : "Exit"} Master List</span>
-                </button>
-              </form>
-            </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      Document Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={onbTitle}
+                      onChange={(e) => setOnbTitle(e.target.value)}
+                      placeholder="e.g. Aadhaar Card Copy, PAN Card, Degree Certificate..."
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                    />
+                  </div>
 
-            {/* List Column: View Onboarding & Exit Checklists */}
-            <div className="lg:col-span-7 space-y-6">
-              {/* Onboarding Checklist List */}
-              <div className="bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      KYC Category
+                    </label>
+                    <select
+                      value={onbCategory}
+                      onChange={(e) => setOnbCategory(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium"
+                    >
+                      <option value="Identity Proof (Aadhaar, Passport, Voter ID)">Identity Proof (Aadhaar, Passport, Voter ID)</option>
+                      <option value="Tax Document (PAN, Form 16)">Tax Document (PAN, Form 16)</option>
+                      <option value="Educational (Degree, Diploma, Marksheet)">Educational (Degree, Diploma, Marksheet)</option>
+                      <option value="Employment Contract / Offer Letter">Employment Contract / Offer Letter</option>
+                      <option value="Bank Proof (Cancelled Cheque, Passbook)">Bank Proof (Cancelled Cheque, Passbook)</option>
+                      <option value="Other KYC Document">Other KYC Document</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      Upload Instructions &amp; Guidelines
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={onbDesc}
+                      onChange={(e) => setOnbDesc(e.target.value)}
+                      placeholder="e.g. Clear color scan of front and back showing photo and valid details..."
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-medium resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="onbChecklistRequired"
+                      checked={onbRequired}
+                      onChange={(e) => setOnbRequired(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                    />
+                    <label htmlFor="onbChecklistRequired" className="font-semibold text-slate-700 dark:text-gray-300 cursor-pointer">
+                      Mandatory Requirement (Employee cannot finish onboarding without this)
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingOnb || !onbTitle.trim()}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingOnb ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    <span>Save to Onboarding Master</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* List: Onboarding Master Items */}
+              <div className="lg:col-span-7 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
                   <div className="flex items-center space-x-2">
                     <ShieldCheck className="w-5 h-5 text-emerald-500" />
                     <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
-                      Onboarding Document Checklist Master ({onboardingChecklistTemplates.length})
+                      Configured Onboarding Checklist Items ({onboardingChecklistTemplates.length})
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    Visible to All Employees
+                    Visible to All Newly Onboarded Employees
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 max-h-[550px] overflow-y-auto pr-1 custom-scrollbar">
                   {onboardingChecklistTemplates.map(tmpl => (
-                    <div key={tmpl.id} className="p-3 bg-slate-50/70 dark:bg-[#141414]/70 border border-slate-200/80 dark:border-[#222] rounded-xl flex items-center justify-between text-xs">
+                    <div key={tmpl.id} className="p-3 bg-slate-50/70 dark:bg-[#141414]/70 border border-slate-200/80 dark:border-[#222] rounded-xl flex items-center justify-between text-xs hover:border-emerald-300 dark:hover:border-emerald-800/60 transition-all">
                       <div className="min-w-0 flex-1 pr-3">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                           <span className="font-bold text-slate-800 dark:text-gray-200">{tmpl.title}</span>
                           {tmpl.required ? (
                             <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">Required</span>
                           ) : (
                             <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Optional</span>
                           )}
+                          {tmpl.branch && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                              {tmpl.branch}
+                            </span>
+                          )}
                         </div>
                         {tmpl.description && (
-                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 leading-tight">{tmpl.description}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-1 leading-tight">{tmpl.description}</p>
                         )}
                         <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-1">Category: {tmpl.category || "General"}</span>
                       </div>
@@ -2342,18 +2463,137 @@ export default function ConfigurationView({
                   ))}
 
                   {onboardingChecklistTemplates.length === 0 && (
-                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6">No Onboarding Checklist items configured yet.</p>
+                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-10">No Onboarding Checklist items configured yet.</p>
                   )}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Exit Checklist List */}
-              <div className="bg-white dark:bg-[#0f0f0f] border border-amber-200/60 dark:border-amber-900/30 rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+          {/* Exit Clearance Checklist Master Panel */}
+          {checklistViewMode === "exit" && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Form: Add Exit Master Requirement */}
+              <div className="lg:col-span-5 bg-white dark:bg-[#0f0f0f] border border-amber-200/60 dark:border-amber-950/60 rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
+                <div className="flex items-center space-x-2.5 border-b border-amber-100 dark:border-amber-950/60 pb-3">
+                  <div className="p-2 bg-amber-50 dark:bg-amber-950/60 rounded-xl text-amber-600 dark:text-amber-400">
+                    <LogOut className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
+                      Add Exit Clearance Requirement
+                    </h3>
+                    <p className="text-[11px] text-slate-400 dark:text-gray-500">
+                      Saved separately to Exit Clearance Master
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!exitTitle.trim()) return;
+                    setIsSubmittingExit(true);
+                    try {
+                      await onAddChecklistTemplate?.({
+                        title: exitTitle.trim(),
+                        description: exitDesc.trim(),
+                        category: exitCategory,
+                        type: "exit",
+                        required: exitRequired,
+                        branch: selectedBranch !== "All Branches" ? selectedBranch : undefined,
+                      });
+                      setExitTitle("");
+                      setExitDesc("");
+                    } catch (err) {
+                      console.error("Failed to add exit clearance checklist item:", err);
+                    } finally {
+                      setIsSubmittingExit(false);
+                    }
+                  }}
+                  className="space-y-3.5 text-xs"
+                >
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      Clearance Document Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={exitTitle}
+                      onChange={(e) => setExitTitle(e.target.value)}
+                      placeholder="e.g. Asset Return Form, Department No-Dues, KT Signoff..."
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-amber-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      Clearance Category
+                    </label>
+                    <select
+                      value={exitCategory}
+                      onChange={(e) => setExitCategory(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-amber-500 font-medium"
+                    >
+                      <option value="Resignation & Relieving Letter">Resignation & Relieving Letter</option>
+                      <option value="Company Asset Return & Handover">Company Asset Return & Handover</option>
+                      <option value="Departmental No-Dues Certificate">Departmental No-Dues Certificate</option>
+                      <option value="Knowledge Transfer (KT) Signoff">Knowledge Transfer (KT) Signoff</option>
+                      <option value="Finance & Final Settlement Clearance">Finance & Final Settlement Clearance</option>
+                      <option value="Clearance Certificate">Clearance Certificate</option>
+                      <option value="Other Exit Document">Other Exit Document</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-gray-300 mb-1">
+                      Instructions &amp; Guidance for Resigning Employee
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={exitDesc}
+                      onChange={(e) => setExitDesc(e.target.value)}
+                      placeholder="e.g. Must be signed by IT department and reporting manager prior to last working day..."
+                      className="w-full bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-amber-500 font-medium resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="exitChecklistRequired"
+                      checked={exitRequired}
+                      onChange={(e) => setExitRequired(e.target.checked)}
+                      className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 border-slate-300 cursor-pointer"
+                    />
+                    <label htmlFor="exitChecklistRequired" className="font-semibold text-slate-700 dark:text-gray-300 cursor-pointer">
+                      Mandatory Requirement (Employee cannot complete final clearance without this)
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmittingExit || !exitTitle.trim()}
+                    className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingExit ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    <span>Save to Exit Clearance Master</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* List: Exit Master Items */}
+              <div className="lg:col-span-7 bg-white dark:bg-[#0f0f0f] border border-amber-200/50 dark:border-amber-950/50 rounded-2xl p-5 shadow-xs dark:neon-glow space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#1a1a1a] pb-3">
                   <div className="flex items-center space-x-2">
                     <LogOut className="w-5 h-5 text-amber-500" />
                     <h3 className="font-display font-bold text-slate-800 dark:text-white text-sm">
-                      Exit Clearance Document Checklist Master ({exitChecklistTemplates.length})
+                      Configured Exit Clearance Items ({exitChecklistTemplates.length})
                     </h3>
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
@@ -2361,20 +2601,25 @@ export default function ConfigurationView({
                   </span>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 max-h-[550px] overflow-y-auto pr-1 custom-scrollbar">
                   {exitChecklistTemplates.map(tmpl => (
-                    <div key={tmpl.id} className="p-3 bg-amber-50/20 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/30 rounded-xl flex items-center justify-between text-xs">
+                    <div key={tmpl.id} className="p-3 bg-amber-50/20 dark:bg-amber-950/10 border border-amber-200/50 dark:border-amber-900/30 rounded-xl flex items-center justify-between text-xs hover:border-amber-300 dark:hover:border-amber-700/60 transition-all">
                       <div className="min-w-0 flex-1 pr-3">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                           <span className="font-bold text-slate-800 dark:text-gray-200">{tmpl.title}</span>
                           {tmpl.required ? (
                             <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400">Required</span>
                           ) : (
                             <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">Optional</span>
                           )}
+                          {tmpl.branch && (
+                            <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                              {tmpl.branch}
+                            </span>
+                          )}
                         </div>
                         {tmpl.description && (
-                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-0.5 leading-tight">{tmpl.description}</p>
+                          <p className="text-[11px] text-slate-400 dark:text-gray-500 mt-1 leading-tight">{tmpl.description}</p>
                         )}
                         <span className="inline-block text-[10px] text-amber-600 dark:text-amber-400 font-mono mt-1">Category: {tmpl.category || "General"}</span>
                       </div>
@@ -2393,12 +2638,12 @@ export default function ConfigurationView({
                   ))}
 
                   {exitChecklistTemplates.length === 0 && (
-                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-6">No Exit Clearance Checklist items configured yet.</p>
+                    <p className="text-xs text-slate-400 dark:text-gray-500 text-center py-10">No Exit Clearance Checklist items configured yet.</p>
                   )}
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
