@@ -194,6 +194,7 @@ export default function DirectoryView({
   const docFileRef = useRef<HTMLInputElement>(null);
 
   // Edit employee state
+  const [editEmpId, setEditEmpId] = useState("");
   const [editFullName, setEditFullName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -899,6 +900,7 @@ export default function DirectoryView({
 
   // Open edit modal and pre-fill all fields from the active employee
   const openEditModal = (emp: any) => {
+    setEditEmpId(emp.id || "");
     setEditFullName(emp.fullName || "");
     setEditEmail(emp.email || "");
     setEditPhone(emp.phone || "");
@@ -981,8 +983,14 @@ export default function DirectoryView({
         avatarUrl = editProfileImagePreview;
       }
 
+      const newEmpIdVal = (role === "admin" || role === "hr") && editEmpId.trim()
+        ? editEmpId.trim().toUpperCase()
+        : activeEmployee.id;
+
       const updated = {
         ...activeEmployee,
+        id: newEmpIdVal,
+        newId: newEmpIdVal !== activeEmployee.id ? newEmpIdVal : undefined,
         fullName: editFullName,
         email: role === "employee" ? (activeEmployee.email || "") : editEmail,
         phone: role === "employee" ? (activeEmployee.phone || "") : editPhone,
@@ -3140,6 +3148,25 @@ export default function DirectoryView({
                       <div>
                         <h4 className="text-[11px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2.5">{++dSecIdx}. Personnel Credentials</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1 flex items-center justify-between">
+                              <span>Employee ID *</span>
+                              {(role === "admin" || role === "hr") ? (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Editable by Admin/HR</span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-normal">Locked</span>
+                              )}
+                            </label>
+                            <input
+                              type="text"
+                              value={editEmpId}
+                              onChange={(e) => setEditEmpId(e.target.value.trim().toUpperCase())}
+                              disabled={role !== "admin" && role !== "hr"}
+                              placeholder="e.g. MGMDIR003"
+                              className={`w-full ${role !== "admin" && role !== "hr" ? "bg-slate-100 dark:bg-[#141414] cursor-not-allowed opacity-75 font-semibold" : "bg-slate-50 dark:bg-[#0a0a0a] font-bold"} text-slate-700 dark:text-gray-200 px-3 py-2 text-xs rounded-xl border border-slate-100 dark:border-[#1a1a1a] focus:outline-hidden focus:border-emerald-500 uppercase tracking-wider`}
+                              required
+                            />
+                          </div>
                           <div>
                             <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Full Name *</label>
                             <input

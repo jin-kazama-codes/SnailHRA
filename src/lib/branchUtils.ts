@@ -6,7 +6,7 @@ export function toBranchId(name?: string | null): string {
   return cleaned ? `br-${cleaned}` : "";
 }
 
-export function toBranchName(idOrName?: string | null, customBranches: string[] = ["Shashtri Nagar", "Noida", "Ludhiana"]): string {
+export function toBranchName(idOrName?: string | null, customBranches: string[] = []): string {
   if (!idOrName) return "";
   const str = String(idOrName).trim();
   

@@ -578,7 +578,7 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
             role: row.role || fallbackEmp?.role || "employee",
             designationId: row.designation_id || row.designationId || fallbackEmp?.designationId || "des-4",
             department: row.department || fallbackEmp?.department || "Information Technology",
-            branch: toBranchName(row.branch || row.branch_name || fallbackEmp?.branch || "Shashtri Nagar"),
+            branch: toBranchName(row.branch || row.branch_name || fallbackEmp?.branch || ""),
             employmentType: row.employment_type || row.employmentType || fallbackEmp?.employmentType || "",
             joiningDate: row.joining_date || row.joiningDate || fallbackEmp?.joiningDate || "2024-03-15",
             status: row.status || fallbackEmp?.status || "Active",

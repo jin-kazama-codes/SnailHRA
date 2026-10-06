@@ -712,6 +712,8 @@ export default function App() {
       setActiveRole(employee.role);
     }
     setCurrentView("dashboard");
+    // Reset branch to All Branches on every login to prevent cross-company branch leakage
+    setSelectedBranch("All Branches");
     // Sync freshly-written localStorage tenant values into React state
     if (typeof window !== "undefined") {
       const newCompanyName = localStorage.getItem("snailhr_companyName") || "";
@@ -722,6 +724,7 @@ export default function App() {
       setCompanyId(newCompanyId);
       setSubscriptionModel(newSubModel);
       setCompanyLogoUrl(newLogoUrl);
+      localStorage.removeItem("snailhr_selectedBranch");
     }
   };
 
@@ -760,11 +763,15 @@ export default function App() {
     setPerformanceRecords([]);
     setAttendanceRequests([]);
 
+    // Reset branch selection so the next login doesn't inherit another company's branch
+    setSelectedBranch("All Branches");
+
     if (typeof window !== "undefined") {
       localStorage.removeItem("snailhr_isLoggedIn");
       localStorage.removeItem("snailhr_currentEmployeeId");
       localStorage.removeItem("snailhr_activeRole");
       localStorage.removeItem("snailhr_currentView");
+      localStorage.removeItem("snailhr_selectedBranch");
     }
     showToast("Signed out successfully.", "info");
   };
@@ -3200,7 +3207,9 @@ export default function App() {
   const filteredRooms = effectiveBranch === "All Branches"
     ? rooms
     : rooms.filter(r => {
-        const itemBranch = r.branch || "Shashtri Nagar";
+        const itemBranch = r.branch;
+        // If room has no branch, include it for all branches
+        if (!itemBranch) return true;
         return isBranchMatched(itemBranch);
       });
 
@@ -3209,7 +3218,9 @@ export default function App() {
     ? roomBookings
     : roomBookings.filter(rb => {
         const room = rooms.find(r => r.id === rb.roomId);
-        const bookingBranch = (rb as any).branch || room?.branch || "Shashtri Nagar";
+        const bookingBranch = (rb as any).branch || room?.branch;
+        // If booking/room has no branch, include for all branches
+        if (!bookingBranch) return true;
         return isBranchMatched(bookingBranch);
       });
 
@@ -3434,8 +3445,9 @@ export default function App() {
 
               {/* Branch Dropdown Menu */}
               {branchDropdownOpen && (
-                <div className="absolute right-0 top-11 z-50 w-72 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-2xl p-2.5 space-y-1 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#1a1a1a] mb-1 flex items-center justify-between">
+                <div className="absolute right-0 top-11 z-50 w-72 bg-white dark:bg-[#0f0f0f] border border-slate-100 dark:border-[#1a1a1a] rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 flex flex-col max-h-[min(420px,80vh)] overflow-hidden">
+                  {/* Sticky Header */}
+                  <div className="px-2.5 py-1.5 border-b border-slate-100 dark:border-[#1a1a1a] flex items-center justify-between shrink-0">
                     <span className="text-[11px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Building2 className="w-3.5 h-3.5 text-emerald-500" />
                       Select Branch Filter
@@ -3445,76 +3457,79 @@ export default function App() {
                     </span>
                   </div>
 
-                  {/* All Branches Option */}
-                  <button
-                    onClick={() => {
-                      setSelectedBranch("All Branches");
-                      setBranchDropdownOpen(false);
-                      showToast("Showing data for All Branches (Company-wide)", "info");
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                      selectedBranch === "All Branches"
-                        ? "bg-emerald-600 text-white font-bold shadow-xs"
-                        : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      <span className="text-base">🏢</span>
-                      <div className="text-left">
-                        <p className="leading-tight">All Branches</p>
-                        <p className={`text-[10px] ${selectedBranch === "All Branches" ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
-                          Corporate Master View
-                        </p>
+                  {/* Scrollable branch list */}
+                  <div className="overflow-y-auto p-2 space-y-1 flex-1">
+                    {/* All Branches Option */}
+                    <button
+                      onClick={() => {
+                        setSelectedBranch("All Branches");
+                        setBranchDropdownOpen(false);
+                        showToast("Showing data for All Branches (Company-wide)", "info");
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                        selectedBranch === "All Branches"
+                          ? "bg-emerald-600 text-white font-bold shadow-xs"
+                          : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <span className="text-base">🏢</span>
+                        <div className="text-left">
+                          <p className="leading-tight">All Branches</p>
+                          <p className={`text-[10px] ${selectedBranch === "All Branches" ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
+                            Corporate Master View
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                      selectedBranch === "All Branches"
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
-                    }`}>
-                      {employees.length}
-                    </span>
-                  </button>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                        selectedBranch === "All Branches"
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
+                      }`}>
+                        {employees.length}
+                      </span>
+                    </button>
 
-                  {/* Per-Branch Options */}
-                  <div className="pt-1 space-y-1">
-                    {allAvailableBranches.map(branchName => {
-                      const branchEmpCount = employees.filter(e => e.branch && e.branch.trim().toLowerCase() === branchName.trim().toLowerCase()).length;
-                      const isSelected = selectedBranch.trim().toLowerCase() === branchName.trim().toLowerCase();
+                    {/* Per-Branch Options */}
+                    <div className="pt-1 space-y-1">
+                      {allAvailableBranches.map(branchName => {
+                        const branchEmpCount = employees.filter(e => e.branch && e.branch.trim().toLowerCase() === branchName.trim().toLowerCase()).length;
+                        const isSelected = selectedBranch.trim().toLowerCase() === branchName.trim().toLowerCase();
 
-                      return (
-                        <button
-                          key={branchName}
-                          onClick={() => {
-                            setSelectedBranch(branchName);
-                            setBranchDropdownOpen(false);
-                            showToast(`Filtered data to ${branchName} branch only`, "success");
-                          }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                            isSelected
-                              ? "bg-emerald-600 text-white font-bold shadow-xs"
-                              : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
-                          }`}
-                        >
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <span className="text-base">📍</span>
-                            <div className="text-left truncate">
-                              <p className="leading-tight truncate">{branchName}</p>
-                              <p className={`text-[10px] truncate ${isSelected ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
-                                Branch Workspace
-                              </p>
+                        return (
+                          <button
+                            key={branchName}
+                            onClick={() => {
+                              setSelectedBranch(branchName);
+                              setBranchDropdownOpen(false);
+                              showToast(`Filtered data to ${branchName} branch only`, "success");
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                              isSelected
+                                ? "bg-emerald-600 text-white font-bold shadow-xs"
+                                : "hover:bg-slate-50 dark:hover:bg-[#1a1a1a] text-slate-700 dark:text-gray-300"
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <span className="text-base">📍</span>
+                              <div className="text-left truncate">
+                                <p className="leading-tight truncate">{branchName}</p>
+                                <p className={`text-[10px] truncate ${isSelected ? "text-emerald-100" : "text-slate-400 dark:text-gray-500"}`}>
+                                  Branch Workspace
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0 ml-2 ${
-                            isSelected
-                              ? "bg-white/20 text-white"
-                              : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
-                          }`}>
-                            {branchEmpCount}
-                          </span>
-                        </button>
-                      );
-                    })}
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold shrink-0 ml-2 ${
+                              isSelected
+                                ? "bg-white/20 text-white"
+                                : "bg-slate-100 dark:bg-[#1f1f1f] text-slate-600 dark:text-gray-400"
+                            }`}>
+                              {branchEmpCount}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3815,10 +3830,18 @@ export default function App() {
                     body: JSON.stringify(updatedData)
                   });
                   if (res.ok) {
+                    const saved = await res.json().catch(() => null);
+                    if (saved && saved.id && saved.id !== id && currentEmployeeId === id) {
+                      setCurrentEmployeeId(saved.id);
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("snailhr_currentEmployeeId", saved.id);
+                      }
+                    }
                     await refreshDatabase();
                     showToast("Employee details updated successfully!", "success");
                   } else {
-                    showToast("Failed to update employee information", "error");
+                    const err = await res.json().catch(() => ({}));
+                    showToast(err.error || "Failed to update employee information", "error");
                   }
                 } catch (err) {
                   console.error(err);
@@ -4155,10 +4178,18 @@ export default function App() {
                 body: JSON.stringify(updatedData)
               });
               if (res.ok) {
+                const saved = await res.json().catch(() => null);
+                if (saved && saved.id && saved.id !== id && currentEmployeeId === id) {
+                  setCurrentEmployeeId(saved.id);
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("snailhr_currentEmployeeId", saved.id);
+                  }
+                }
                 await refreshDatabase();
                 showToast("Profile details updated successfully!", "success");
               } else {
-                showToast("Failed to update profile information", "error");
+                const err = await res.json().catch(() => ({}));
+                showToast(err.error || "Failed to update profile information", "error");
               }
             } catch (err) {
               console.error(err);

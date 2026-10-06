@@ -1318,18 +1318,99 @@ async function startServer() {
 
 
 
-  // 5. Update Employee Status / Bio
+  // 5. Update Employee Status / Bio / ID
   app.put("/api/employees/:id", async (req, res) => {
     const { id } = req.params;
     const updateBody = req.body;
-    const empIndex = db.employees.findIndex(e => e.id === id);
+    let empIndex = db.employees.findIndex(e => e.id === id);
     if (empIndex === -1) {
       return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const requestedId = updateBody.newId || updateBody.id;
+    const newId = requestedId ? String(requestedId).trim().toUpperCase() : id;
+
+    // Handle Employee ID change
+    if (newId && newId !== id) {
+      // Check collision in memory
+      const collision = db.employees.some(e => e.id.toUpperCase() === newId && e.id !== id);
+      if (collision) {
+        return res.status(400).json({ error: `Employee ID "${newId}" is already assigned to another employee.` });
+      }
+
+      // Check collision in Supabase
+      if (supabase) {
+        try {
+          const { data: existingSb } = await supabase.from("employees").select("id").eq("id", newId).maybeSingle();
+          if (existingSb && existingSb.id !== id) {
+            return res.status(400).json({ error: `Employee ID "${newId}" already exists in the database.` });
+          }
+        } catch (chkErr) {
+          console.warn("Supabase ID check warning:", chkErr);
+        }
+      }
+
+      // In Supabase, perform safe migration (clone, cascade foreign keys, delete old ID)
+      if (supabase) {
+        try {
+          const { data: oldEmp } = await supabase.from("employees").select("*").eq("id", id).maybeSingle();
+          if (oldEmp) {
+            const originalEmail = oldEmp.email;
+            const tempEmail = originalEmail ? `${originalEmail}.migrating-${Date.now()}` : `temp-${Date.now()}@migration.local`;
+            
+            // Bypass unique email constraint by temporarily updating old email
+            if (originalEmail) {
+              await supabase.from("employees").update({ email: tempEmail }).eq("id", id);
+            }
+
+            // Insert cloned record with new ID and original email
+            await supabase.from("employees").insert({
+              ...oldEmp,
+              id: newId,
+              email: originalEmail
+            });
+
+            // Cascade update in all related tables
+            const cascadeTables = [
+              "attendance", "leaves", "expenses", "fines", "payslips",
+              "grievance_tickets", "performance_records", "reimbursements",
+              "inventory_requests", "resignation_requests"
+            ];
+            for (const tbl of cascadeTables) {
+              try {
+                await supabase.from(tbl).update({ employee_id: newId }).eq("employee_id", id);
+              } catch (tblErr) {
+                console.warn(`Cascade warning on ${tbl}:`, tblErr);
+              }
+            }
+
+            // Delete old record
+            await supabase.from("employees").delete().eq("id", id);
+            console.log(`Successfully migrated employee ID from ${id} to ${newId} in Supabase with foreign key cascades.`);
+          }
+        } catch (sbErr) {
+          console.error("Error migrating employee ID in Supabase:", sbErr);
+        }
+      }
+
+      // Update in-memory collections
+      db.attendance.forEach(a => { if (a.employeeId === id) a.employeeId = newId; });
+      db.leaves.forEach(l => { if (l.employeeId === id) l.employeeId = newId; });
+      db.expenses.forEach(e => { if (e.employeeId === id) e.employeeId = newId; });
+      db.fines.forEach(f => { if (f.employeeId === id) f.employeeId = newId; });
+      db.payslips.forEach(p => { if (p.employeeId === id) p.employeeId = newId; });
+      if (db.inventoryRequests) db.inventoryRequests.forEach(ir => { if (ir.employeeId === id) ir.employeeId = newId; });
+      if (db.grievanceTickets) db.grievanceTickets.forEach(gt => { if (gt.employeeId === id) gt.employeeId = newId; });
+      if (db.performanceRecords) db.performanceRecords.forEach(pr => { if (pr.employeeId === id) pr.employeeId = newId; });
+      if (db.resignationRequests) db.resignationRequests.forEach(rr => { if (rr.employeeId === id) rr.employeeId = newId; });
+
+      db.employees[empIndex].id = newId;
     }
 
     db.employees[empIndex] = {
       ...db.employees[empIndex],
       ...updateBody,
+      id: newId,
       salary: updateBody.salary ? { ...db.employees[empIndex].salary, ...updateBody.salary } : db.employees[empIndex].salary,
       bankDetails: updateBody.bankDetails ? { ...db.employees[empIndex].bankDetails, ...updateBody.bankDetails } : db.employees[empIndex].bankDetails
     };

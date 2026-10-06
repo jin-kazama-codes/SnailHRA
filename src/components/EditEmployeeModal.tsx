@@ -28,6 +28,7 @@ export default function EditEmployeeModal({
   const isEmployee = role === "employee";
   const [isEditing, setIsEditing] = useState(initialMode === "edit");
 
+  const [empId, setEmpId] = useState(employee.id || "");
   const [prefix, setPrefix] = useState<"Mr" | "Mrs" | "Miss" | "Ms">(employee.prefix || "Mr");
   const [fullName, setFullName] = useState(employee.fullName || "");
   const [gender, setGender] = useState<"Male" | "Female" | "Other">(employee.gender || "Male");
@@ -135,6 +136,8 @@ export default function EditEmployeeModal({
         : 0;
 
       const updated: any = {
+        id: !isEmployee && empId.trim() ? empId.trim().toUpperCase() : employee.id,
+        newId: !isEmployee && empId.trim() && empId.trim().toUpperCase() !== employee.id ? empId.trim().toUpperCase() : undefined,
         prefix,
         fullName: fullName.trim(),
         gender,
@@ -580,6 +583,27 @@ export default function EditEmployeeModal({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1 flex items-center justify-between">
+                          <span>Employee ID *</span>
+                          {!isEmployee ? (
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Editable by Admin/HR</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400 font-normal flex items-center gap-1">
+                              <Lock className="w-3 h-3 text-amber-500" /> Locked
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="text"
+                          value={empId}
+                          onChange={(e) => setEmpId(e.target.value.trim().toUpperCase())}
+                          disabled={isEmployee}
+                          className={`w-full ${isEmployee ? "bg-slate-100/80 dark:bg-[#141414]/70 text-slate-500 dark:text-gray-400 cursor-not-allowed opacity-80" : "bg-slate-50 dark:bg-[#141414] text-slate-800 dark:text-gray-200"} px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-[#222] focus:outline-none focus:border-emerald-500 font-bold uppercase tracking-wider`}
+                          required
+                        />
+                      </div>
+
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-gray-400 mb-1">Prefix</label>
                         <select
