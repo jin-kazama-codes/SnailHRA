@@ -377,36 +377,87 @@ export async function POST(request: Request) {
         }
       } catch (e) {}
 
-      const companyId = await getCompanyIdForEmployee(employeeId);
-      const emp = (db.employees || []).find(e => e.id === employeeId);
-      const empBranch = emp?.branch || "";
       let lateTime = "09:30";
 
-      if (supabase) {
+      if (dbClient) {
         try {
           let settingsData = null;
-          if (empBranch && companyId) {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).eq("branch", empBranch).maybeSingle();
-            if (data) settingsData = data;
+          const bName = empBranch ? toBranchName(empBranch) : "";
+          const bId = empBranchId || (empBranch ? toBranchId(empBranch) : "");
+
+          // 1. Try branch ID match
+          if (bId || bName) {
+            const { data } = await dbClient
+              .from("timing_settings")
+              .select("late_threshold")
+              .or(`id.eq.branch-${bId},id.eq.branch-${bName},id.eq.${bId},id.eq.${bName}`)
+              .maybeSingle();
+            if (data?.late_threshold) settingsData = data;
           }
-          if (!settingsData && empBranch) {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("branch", empBranch).maybeSingle();
-            if (data) settingsData = data;
+
+          // 2. Try branch column match
+          if (!settingsData && (bName || bId || empBranch)) {
+            let q = dbClient.from("timing_settings").select("late_threshold");
+            if (companyId) {
+              const { data } = await dbClient
+                .from("timing_settings")
+                .select("late_threshold")
+                .eq("company_id", companyId)
+                .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${empBranch},branch.ilike.${bName}`)
+                .maybeSingle();
+              if (data?.late_threshold) settingsData = data;
+            }
+            if (!settingsData) {
+              const { data } = await dbClient
+                .from("timing_settings")
+                .select("late_threshold")
+                .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${empBranch},branch.ilike.${bName}`)
+                .maybeSingle();
+              if (data?.late_threshold) settingsData = data;
+            }
           }
+
+          // 3. Fallback to company-wide timing settings
           if (!settingsData && companyId) {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
-            if (data) settingsData = data;
+            const { data } = await dbClient
+              .from("timing_settings")
+              .select("late_threshold")
+              .eq("company_id", companyId)
+              .is("branch", null)
+              .maybeSingle();
+            if (data?.late_threshold) settingsData = data;
           }
+
+          // 4. Fallback to default timing settings
           if (!settingsData) {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("id", "default").maybeSingle();
-            if (data) settingsData = data;
+            const { data } = await dbClient
+              .from("timing_settings")
+              .select("late_threshold")
+              .eq("id", "default")
+              .maybeSingle();
+            if (data?.late_threshold) settingsData = data;
           }
-          if (settingsData && settingsData.late_threshold) {
+
+          if (settingsData?.late_threshold) {
             lateTime = settingsData.late_threshold;
           }
-        } catch (e) {}
-      } else {
-        const branchSettings = empBranch && db.branchTimingSettings?.[empBranch];
+        } catch (e) {
+          console.warn("Error fetching late threshold in punch route:", e);
+        }
+      }
+
+      // Check in-memory db fallback if lateTime is still default
+      if (lateTime === "09:30" && (empBranch || empBranchId)) {
+        const bName = empBranch ? toBranchName(empBranch) : "";
+        const bId = empBranchId || (empBranch ? toBranchId(empBranch) : "");
+        const branchSettings = db.branchTimingSettings?.[empBranch]
+          || db.branchTimingSettings?.[bName]
+          || db.branchTimingSettings?.[bId]
+          || (db.branchTimingSettings ? Object.entries(db.branchTimingSettings).find(([k]) =>
+              k.toLowerCase() === empBranch.toLowerCase() ||
+              toBranchName(k).toLowerCase() === bName.toLowerCase() ||
+              toBranchId(k) === bId
+            )?.[1] : null);
         const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
         lateTime = branchSettings?.lateThreshold || compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
       }
@@ -420,7 +471,7 @@ export async function POST(request: Request) {
         punch = {
           ...existing,
           clockIn: body.clockIn || existing.clockIn || now.toISOString(),
-          status: body.status || existing.status || (isLate ? "Late" : "Present"),
+          status: body.status || (isLate ? "Late" : "Present"),
           workFromHome: body.workFromHome ?? existing.workFromHome ?? false
         };
         delete (punch as any).type;
@@ -441,7 +492,7 @@ export async function POST(request: Request) {
       }
 
       // Auto-issue fine if employee clock in is late (past Late Buffer time)
-      if (isLate || punch.status === "Late") {
+      if (isLate) {
         const punchDate = punch.date || todayStr;
         if (!db.fines) db.fines = [];
 

@@ -159,14 +159,22 @@ export default function AttendanceView({
 
   const getBranchTiming = (branchNameOrId?: string) => {
     if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
-    return branchTimingSettings[branchNameOrId]
-      || branchTimingSettings[toBranchName(branchNameOrId)]
-      || branchTimingSettings[toBranchId(branchNameOrId)]
-      || null;
+    const direct = branchTimingSettings[branchNameOrId];
+    if (direct) return direct;
+    const byName = branchTimingSettings[toBranchName(branchNameOrId)];
+    if (byName) return byName;
+    const byId = branchTimingSettings[toBranchId(branchNameOrId)];
+    if (byId) return byId;
+    const matchKey = Object.keys(branchTimingSettings).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return matchKey ? branchTimingSettings[matchKey] : null;
   };
 
-  const activeTiming = getBranchTiming(loggedInUser?.branch)
-    || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+  const activeTiming = (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+    || getBranchTiming(loggedInUser?.branch)
     || timingSettings;
 
   // Role & Branch Filtering logic for accessible employees list
@@ -652,7 +660,7 @@ export default function AttendanceView({
     };
   };
 
-  // Helper to determine if a punch-in occurred after the late threshold (buffer time)
+  // Helper to determine if a punch-in occurred after the late threshold (buffer time / late grace threshold)
   const getEffectivePunchStatus = (punch?: AttendancePunch): "Present" | "Late" | "Half Day" | "Absent" | "On Leave" => {
     if (!punch) return "Present";
     if (punch.status === "Half Day" || punch.status === "On Leave" || punch.status === "Absent") {
@@ -660,7 +668,13 @@ export default function AttendanceView({
     }
     if (!punch.clockIn) return punch.status || "Present";
 
-    const threshold = timingSettings?.lateThreshold || "09:30";
+    const emp = employees.find(e => e.id === punch.employeeId);
+    const empTiming = getBranchTiming(emp?.branch)
+      || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+      || activeTiming
+      || timingSettings;
+
+    const threshold = empTiming?.lateThreshold || activeTiming?.lateThreshold || timingSettings?.lateThreshold || "09:30";
     const [lateHours, lateMinutes] = threshold.split(":").map(Number);
 
     const clockInDate = new Date(punch.clockIn);
@@ -679,7 +693,8 @@ export default function AttendanceView({
       return "Late";
     }
 
-    return punch.status || "Present";
+    // Punched in on or before the late grace threshold -> Not Late!
+    return punch.status === "Late" ? "Present" : (punch.status || "Present");
   };
 
   const currentEmployeeStats = computeEmployeeMonthlyStats(selectedEmployeeId);
@@ -1127,15 +1142,15 @@ export default function AttendanceView({
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Present Days</span>
                 <span className="text-2xl font-bold text-slate-800 dark:text-white font-mono mt-1 block">
-                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.status === "Present").length}
+                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.date.startsWith(selectedMonth) && getEffectivePunchStatus(a) === "Present").length}
                 </span>
-                <span className="text-[10px] text-emerald-600 font-medium mt-0.5 inline-block">SLA Compliant</span>
+                <span className="text-[10px] text-emerald-600 font-medium mt-0.5 inline-block">Before {formatTime12h(activeTiming?.lateThreshold || "09:30")}</span>
               </div>
 
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Late Logins</span>
                 <span className="text-2xl font-bold text-amber-600 font-mono mt-1 block">
-                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.status === "Late").length}
+                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.date.startsWith(selectedMonth) && getEffectivePunchStatus(a) === "Late").length}
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-0.5 inline-block">After {formatTime12h(activeTiming?.lateThreshold || "09:30")}</span>
               </div>
@@ -1143,7 +1158,7 @@ export default function AttendanceView({
               <div className="p-3 bg-slate-50 dark:bg-[#0a0a0a]/50 rounded-xl border border-slate-100/50 dark:border-[#1a1a1a] text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Work Mode</span>
                 <span className="text-base font-bold text-blue-600 dark:text-blue-400 font-mono mt-2 block">
-                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.workFromHome).length} WFH
+                  {attendance.filter(a => a.employeeId === currentEmployeeId && a.date.startsWith(selectedMonth) && a.workFromHome).length} WFH
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-gray-500 mt-1 inline-block">{userBranch}</span>
               </div>
@@ -2098,16 +2113,17 @@ export default function AttendanceView({
                   let cellBg = "bg-slate-50/40 dark:bg-[#0a0a0a]/20 hover:bg-slate-100/60 dark:hover:bg-[#1a1a1a]";
                   let cellBorder = "border-slate-100 dark:border-[#1a1a1a]/50";
                   let dayType = "";
+                  const effStatus = punch ? getEffectivePunchStatus(punch) : "";
 
                   if (punch) {
                     dayType = "punch";
-                    if (punch.status === "Present") {
+                    if (effStatus === "Present") {
                       cellBg = "bg-emerald-50/40 dark:bg-emerald-950/10 hover:bg-emerald-100/40 dark:hover:bg-emerald-950/25";
                       cellBorder = "border-emerald-100 dark:border-emerald-950/30";
-                    } else if (punch.status === "Late") {
+                    } else if (effStatus === "Late") {
                       cellBg = "bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-100/40 dark:hover:bg-amber-950/25";
                       cellBorder = "border-amber-100 dark:border-amber-950/30";
-                    } else if (punch.status === "Half Day") {
+                    } else if (effStatus === "Half Day") {
                       cellBg = "bg-yellow-50/40 dark:bg-yellow-950/10 hover:bg-yellow-100/40 dark:hover:bg-yellow-950/25";
                       cellBorder = "border-yellow-100 dark:border-yellow-950/30";
                     }
@@ -2146,10 +2162,10 @@ export default function AttendanceView({
                         {/* Day indicator badge */}
                         {dayType === "punch" && (
                           <span className={`text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase ${
-                            punch?.status === "Present" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400" :
-                            punch?.status === "Late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400" :
+                            effStatus === "Present" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400" :
+                            effStatus === "Late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400" :
                             "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-400"
-                          }`}>{punch?.status}</span>
+                          }`}>{effStatus}</span>
                         )}
                         {dayType === "leave" && (
                           <span className="text-[6px] sm:text-[8px] px-0.5 sm:px-1.5 py-px sm:py-0.5 rounded-full font-bold uppercase bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-400">LEAVE</span>
@@ -2591,18 +2607,23 @@ export default function AttendanceView({
                         <div>
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attendance Status</span>
                           <span className="text-sm font-bold text-slate-800 dark:text-white mt-0.5 block">
-                            {punch ? punch.status : leave ? `Leave (${leave.leaveType})` : holiday ? `Holiday (${holiday.name})` : isWeekend ? "Weekend Rest Day" : "Absent"}
+                            {punch ? (getEffectivePunchStatus(punch)) : leave ? `Leave (${leave.leaveType})` : holiday ? `Holiday (${holiday.name})` : isWeekend ? "Weekend Rest Day" : "Absent"}
                           </span>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
-                          punch?.status === "Present" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" :
-                          punch?.status === "Late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400" :
-                          leave ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-400" :
-                          isWeekend ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
-                          "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-400"
-                        }`}>
-                          {punch ? punch.status : leave ? "ON LEAVE" : holiday ? "HOLIDAY" : isWeekend ? "REST DAY" : "ABSENT"}
-                        </span>
+                        {(() => {
+                          const effStatus = punch ? getEffectivePunchStatus(punch) : "";
+                          return (
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${
+                              effStatus === "Present" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" :
+                              effStatus === "Late" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400" :
+                              leave ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-400" :
+                              isWeekend ? "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300" :
+                              "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-400"
+                            }`}>
+                              {punch ? effStatus : leave ? "ON LEAVE" : holiday ? "HOLIDAY" : isWeekend ? "REST DAY" : "ABSENT"}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Timings Bento */}

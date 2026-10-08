@@ -171,12 +171,70 @@ export default function DashboardView({
     ? resignationRequests.find(r => r.employeeId === currentEmployee.id && r.status !== "Withdrawn")
     : undefined;
 
+  const formatTime12h = (time24?: string) => {
+    if (!time24) return "09:30 AM";
+    const parts = time24.split(":");
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h)) return "09:30 AM";
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${String(h12).padStart(2, "0")}:${String(isNaN(m) ? 0 : m).padStart(2, "0")} ${period}`;
+  };
+
+  const getBranchTiming = (branchNameOrId?: string) => {
+    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
+    const direct = branchTimingSettings[branchNameOrId];
+    if (direct) return direct;
+    const byName = branchTimingSettings[toBranchName(branchNameOrId)];
+    if (byName) return byName;
+    const byId = branchTimingSettings[toBranchId(branchNameOrId)];
+    if (byId) return byId;
+    const matchKey = Object.keys(branchTimingSettings).find(k => 
+      k.toLowerCase() === branchNameOrId.toLowerCase() ||
+      toBranchId(k) === toBranchId(branchNameOrId) ||
+      toBranchName(k).toLowerCase() === toBranchName(branchNameOrId).toLowerCase()
+    );
+    return matchKey ? branchTimingSettings[matchKey] : null;
+  };
+
+  const activeTiming = (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+    || getBranchTiming(currentEmployee?.branch)
+    || timingSettings;
+
+  const lateThresholdDisplay = formatTime12h(activeTiming?.lateThreshold || "09:30");
+
+  const isPunchLate = (p?: AttendancePunch) => {
+    if (!p) return false;
+    if (p.status === "Half Day" || p.status === "On Leave" || p.status === "Absent") return false;
+    if (!p.clockIn) return p.status === "Late";
+    const emp = employees.find(e => e.id === p.employeeId);
+    const empTiming = getBranchTiming(emp?.branch)
+      || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
+      || activeTiming
+      || timingSettings;
+    const threshold = empTiming?.lateThreshold || activeTiming?.lateThreshold || timingSettings?.lateThreshold || "09:30";
+    const [lateH, lateM] = threshold.split(":").map(Number);
+    const clockInDate = new Date(p.clockIn);
+    let hours = clockInDate.getHours();
+    let minutes = clockInDate.getMinutes();
+    try {
+      const istStr = clockInDate.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" });
+      const [h, m] = istStr.split(":").map(Number);
+      if (!isNaN(h) && !isNaN(m)) {
+        hours = h;
+        minutes = m;
+      }
+    } catch (e) {}
+    return hours > lateH || (hours === lateH && minutes > lateM);
+  };
+
   // 3. Employee Metrics (Personal only)
   const myTodayPunch = currentEmployee ? attendance.find(a => a.employeeId === currentEmployee.id && a.date === todayStr) : undefined;
   const myPunchesThisMonth = currentEmployee ? attendance.filter(a => a.employeeId === currentEmployee.id && a.date.startsWith(currentMonthStr)) : [];
-  const myPresentDays = myPunchesThisMonth.filter(p => p.status === "Present" || p.status === "Late").length;
+  const myPresentDays = myPunchesThisMonth.filter(p => p.status === "Present" || p.status === "Late" || !isPunchLate(p)).length;
   const myWfhDays = myPunchesThisMonth.filter(p => p.workFromHome).length;
-  const myLateLogins = myPunchesThisMonth.filter(p => p.status === "Late").length;
+  const myLateLogins = myPunchesThisMonth.filter(p => isPunchLate(p)).length;
   const myLeaves = currentEmployee ? leaves.filter(l => {
     return l.employeeId?.toLowerCase() === currentEmployee.id?.toLowerCase() ||
            (currentEmployee.code && l.employeeId?.toLowerCase() === currentEmployee.code.toLowerCase());
@@ -209,31 +267,6 @@ export default function DashboardView({
     const consumed = getConsumedLeaveDays(name);
     return acc + Math.max(0, allocated - consumed);
   }, 0);
-
-  const formatTime12h = (time24?: string) => {
-    if (!time24) return "09:30 AM";
-    const parts = time24.split(":");
-    const h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1], 10);
-    if (isNaN(h)) return "09:30 AM";
-    const period = h >= 12 ? "PM" : "AM";
-    const h12 = h % 12 || 12;
-    return `${String(h12).padStart(2, "0")}:${String(isNaN(m) ? 0 : m).padStart(2, "0")} ${period}`;
-  };
-
-  const getBranchTiming = (branchNameOrId?: string) => {
-    if (!branchNameOrId || branchNameOrId === "All Branches" || !branchTimingSettings) return null;
-    return branchTimingSettings[branchNameOrId]
-      || branchTimingSettings[toBranchName(branchNameOrId)]
-      || branchTimingSettings[toBranchId(branchNameOrId)]
-      || null;
-  };
-
-  const activeTiming = getBranchTiming(currentEmployee?.branch)
-    || (selectedBranch !== "All Branches" ? getBranchTiming(selectedBranch) : null)
-    || timingSettings;
-
-  const lateThresholdDisplay = formatTime12h(activeTiming?.lateThreshold || "09:30");
 
   const myPayslips = (currentEmployee && payslips && payslips.length > 0)
     ? payslips.filter(p => (p.employeeId === currentEmployee.id || (currentEmployee.code && p.employeeId === currentEmployee.code)) && p.status !== "Draft")

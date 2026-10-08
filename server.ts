@@ -1506,16 +1506,49 @@ async function startServer() {
         return res.status(400).json({ error: "Already clocked in for today" });
       }
 
-      // Check if late based on timing settings from Supabase
+      // Check if late based on timing settings from Supabase / Branch settings
       const now = new Date();
       let status: "Present" | "Late" = "Present";
       let lateTime = "09:30";
       const companyId = await getCompanyIdForEmployee(employeeId);
+      const emp = (db.employees || []).find((e: any) => e.id === employeeId);
+      const empBranch = emp?.branch || "";
+      const bName = empBranch ? toBranchName(empBranch) : "";
+      const bId = empBranch ? toBranchId(empBranch) : "";
+
       if (supabase) {
         try {
           let settingsData = null;
-          if (companyId) {
-            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).maybeSingle();
+          if (bId || bName) {
+            const { data } = await supabase
+              .from("timing_settings")
+              .select("late_threshold")
+              .or(`id.eq.branch-${bId},id.eq.branch-${bName},id.eq.${bId},id.eq.${bName}`)
+              .maybeSingle();
+            if (data?.late_threshold) settingsData = data;
+          }
+          if (!settingsData && (bName || bId || empBranch)) {
+            let q = supabase.from("timing_settings").select("late_threshold");
+            if (companyId) {
+              const { data } = await supabase
+                .from("timing_settings")
+                .select("late_threshold")
+                .eq("company_id", companyId)
+                .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${empBranch},branch.ilike.${bName}`)
+                .maybeSingle();
+              if (data?.late_threshold) settingsData = data;
+            }
+            if (!settingsData) {
+              const { data } = await supabase
+                .from("timing_settings")
+                .select("late_threshold")
+                .or(`branch.eq.${bName},branch.eq.${bId},branch.eq.${empBranch},branch.ilike.${bName}`)
+                .maybeSingle();
+              if (data?.late_threshold) settingsData = data;
+            }
+          }
+          if (!settingsData && companyId) {
+            const { data } = await supabase.from("timing_settings").select("late_threshold").eq("company_id", companyId).is("branch", null).maybeSingle();
             if (data) settingsData = data;
           }
           if (!settingsData) {
@@ -1527,8 +1560,13 @@ async function startServer() {
           }
         } catch (e) {}
       } else {
+        const branchTiming = empBranch && (
+          db.branchTimingSettings?.[empBranch] ||
+          db.branchTimingSettings?.[bName] ||
+          db.branchTimingSettings?.[bId]
+        );
         const compSettings = (db as any).companyTimingSettings?.[companyId || ""];
-        lateTime = compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
+        lateTime = branchTiming?.lateThreshold || compSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
       }
       const [lateHours, lateMinutes] = lateTime.split(":").map(Number);
       let nowHours = now.getHours();

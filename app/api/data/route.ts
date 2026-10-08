@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDatabase, saveDatabase, initialOnboardingChecklistTemplates, initialExitChecklistTemplates } from "@/src/lib/db";
-import { supabase, syncFineToSupabase } from "@/src/lib/supabase";
+import { supabase, syncFineToSupabase, syncPunchToSupabase, deleteFineFromSupabase } from "@/src/lib/supabase";
 import { supabaseAdmin } from "@/src/lib/supabase-admin";
 import { toBranchId, toBranchName, encodeBranchPrefix, extractBranchPrefix } from "@/src/lib/branchUtils";
 import { ResignationStatus } from "@/src/types";
@@ -1279,9 +1279,6 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
   if (db.attendance && db.attendance.length > 0) {
     if (!db.fines) db.fines = [];
 
-    const lateTimeThreshold = db.timingSettings?.lateThreshold || "09:30";
-    const [lateH, lateM] = lateTimeThreshold.split(":").map(Number);
-
     // Find late infraction setting configured in System Settings
     let lateInfr = (db.infractionTypes || []).find((t: any) => {
       const name = (t.name || "").toLowerCase();
@@ -1296,6 +1293,24 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
     for (const punch of db.attendance) {
       if (!punch.clockIn || !punch.date) continue;
 
+      const emp = (db.employees || []).find((e: any) => (e.id || "").toLowerCase() === (punch.employeeId || "").toLowerCase());
+      const empBranch = emp?.branch || "";
+      const bName = empBranch ? toBranchName(empBranch) : "";
+      const bId = empBranch ? toBranchId(empBranch) : "";
+      const branchSettings = empBranch && (
+        db.branchTimingSettings?.[empBranch] ||
+        db.branchTimingSettings?.[bName] ||
+        db.branchTimingSettings?.[bId] ||
+        (db.branchTimingSettings ? Object.entries(db.branchTimingSettings).find(([k]) =>
+          k.toLowerCase() === empBranch.toLowerCase() ||
+          toBranchName(k).toLowerCase() === bName.toLowerCase() ||
+          toBranchId(k) === bId
+        )?.[1] : null)
+      );
+
+      const lateTimeThreshold = branchSettings?.lateThreshold || db.timingSettings?.lateThreshold || "09:30";
+      const [lateH, lateM] = lateTimeThreshold.split(":").map(Number);
+
       let hours = 0;
       let minutes = 0;
       try {
@@ -1308,10 +1323,37 @@ function getMoreUpToDateBreaks(breaksA: any[] = [], breaksB: any[] = []): any[] 
         }
       } catch (e) {}
 
-      const isLate = punch.status === "Late" || hours > lateH || (hours === lateH && minutes > lateM);
+      const isLate = hours > lateH || (hours === lateH && minutes > lateM);
+
+      // Reconcile punch status if punch occurred on or before grace threshold
+      if (!isLate) {
+        if (punch.status === "Late") {
+          punch.status = "Present";
+          if (supabase) {
+            syncPunchToSupabase(punch).catch(e => console.warn("Auto-reconcile punch sync warning:", e));
+          }
+        }
+
+        // Clean up any erroneous late auto-fines for on-time punches
+        const falseFines = db.fines.filter((f: any) =>
+          (f.employeeId || "").toLowerCase() === (punch.employeeId || "").toLowerCase() &&
+          f.date === punch.date &&
+          ((f.reason || "").toLowerCase().includes("late") || (f.reason || "").toLowerCase().includes("comming") || (f.reason || "").toLowerCase().includes("tardiness")) &&
+          (f.id?.startsWith("fin-auto-") || f.status === "Pending")
+        );
+
+        if (falseFines.length > 0) {
+          db.fines = db.fines.filter((f: any) => !falseFines.includes(f));
+          if (supabase) {
+            falseFines.forEach((f: any) => {
+              deleteFineFromSupabase(f.id).catch(e => console.warn("Auto-cleanup false fine warning:", e));
+            });
+          }
+        }
+      }
 
       if (isLate && punch.status !== "Half Day" && punch.status !== "On Leave") {
-        const emp = (db.employees || []).find((e: any) => (e.id || "").toLowerCase() === (punch.employeeId || "").toLowerCase());
+        punch.status = "Late";
         const empName = emp ? (emp.fullName || (emp as any).full_name || `Employee ${punch.employeeId}`) : `Employee ${punch.employeeId}`;
 
         const existingFine = db.fines.find((f: any) =>
