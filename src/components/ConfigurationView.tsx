@@ -1255,7 +1255,7 @@ export default function ConfigurationView({
                         <Wifi className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                         <input
                           type="text"
-                          placeholder="e.g. 223.233.66.0/24 or 223.233.66.140"
+                          placeholder="e.g. 223.233.0.0/16, 223.233.72.0/24 or 223.233.*.*"
                           value={ip}
                           onChange={(e) => handleIpChange(idx, e.target.value)}
                           disabled={!wifiEnabled}
@@ -1301,12 +1301,12 @@ export default function ConfigurationView({
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       <span>Your Current Public IP: <strong className="font-mono text-emerald-800 dark:text-emerald-200">{detectedIp}</strong></span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         type="button"
                         onClick={() => handleUseDetectedIp(detectedIp)}
                         className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700 shadow-xs"
-                        title="Add exact IP"
+                        title="Add exact IP only"
                       >
                         + Exact IP
                       </button>
@@ -1321,9 +1321,24 @@ export default function ConfigurationView({
                           }
                         }}
                         className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer bg-white dark:bg-[#1a1a1a] px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700 shadow-xs"
-                        title="Add entire /24 subnet (handles dynamic IP changes)"
+                        title="Add /24 subnet (e.g. 223.233.72.0/24)"
                       >
                         → /24 Subnet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Convert x.x.x.x → x.x.0.0/16
+                          const parts = detectedIp.split(".");
+                          if (parts.length === 4) {
+                            const subnet = `${parts[0]}.${parts[1]}.0.0/16`;
+                            handleUseDetectedIp(subnet);
+                          }
+                        }}
+                        className="text-[11px] font-bold text-violet-700 dark:text-violet-300 hover:underline cursor-pointer bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 rounded border border-violet-300 dark:border-violet-700 shadow-xs"
+                        title="Recommended if your router restarts and changes the 3rd number (e.g. 72 to 64, 76, etc.)"
+                      >
+                        → /16 ISP Subnet (Dynamic IP)
                       </button>
                     </div>
                   </div>
@@ -1337,18 +1352,21 @@ export default function ConfigurationView({
                 )}
 
                 {/* CIDR Subnet Tip */}
-                <div className="p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-[11px] text-blue-800 dark:text-blue-300 leading-normal space-y-1">
-                  <p className="font-semibold flex items-center gap-1">
-                    <span>🔒 Tip: Use Subnet Range for Dynamic IPs</span>
+                <div className="p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 text-[11px] text-blue-900 dark:text-blue-200 leading-normal space-y-1.5">
+                  <p className="font-semibold flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+                    <span>💡 Dynamic Router IP / Wi-Fi Restart Fix:</span>
                   </p>
                   <p>
-                    If your office router restarts and assigns a new IP, use <strong>CIDR notation</strong> to allow the whole subnet.<br />
-                    e.g. <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.0/24</code> allows any IP from <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.1</code> to <code className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded">223.233.66.254</code>.
+                    When office Wi-Fi restarts, your broadband ISP assigns a dynamic IP where the <strong>3rd number changes</strong> (e.g. <code className="bg-blue-100 dark:bg-blue-900/60 px-1 rounded font-mono">223.233.72.x</code> becomes <code className="bg-blue-100 dark:bg-blue-900/60 px-1 rounded font-mono">223.233.64.x</code>).
                   </p>
+                  <div className="space-y-1 bg-white/70 dark:bg-black/30 p-2 rounded-lg font-mono text-[10px] border border-blue-200/50 dark:border-blue-900/50">
+                    <div>• <strong className="text-violet-600 dark:text-violet-400">223.233.0.0/16</strong> (or <strong>223.233.*.*</strong>) : Covers <strong>ALL</strong> dynamic subnets (72, 64, 76, 78, etc.). Eliminates attendance blocks on router restart!</div>
+                    <div>• <strong className="text-blue-600 dark:text-blue-400">223.233.72.0/24</strong> : Only covers 72.1 to 72.254.</div>
+                  </div>
                 </div>
 
                 <p className="text-[10px] text-slate-400 dark:text-gray-500 font-mono">
-                  Add exact IPs or subnets (e.g. main office, branch router, VPN). Use <code>/24</code> for dynamic IP coverage.
+                  Allowed formats: exact IP (<code className="text-slate-600 dark:text-slate-300">223.233.72.151</code>), /24 subnet (<code className="text-slate-600 dark:text-slate-300">223.233.72.0/24</code>), dynamic /16 subnet (<code className="text-slate-600 dark:text-slate-300">223.233.0.0/16</code>), or wildcard (<code className="text-slate-600 dark:text-slate-300">223.233.*.*</code>).
                 </p>
               </div>
 

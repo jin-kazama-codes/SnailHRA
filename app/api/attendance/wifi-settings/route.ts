@@ -9,7 +9,7 @@ function parseIps(ipInput: string | string[] | undefined | null): string[] {
   const raw: string[] = Array.isArray(ipInput)
     ? ipInput.map(i => String(i).trim())
     : String(ipInput).split(",").map(i => i.trim());
-  // Allow plain IPs and CIDR notation (e.g. 192.168.1.0/24 or 10.0.0.0/8)
+  // Allow plain IPs, wildcards, and CIDR notation (e.g. 192.168.1.0/24, 223.233.0.0/16, 223.233.*.*)
   return raw.filter(entry => {
     if (!entry) return false;
     // CIDR format: x.x.x.x/prefix
@@ -17,6 +17,10 @@ function parseIps(ipInput: string | string[] | undefined | null): string[] {
       const [ip, prefix] = entry.split("/");
       const num = parseInt(prefix, 10);
       return ip && !isNaN(num) && num >= 0 && num <= 32;
+    }
+    // Wildcard format: e.g. 223.233.*.* or 223.233.*
+    if (entry.includes("*")) {
+      return /^(\d{1,3}|\*)(\.(\d{1,3}|\*)){1,3}$/.test(entry);
     }
     // Plain IP: basic format check
     return /^\d{1,3}(\.\d{1,3}){3}$/.test(entry);

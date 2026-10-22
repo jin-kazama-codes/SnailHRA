@@ -102,13 +102,24 @@ function isIpMatched(rawClientIp: string, allowedIpsList: string[]): boolean {
     const normalized = normalizeIp(entry);
     if (!normalized) continue;
 
-    // CIDR range match (e.g. 223.233.72.0/24)
+    // CIDR range match (e.g. 223.233.72.0/24 or 223.233.0.0/16)
     if (normalized.includes("/")) {
       if (isIpInCidr(clientIp, normalized)) return true;
       // If client is on 127.0.0.1, check local machine IPs ONLY if the allowed entry is also private
       if (clientIp === "127.0.0.1" && isPrivateIp(normalized.split("/")[0])) {
         const machineIps = getLocalMachineIps();
         if (machineIps.some(mIp => isIpInCidr(mIp, normalized))) return true;
+      }
+    } else if (normalized.includes("*")) {
+      // Wildcard match (e.g. 223.233.*.* or 223.233.*)
+      try {
+        const regexPattern = "^" + normalized
+          .split(".")
+          .map(part => part === "*" ? "\\d{1,3}" : part)
+          .join("\\.") + "$";
+        if (new RegExp(regexPattern).test(clientIp)) return true;
+      } catch {
+        // ignore invalid regex
       }
     } else {
       // 1. Exact match
