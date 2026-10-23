@@ -267,9 +267,11 @@ export default function PayrollView({
     setEditEsiOptIn(!isEsiExempt);
     // Always recalculate ESI from the config-derived gross (same logic as the table)
     // so stale stored esiDeduction values never show in the modal
-    const configHraForEsi = config?.hraType === "percentage"
-      ? Math.round(basic * ((config?.hraValue || 0) / 100))
-      : (config?.hraValue || 0);
+    const configHraForEsi = (emp.salary?.hra !== undefined && emp.salary.hra > 0)
+      ? emp.salary.hra
+      : (config?.hraType === "percentage"
+        ? Math.round(basic * ((config?.hraValue || 0) / 100))
+        : (config?.hraValue || 0));
     const configGross = basic + configHraForEsi + configTel + configFuel + configProfDev + configLta + configSpAllow;
     const esiCeiling = config?.esiGrossCeiling ?? 21000;
     const recalcEsi = (!isEsiExempt && (esiCeiling <= 0 || configGross <= esiCeiling))
@@ -291,10 +293,10 @@ export default function PayrollView({
       let calculatedPf = 0;
       if (editPfMode === "exempt") {
         calculatedPf = 0;
-      } else if (editPfMode === "fixed_1800") {
-        calculatedPf = 1800;
       } else if (editPfMode === "custom") {
         calculatedPf = Number(editPfCustom) || 0;
+      } else if (editPfMode === "fixed_1800") {
+        calculatedPf = 1800;
       } else {
         calculatedPf = Math.round(basic * ((config?.pfValue || 12) / 100));
       }
@@ -302,13 +304,16 @@ export default function PayrollView({
       const configHra = config?.hraType === "percentage"
         ? Math.round(basic * ((config?.hraValue || 0) / 100))
         : (config?.hraValue || 0);
+      const hra = (editingEmpForSalary.salary?.hra !== undefined && editingEmpForSalary.salary.hra > 0)
+        ? editingEmpForSalary.salary.hra
+        : configHra;
 
       let calculatedEsi = 0;
       if (editEsiOptIn) {
         if (editEsiMode === "custom" && editEsiCustom !== "") {
           calculatedEsi = Number(editEsiCustom) || 0;
         } else {
-          const gross = basic + configHra + Number(editTel) + Number(editFuel) + Number(editProfDev) + Number(editLta) + Number(editSpAllow);
+          const gross = basic + hra + Number(editTel) + Number(editFuel) + Number(editProfDev) + Number(editLta) + Number(editSpAllow);
           const esiGrossCeiling = config?.esiGrossCeiling ?? 21000;
           if (esiGrossCeiling <= 0 || gross <= esiGrossCeiling) {
             calculatedEsi = Math.round(gross * ((config?.esiRatePercentage || 0.75) / 100));
@@ -336,6 +341,12 @@ export default function PayrollView({
       await onUpdateEmployee(editingEmpForSalary.id, {
         salary: updatedSalary,
       });
+
+      // Auto-refresh payslip if one was already compiled for this employee in selectedMonth
+      const existingSlip = currentMonthPayslips.find(p => p.employeeId === editingEmpForSalary.id);
+      if (existingSlip && onGeneratePayslip) {
+        await onGeneratePayslip(editingEmpForSalary.id, selectedMonth);
+      }
 
       // Keep tenant config PF & ESI exemption lists in sync if modal toggles changed
       const currentPfExemptList = config?.pfExemptEmployeeIds || [];
@@ -626,6 +637,7 @@ export default function PayrollView({
     const configHra = config?.hraType === "percentage"
       ? Math.round(basic * ((config.hraValue ?? 40) / 100))
       : (config?.hraValue ?? 0);
+    const hra = (emp.salary?.hra !== undefined && emp.salary.hra > 0) ? emp.salary.hra : configHra;
     const configTel = config?.telephoneType === "percentage"
       ? Math.round(basic * ((config.telephoneValue || 0) / 100))
       : (config?.telephoneValue || 0);
@@ -652,7 +664,7 @@ export default function PayrollView({
 
     return {
       basic,
-      hra: configHra,
+      hra,
       telephone,
       fuel,
       professionalDev,
@@ -770,10 +782,14 @@ export default function PayrollView({
                     const isPfExempt = (config?.pfExemptEmployeeIds || []).includes(slip.employeeId) || targetEmp?.salary?.pfMode === "exempt";
                     let pfDeduction = 0;
                     if (!isPfExempt && sal) {
-                      if (targetEmp?.salary?.pfMode === "fixed_1800" || config?.pfModeDefault === "fixed_1800") {
-                        pfDeduction = 1800;
-                      } else if (targetEmp?.salary?.pfMode === "custom" && targetEmp?.salary?.pfDeduction !== undefined && targetEmp.salary.pfDeduction > 0) {
+                      if (targetEmp?.salary?.pfMode === "custom" && targetEmp?.salary?.pfDeduction !== undefined && targetEmp.salary.pfDeduction > 0) {
                         pfDeduction = targetEmp.salary.pfDeduction;
+                      } else if (targetEmp?.salary?.pfMode === "fixed_1800") {
+                        pfDeduction = 1800;
+                      } else if (targetEmp?.salary?.pfMode === "percentage") {
+                        pfDeduction = Math.round(sal.basic * ((config?.pfValue ?? 12) / 100));
+                      } else if (config?.pfModeDefault === "fixed_1800") {
+                        pfDeduction = 1800;
                       } else {
                         pfDeduction = (config?.pfType === "fixed")
                           ? (config?.pfValue ?? 1800)
@@ -783,11 +799,13 @@ export default function PayrollView({
                     const empTdsOptIn = targetEmp?.salary?.tdsOptIn !== false;
                     const defaultTaxes = (!empTdsOptIn || !targetEmp?.salary)
                       ? 0
-                      : computeMonthlyTDSFromEmployee(
-                        { ...targetEmp.salary, taxProfile: targetEmp.salary?.taxProfile as any },
-                        config?.taxType || "percentage",
-                        config?.taxValue ?? 5
-                      );
+                      : (targetEmp.salary.tdsMode === "custom" && targetEmp.salary.tdsDeduction !== undefined && targetEmp.salary.tdsDeduction > 0)
+                        ? targetEmp.salary.tdsDeduction
+                        : computeMonthlyTDSFromEmployee(
+                          { ...targetEmp.salary, taxProfile: targetEmp.salary?.taxProfile as any },
+                          config?.taxType || "percentage",
+                          config?.taxValue ?? 5
+                        );
                     const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(slip.employeeId) ||
                       (config?.esiExemptEmployeeIds || []).includes(targetEmp?.code || "") ||
                       targetEmp?.salary?.esiOptIn === false;
@@ -999,10 +1017,14 @@ export default function PayrollView({
                           emp.salary?.pfMode === "exempt";
                         let pfDeduction = 0;
                         if (!isPfExempt) {
-                          if (emp.salary?.pfMode === "fixed_1800" || config?.pfModeDefault === "fixed_1800") {
-                            pfDeduction = 1800;
-                          } else if (emp.salary?.pfMode === "custom" && emp.salary?.pfDeduction !== undefined && emp.salary?.pfDeduction > 0) {
+                          if (emp.salary?.pfMode === "custom" && emp.salary?.pfDeduction !== undefined && emp.salary?.pfDeduction > 0) {
                             pfDeduction = emp.salary.pfDeduction;
+                          } else if (emp.salary?.pfMode === "fixed_1800") {
+                            pfDeduction = 1800;
+                          } else if (emp.salary?.pfMode === "percentage") {
+                            pfDeduction = Math.round(sal.basic * ((config?.pfValue ?? 12) / 100));
+                          } else if (config?.pfModeDefault === "fixed_1800") {
+                            pfDeduction = 1800;
                           } else {
                             pfDeduction = (config?.pfType === "fixed")
                               ? (config?.pfValue ?? 1800)
@@ -1015,11 +1037,13 @@ export default function PayrollView({
                         const empTdsOptIn = emp.salary?.tdsOptIn !== false;
                         const defaultTaxes = !empTdsOptIn
                           ? 0
-                          : computeMonthlyTDSFromEmployee(
-                            { ...emp.salary, taxProfile: emp.salary?.taxProfile as any },
-                            config?.taxType || "percentage",
-                            config?.taxValue ?? 5
-                          );
+                          : (emp.salary?.tdsMode === "custom" && emp.salary?.tdsDeduction !== undefined && emp.salary?.tdsDeduction > 0)
+                            ? emp.salary.tdsDeduction
+                            : computeMonthlyTDSFromEmployee(
+                              { ...emp.salary, taxProfile: emp.salary?.taxProfile as any },
+                              config?.taxType || "percentage",
+                              config?.taxValue ?? 5
+                            );
 
                         const isEsiExempt = (config?.esiExemptEmployeeIds || []).includes(emp.id) ||
                           (config?.esiExemptEmployeeIds || []).includes(emp.code || "") ||
@@ -1079,7 +1103,12 @@ export default function PayrollView({
                                   <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.professionalDev : sal.professionalDev).toLocaleString()}</td>
                                   <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.lta : sal.lta).toLocaleString()}</td>
                                   <td className="py-2 px-1.5 text-right font-mono text-[11px] text-slate-500 dark:text-gray-400 whitespace-nowrap">₹{(isCompiled ? hasSlip.allowances : sal.allowances).toLocaleString()}</td>
-                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">₹{(pfDeduction + defaultTaxes + esiEst).toLocaleString()}</td>
+                                  <td className="py-2 px-1.5 text-right font-mono text-[11px] text-indigo-500 font-medium whitespace-nowrap">
+                                    ₹{(isCompiled
+                                      ? ((hasSlip.pfDeduction || 0) + (hasSlip.taxDeduction || 0) + (hasSlip.esiDeduction || 0))
+                                      : (pfDeduction + defaultTaxes + esiEst)
+                                    ).toLocaleString()}
+                                  </td>
                                   <td className="py-2 px-1.5 text-right font-mono text-[11px] text-rose-500 whitespace-nowrap">
                                     ₹{isCompiled ? hasSlip.finesDeducted.toLocaleString() : empPendingFines.toLocaleString()}
                                   </td>
@@ -1143,6 +1172,25 @@ export default function PayrollView({
                                         >
                                           <span>Review</span>
                                         </button>
+                                        {(role === "admin" || role === "hr") && onUpdateEmployee && (
+                                          <button
+                                            onClick={() => openEditAllowancesModal(emp)}
+                                            className="p-1 rounded-md bg-slate-100 hover:bg-amber-50 dark:bg-[#1a1a1a] dark:hover:bg-amber-950/40 text-slate-600 hover:text-amber-600 dark:text-gray-300 dark:hover:text-amber-400 border border-slate-200 dark:border-[#2a2a2a] transition-all cursor-pointer shrink-0"
+                                            title="Edit Monthly Allowances & PF/TDS"
+                                          >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                        {(role === "admin" || role === "hr") && (
+                                          <button
+                                            onClick={() => handleCompileSlip(emp.id)}
+                                            disabled={compilingEmpId === emp.id}
+                                            className="p-1 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 transition-all cursor-pointer shrink-0"
+                                            title="Recompile payslip with latest rules"
+                                          >
+                                            <RefreshCw className={`w-3.5 h-3.5 ${compilingEmpId === emp.id ? "animate-spin" : ""}`} />
+                                          </button>
+                                        )}
                                         {(role === "admin" || role === "hr") && onResetPayslip && (
                                           <button
                                             onClick={() => {
@@ -3140,10 +3188,11 @@ export default function PayrollView({
                 {/* Live Gross & Net Pay preview box */}
                 {(() => {
                   const basic = editingEmpForSalary.salary?.basic || 0;
-                  // Always compute HRA from config (same as the table), never from stale stored value
-                  const hra = config?.hraType === "percentage"
-                    ? Math.round(basic * ((config?.hraValue || 0) / 100))
-                    : (config?.hraValue || 0);
+                  const hra = (editingEmpForSalary.salary?.hra !== undefined && editingEmpForSalary.salary.hra > 0)
+                    ? editingEmpForSalary.salary.hra
+                    : (config?.hraType === "percentage"
+                      ? Math.round(basic * ((config?.hraValue || 0) / 100))
+                      : (config?.hraValue || 0));
                   const tel = Number(editTel) || 0;
                   const fuel = Number(editFuel) || 0;
                   const profDev = Number(editProfDev) || 0;
@@ -3153,8 +3202,8 @@ export default function PayrollView({
 
                   let pf = 0;
                   if (editPfMode === "exempt") pf = 0;
-                  else if (editPfMode === "fixed_1800") pf = 1800;
                   else if (editPfMode === "custom") pf = Number(editPfCustom) || 0;
+                  else if (editPfMode === "fixed_1800") pf = 1800;
                   else pf = Math.round(basic * ((config?.pfValue || 12) / 100));
 
                   let tds = 0;

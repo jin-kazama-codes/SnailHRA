@@ -170,11 +170,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    // Check if already exists for this employee + month (ignore Draft status)
+    // Check if already exists for this employee + month (will update/recompile if exists)
     const exists = db.payslips.find(p => p.employeeId === employeeId && p.month === month);
-    if (exists && exists.status !== "Draft") {
-      return NextResponse.json({ error: `Payslip already generated for ${employee.fullName} for ${month}` }, { status: 400 });
-    }
 
     // Smart resolution for tenant PayrollConfig
     const empCompanyId = (employee as any).companyId || (employee as any).company_id;
@@ -214,10 +211,12 @@ export async function POST(request: Request) {
 
     const basic = Number(employee.salary?.basic) || 45000;
 
-    // Calculate HRA & Allowances based on config rules
-    const hra = config.hraType === "percentage"
-      ? Math.round(basic * (config.hraValue / 100))
-      : config.hraValue;
+    // Calculate HRA & Allowances based on config rules (respecting per-employee override)
+    const hra = (employee.salary?.hra !== undefined && Number(employee.salary.hra) > 0)
+      ? Number(employee.salary.hra)
+      : (config.hraType === "percentage"
+        ? Math.round(basic * (config.hraValue / 100))
+        : config.hraValue);
 
     const configTelephone = config.telephoneType === "percentage"
       ? Math.round(basic * ((config.telephoneValue || 0) / 100))
@@ -265,10 +264,14 @@ export async function POST(request: Request) {
     let pf = 0;
     if (isPfExempt) {
       pf = 0;
-    } else if (employee.salary?.pfMode === "fixed_1800" || config.pfModeDefault === "fixed_1800") {
-      pf = 1800;
     } else if (employee.salary?.pfMode === "custom" && employee.salary.pfDeduction !== undefined && employee.salary.pfDeduction > 0) {
       pf = employee.salary.pfDeduction;
+    } else if (employee.salary?.pfMode === "fixed_1800") {
+      pf = 1800;
+    } else if (employee.salary?.pfMode === "percentage") {
+      pf = Math.round(basic * ((config.pfValue ?? 12) / 100));
+    } else if (config.pfModeDefault === "fixed_1800") {
+      pf = 1800;
     } else {
       pf = (config.pfType === "fixed")
         ? (config.pfValue ?? 1800)

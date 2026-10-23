@@ -121,10 +121,12 @@ export default function EditEmployeeModal({
       const bVal = Number(salaryBasic) || 0;
       const gVal = bVal + (Number(salaryHra) || 0) + (Number(salaryTelephone) || 0) + (Number(salaryFuel) || 0) + (Number(salaryProfDev) || 0) + (Number(salaryLta) || 0) + (Number(salaryAllowances) || 0);
 
-      const calculatedPf = pfMode === "fixed_1800"
-        ? 1800
+      const calculatedPf = pfMode === "exempt"
+        ? 0
         : pfMode === "custom"
         ? (Number(salaryPf) || 0)
+        : pfMode === "fixed_1800"
+        ? 1800
         : Math.round(bVal * 0.12);
 
       const calculatedTds = tdsOptIn

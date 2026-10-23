@@ -2240,10 +2240,14 @@ async function startServer() {
     let pf = 0;
     if (isPfExempt) {
       pf = 0;
-    } else if (employee.salary?.pfMode === "fixed_1800" || payrollConfig?.pfModeDefault === "fixed_1800") {
-      pf = 1800;
     } else if (employee.salary?.pfMode === "custom" && typeof employee.salary.pfDeduction === "number" && employee.salary.pfDeduction > 0) {
       pf = employee.salary.pfDeduction;
+    } else if (employee.salary?.pfMode === "fixed_1800") {
+      pf = 1800;
+    } else if (employee.salary?.pfMode === "percentage") {
+      pf = Math.round(basic * ((payrollConfig?.pfValue ?? 12) / 100));
+    } else if (payrollConfig?.pfModeDefault === "fixed_1800") {
+      pf = 1800;
     } else {
       pf = Math.round(basic * ((payrollConfig?.pfValue ?? 12) / 100));
     }

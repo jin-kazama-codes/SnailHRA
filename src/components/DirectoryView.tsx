@@ -1005,35 +1005,70 @@ export default function DirectoryView({
         avatarUrl: avatarUrl,
         dateOfBirth: editDateOfBirth,
         salary: (() => {
-          const basicVal = Number(editSalaryBasic) || 0;
-          const hraVal = onboardPayrollConfig
-            ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
-            : Math.round(basicVal * 0.4);
-          const allowancesVal = onboardPayrollConfig
-            ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
-            : Math.round(basicVal * 0.2);
-          const grossVal = basicVal + hraVal + allowancesVal;
-          const isPfExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee.id);
-          const pfVal = isPfExempt
-            ? 0
+          const basicVal = Number(editSalaryBasic) || (activeEmployee.salary?.basic ?? 0);
+          const existingSalary = activeEmployee.salary || {};
+          const hraVal = existingSalary.hra !== undefined && existingSalary.hra > 0
+            ? existingSalary.hra
             : (onboardPayrollConfig
-              ? (onboardPayrollConfig.pfModeDefault === "fixed_1800"
-                ? (onboardPayrollConfig.pfValue || 1800)
-                : (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue))
-              : Math.round(basicVal * 0.12));
-          const isEsiExempt = (onboardPayrollConfig?.esiExemptEmployeeIds || []).includes(activeEmployee.id);
+              ? (onboardPayrollConfig.hraType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.hraValue / 100)) : onboardPayrollConfig.hraValue)
+              : Math.round(basicVal * 0.4));
+          const allowancesVal = existingSalary.allowances !== undefined && existingSalary.allowances > 0
+            ? existingSalary.allowances
+            : (onboardPayrollConfig
+              ? (onboardPayrollConfig.allowancesType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.allowancesValue / 100)) : onboardPayrollConfig.allowancesValue)
+              : Math.round(basicVal * 0.2));
+          const telVal = existingSalary.telephone || 0;
+          const fuelVal = existingSalary.fuel || 0;
+          const profDevVal = existingSalary.professionalDev || 0;
+          const ltaVal = existingSalary.lta || 0;
+          const grossVal = basicVal + hraVal + allowancesVal + telVal + fuelVal + profDevVal + ltaVal;
+          const isPfExempt = (onboardPayrollConfig?.pfExemptEmployeeIds || []).includes(activeEmployee.id) || existingSalary.pfMode === "exempt";
+          let pfVal = 0;
+          if (!isPfExempt) {
+            if (existingSalary.pfMode === "custom" && existingSalary.pfDeduction !== undefined && existingSalary.pfDeduction > 0) {
+              pfVal = existingSalary.pfDeduction;
+            } else if (existingSalary.pfMode === "fixed_1800") {
+              pfVal = 1800;
+            } else if (existingSalary.pfMode === "percentage") {
+              pfVal = Math.round(basicVal * ((onboardPayrollConfig?.pfValue || 12) / 100));
+            } else if (onboardPayrollConfig?.pfModeDefault === "fixed_1800") {
+              pfVal = 1800;
+            } else {
+              pfVal = onboardPayrollConfig
+                ? (onboardPayrollConfig.pfType === "percentage" ? Math.round(basicVal * (onboardPayrollConfig.pfValue / 100)) : onboardPayrollConfig.pfValue)
+                : Math.round(basicVal * 0.12);
+            }
+          }
+          const isEsiExempt = (onboardPayrollConfig?.esiExemptEmployeeIds || []).includes(activeEmployee.id) || existingSalary.esiOptIn === false;
           const esiGrossCeiling = onboardPayrollConfig?.esiGrossCeiling ?? 21000;
-          const esiVal = (onboardPayrollConfig?.esiEnabled !== false && !isEsiExempt && (esiGrossCeiling <= 0 || grossVal <= esiGrossCeiling))
-            ? Math.round(grossVal * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100))
-            : 0;
-          const tdsVal = onboardPayrollConfig
-            ? computeIncomeTax(grossVal, onboardPayrollConfig.taxType, onboardPayrollConfig.taxValue)
-            : Math.round(grossVal * 0.05);
+          let esiVal = 0;
+          if (onboardPayrollConfig?.esiEnabled !== false && !isEsiExempt) {
+            if (existingSalary.esiMode === "custom" && existingSalary.esiDeduction !== undefined && existingSalary.esiDeduction > 0) {
+              esiVal = existingSalary.esiDeduction;
+            } else if (esiGrossCeiling <= 0 || grossVal <= esiGrossCeiling) {
+              esiVal = Math.round(grossVal * ((onboardPayrollConfig?.esiRatePercentage || 0.75) / 100));
+            }
+          }
+          let tdsVal = 0;
+          if (existingSalary.tdsOptIn !== false) {
+            if (existingSalary.tdsMode === "custom" && existingSalary.tdsDeduction !== undefined && existingSalary.tdsDeduction > 0) {
+              tdsVal = existingSalary.tdsDeduction;
+            } else {
+              tdsVal = onboardPayrollConfig
+                ? computeIncomeTax(grossVal, onboardPayrollConfig.taxType, onboardPayrollConfig.taxValue)
+                : Math.round(grossVal * 0.05);
+            }
+          }
 
           return {
+            ...existingSalary,
             basic: basicVal,
             hra: hraVal,
             allowances: allowancesVal,
+            telephone: telVal,
+            fuel: fuelVal,
+            professionalDev: profDevVal,
+            lta: ltaVal,
             pfDeduction: pfVal,
             esiDeduction: esiVal,
             tdsDeduction: tdsVal,
